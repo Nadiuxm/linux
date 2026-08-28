@@ -82,12 +82,17 @@ jour même, tant que le détail est frais.
 - **`~/.bashrc.d` est un lien vers le dépôt** (tree folding de Stow). Tout fichier
   déposé dedans sera versionné : jamais de token ni de secret là-dedans.
 
+## Hors périmètre — ne pas relancer le sujet
+
+**La gestion et la sauvegarde des secrets** (clé SSH du dépôt, base KeePassXC) est
+prise en charge par Julien, en dehors de ce dépôt et par ses propres moyens.
+Ne pas auditer la clé, ne pas proposer de passphrase, de rotation ni de stratégie
+de sauvegarde : le sujet a été explicitement clos le 2026-08-28.
+
+La sauvegarde des secrets reste listée à l'étape 5 de la procédure de bascule
+(`journal/README.md`) comme point de contrôle avant un wipe — c'est une case à
+cocher, pas une invitation à rouvrir le débat.
+
 ## Points ouverts
 
-- **Survie de la clé SSH entre deux installations.** La clé ne peut pas vivre dans le
-  dépôt qu'elle déverrouille. Stratégie à arbitrer : préserver la clé (sauvegarde hors
-  machine) ou la régénérer à chaque install (identité de machine jetable, pratique pro).
-- **`~/.ssh/gitlinux` n'a pas de passphrase** et il n'y a pas de `~/.ssh/config` : le
-  push ne fonctionne que tant que la clé est chargée dans l'agent. À corriger.
-- **La base `.kdbx` est la racine de confiance et le point unique de défaillance.**
-  Exclue de git à juste titre — donc sauvegardée par personne. Sujet prioritaire.
+*(aucun pour l'instant)*
