@@ -1,0 +1,36 @@
+# Journal de lab
+
+Une itération = une distribution installée en bare-metal, utilisée pour de vrai,
+puis remplacée. Un dossier par itération, numéroté dans l'ordre chronologique.
+
+| # | Dossier | Distro | Statut |
+|---|---|---|---|
+| 01 | [`01-fedora-44-workstation/`](01-fedora-44-workstation/) | Fedora 44 Workstation | 🟢 en cours |
+
+## Comment tenir le journal
+
+Dans chaque itération :
+
+- **`README.md`** — la fiche : ce que j'installe, pourquoi, dans quelles conditions.
+  Se remplit au début, et se conclut par un verdict à la fin.
+- **`journal.md`** — les entrées **datées**, ajoutées au fil de l'eau.
+  Un problème rencontré = une entrée, écrite **le jour même**, tant que le détail est frais.
+- **`baseline/`** — l'état machine capturé par `bin/snapshot.sh`. Généré, pas écrit à la main.
+
+Règle : noter **le problème et le temps perdu**, pas seulement la solution.
+« J'ai perdu 40 min sur le pilote NVIDIA » est une donnée de décision.
+« J'ai installé akmod-nvidia » n'en est pas une.
+
+## Procédure de bascule (avant de réinstaller la machine)
+
+En bare-metal, une réinstallation détruit tout — ce dépôt local inclus.
+À dérouler **intégralement** avant de lancer le moindre installateur :
+
+1. Clore l'itération : verdict dans son `README.md`, dernière entrée dans `journal.md`.
+2. `./bin/snapshot.sh` — capture finale de l'état du système.
+3. Reporter dans `dotfiles/` toute config à conserver (voir `dotfiles/README.md`).
+4. `git add -A && git commit && git push` — **vérifier que le push est bien passé sur GitHub**.
+5. Sauvegarder hors machine ce que git ne porte pas : clés SSH/GPG, base KeePassXC,
+   comptes navigateur, documents. Le `.gitignore` les exclut volontairement du dépôt.
+6. Vérifier depuis un autre appareil que le dépôt distant est à jour et complet.
+7. Seulement là, installer la distro suivante — puis `git clone` en premier geste.

@@ -1,0 +1,29 @@
+# --- Secrets : ne JAMAIS committer, même en dépôt privé ---
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.kdbx
+.env
+.env.*
+**/secrets/
+**/*_secret*
+**/*credential*
+.netrc
+
+# --- Bruit système ---
+*~
+*.swp
+*.swo
+.DS_Store
+__pycache__/
+
+# --- Gros fichiers qui n'ont rien à faire dans git ---
+*.iso
+*.img
+*.qcow2
+*.tar.gz
+*.tar.zst
+*.zip
