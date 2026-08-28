@@ -33,10 +33,15 @@ un `dnf update`, puis `dnf install keepassxc`.
 **Un seul `dnf install` volontaire sur toute la machine.** C'est le protocole que je
 dois reproduire à l'identique sur chaque distro suivante :
 
-> install par défaut → mise à jour complète → KeePassXC → rien d'autre
+> install par défaut → mise à jour complète → KeePassXC → git + stow → rien d'autre
 
 Toute la valeur de la comparaison tient à ça. Si j'ajoute des outils sur une distro
 et pas sur une autre, je ne compare plus les distros mais mes propres bricolages.
+
+`git` et `stow` ne sont pas des ajouts de confort : c'est l'outillage du lab, sans
+lequel la méthode ne fonctionne pas sur la distro suivante. Ils font donc partie du
+protocole, au même titre que KeePassXC — mais pour une raison différente, et cette
+distinction compte quand je relirai ce journal dans six mois.
 
 ### Piège évité : les dépôts tiers ne sont pas des ajouts
 
@@ -75,6 +80,57 @@ C'est le bon choix — mais ça veut dire que **rien ne la sauvegarde automatiqu
 En bare-metal, oublier cette sauvegarde avant une réinstall = perdre ses mots de
 passe. C'est le risque n°1 de la méthode.
 
-**À suivre :** installer `stow` et poser les liens (en cours).
+### Stow posé — ce que le conflit m'a appris
+
+`stow -n -v -t ~ bash git` (simulation) a refusé de continuer :
+
+```
+WARNING! stowing bash would cause conflicts:
+  * cannot stow .../bash/.bashrc over existing target .bashrc since neither
+    a link nor a directory and --adopt not specified
+All operations aborted.
+```
+
+Ce n'est pas un bug : Stow ne remplace **jamais** un fichier qu'il n'a pas créé.
+Il ne gère que ses propres liens symboliques. Les `.bashrc` et `.bash_profile`
+livrés par Fedora étaient de vrais fichiers, il fallait donc les écarter d'abord
+(`mv` vers `~/.dotfiles-backup/`, pas `rm` — on ne détruit pas ce qu'on n'a pas relu).
+
+Bien vu aussi : « All operations aborted ». Stow est **atomique**, il ne pose rien
+tant qu'un seul conflit subsiste. Pas de demi-installation à rattraper.
+
+Après nettoyage, les quatre liens se posent. Deux détails qui comptent :
+
+- Ils sont **relatifs** (`.bashrc -> linux/dotfiles/bash/.bashrc`), pas absolus.
+  Le dossier utilisateur peut être renommé ou remonté ailleurs, ça tient.
+- `~/.bashrc.d` est un lien vers le **dossier** entier, pas un dossier réel contenant
+  des liens : c'est le *tree folding* de Stow, qui pose le lien le plus haut possible.
+  Conséquence pratique — tout fichier déposé dans `~/.bashrc.d/` atterrit dans le
+  dépôt et sera versionné. Pratique, mais **jamais de secret ni de token là-dedans**.
+
+### Dépôt distant — deploy key et identité
+
+Poussé sur `github.com/Nadiuxm/linux` (privé).
+
+Deux choses relevées au passage, à retenir pour la suite :
+
+**La clé SSH est une deploy key, pas une clé de compte.** `ssh -T git@github.com`
+répond `Hi Nadiuxm/linux!` — avec le nom du dépôt. Une clé de compte répondrait
+`Hi Nadiuxm!` tout court. Une deploy key n'ouvre **qu'un seul dépôt**, et elle est
+en lecture seule sauf si « Allow write access » a été coché. Ici l'écriture passe
+(vérifié par `git push --dry-run`, qui teste les permissions sans rien envoyer).
+Au prochain dépôt il faudra soit refaire une clé, soit l'enregistrer dans
+*Settings → SSH and GPG keys* du compte pour qu'elle vaille partout.
+
+**Identité git corrigée avant le premier push.** Les commits partaient avec mon
+adresse pro alors que ce lab est personnel. Réécrit avec :
+
+```bash
+git rebase --root --exec "git commit --amend --no-edit --reset-author"
+```
+
+Trivial parce que rien n'était encore poussé. La même correction après un push
+aurait demandé de réécrire l'historique côté GitHub — beaucoup plus pénible.
+**Leçon : vérifier `git config user.email` avant le premier commit, pas après.**
 
 ---

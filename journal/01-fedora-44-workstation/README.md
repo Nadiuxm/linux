@@ -34,9 +34,26 @@ Chronologie réelle, lue dans `dnf history` :
 | 28 août 16:09 | 3 | Langpacks français (`langpacks-fr`, dictionnaires LibreOffice, `man-pages-fr`). Déclenché **automatiquement** par le choix de langue au premier démarrage. |
 | 28 août 16:18 | 4 | `dnf update` — 1550 paquets |
 | 28 août 16:29 | 5 | `dnf install keepassxc` — 16 paquets |
+| 28 août 17:02 | 6 | `dnf install stow` — 3 paquets (outillage du lab) |
 
-**Le seul `dnf install` volontaire de cette machine est KeePassXC.** Tout le reste
-vient de l'image de base ou de la mise à jour.
+Deux `dnf install` volontaires, et ils ne jouent pas le même rôle :
+
+- **KeePassXC** — logiciel personnel, contrainte de travail (voir plus bas)
+- **`stow`** — outillage du lab lui-même, sans lequel les dotfiles ne se
+  réappliquent pas sur la distro suivante
+
+`git` n'apparaît pas : il est déjà dans l'image Fedora Workstation.
+Tout le reste vient de l'image de base ou de la mise à jour.
+
+### Le protocole à reproduire
+
+C'est la séquence exacte à rejouer sur chaque distro testée, sans y ajouter quoi
+que ce soit — sinon je ne compare plus les distros mais mes propres bricolages :
+
+> **install par défaut → mise à jour complète → KeePassXC → git + stow → rien d'autre**
+
+Le temps passé sur chaque étape est lui-même une donnée : si obtenir KeePassXC
+demande trois manipulations sur une distro et zéro sur une autre, c'est noté.
 
 ### Les dépôts tiers ne sont pas des ajouts
 

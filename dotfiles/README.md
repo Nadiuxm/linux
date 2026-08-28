@@ -80,5 +80,10 @@ Une copie laissée dans `$HOME` et l'on ne sait plus laquelle des deux fait foi.
   Utiliser `dconf dump /org/gnome/ > gnome-settings.ini` et `dconf load` pour recharger.
 - **Secrets** : clés SSH/GPG, base KeePassXC. Exclus par le `.gitignore`, à sauvegarder
   hors du dépôt.
+- **Attention à `~/.bashrc.d/`** : Stow l'a posé en *tree folding*, c'est-à-dire un
+  lien vers le dossier entier du dépôt, pas un dossier réel. Tout fichier déposé
+  dedans est donc **directement dans le dépôt** et sera versionné au prochain commit.
+  Jamais de token ni de mot de passe là-dedans — pour ça, un fichier hors dépôt
+  (`~/.secrets.sh`, ignoré par git) sourcé depuis un fragment.
 - **Config spécifique à une distro** : si un paquet devient incompatible d'une distro à
   l'autre, le scinder (`bash-fedora`, `bash-debian`) plutôt que d'empiler les `if`.
