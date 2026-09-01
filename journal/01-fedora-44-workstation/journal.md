@@ -381,6 +381,78 @@ et ni GVFS ni le trousseau n'y changent quoi que ce soit. **Le chiffrement se d�
 moment de l'installation** : c'est donc une case à cocher à la prochaine bascule de
 distro, pas quelque chose à rattraper aujourd'hui. À trancher avant l'itération 02.
 
+### L'agent SSH sous Sway : un problème qui n'en était plus un
+
+Point ouvert depuis quelques jours : `SSH_AUTH_SOCK` réputé non persistant sous Sway,
+après un `git push` bloqué. En voulant le régler, j'ai découvert qu'il **était déjà
+réglé** — et la façon dont je m'en suis rendu compte vaut plus que le correctif.
+
+Le fichier qui fait le travail, `/usr/lib/systemd/user/gcr-ssh-agent.socket` :
+
+```ini
+ListenStream=%t/gcr/ssh
+ExecStartPost=-/usr/bin/systemctl --user set-environment SSH_AUTH_SOCK=%t/gcr/ssh
+[Install]
+WantedBy=sockets.target
+```
+
+Il vient du paquet `gcr`, il est `WantedBy=sockets.target`, donc **relancé à chaque
+session, quel que soit le bureau**. La variable n'est pas un résidu volatil : elle est
+reposée à chaque login. Mon point ouvert décrivait l'état d'*avant* l'activation du
+socket, et je ne l'avais pas relu depuis.
+
+Vérification dans le terminal :
+
+```
+SSH_AUTH_SOCK = /run/user/1000/gcr/ssh
+256 SHA256:VVStpM… jzielona@fedora (ED25519)
+56fdced…  refs/heads/main
+```
+
+Tout répond. Rien à corriger.
+
+#### Deux fausses pistes, et ce qu'elles apprennent
+
+**J'ai d'abord soupçonné un conflit GNOME/Sway** — Sway installé par-dessus GNOME,
+d'où un environnement bâtard qu'une install propre n'aurait pas. Faux : le socket `gcr`
+ne dépend d'aucun bureau. Le vrai clivage est ailleurs, et il est plus intéressant :
+**qui lance le compositeur.** GNOME est démarré par `systemd --user` et hérite donc de
+`set-environment` ; Sway est lancé par GDM dans `session-2.scope` et n'en hérite pas.
+Fedora comble l'écart avec `/etc/sway/config.d/10-systemd-session.conf`, qui lance
+`sway-systemd/session.sh` pour propager l'environnement dans les deux sens.
+
+Leçon : **avant d'écrire un contournement, vérifier si la distro n'a pas déjà traité le
+problème.** J'allais versionner un correctif pour quelque chose que Fedora gère.
+
+**Ensuite j'ai cru reproduire la panne en direct** : un `git fetch` échouait
+(`Permission denied (publickey)`) avec `SSH_AUTH_SOCK` vide, pendant que le mien passait
+dans le terminal. Mais c'était l'assistant qui échouait, pas la machine — il tourne dans
+un bac à sable qui retire l'accès à l'agent SSH et interdit même la lecture de
+`/proc/<pid>/environ`. Un outil automatisé n'est pas un témoin fiable de l'état du
+système : **refaire la mesure dans un vrai terminal avant de conclure.**
+
+C'est la deuxième fois de la journée que je manque d'attribuer une friction à la mauvaise
+cause — après `gio mount` qu'il aurait été facile d'imputer à Sway. Le point commun :
+tester deux choses nouvelles en même temps rend la nouveauté la plus visible
+suspecte par défaut.
+
+#### Ce que ça change pour l'axe « bureaux »
+
+L'agent SSH, le trousseau et le dialogue de montage viennent **tous** de la pile GNOME
+installée par la baseline. Sway s'appuie dessus sans le dire. Une install Sway seule
+n'aurait pas ce problème — elle en aurait un autre : monter un agent SSH et un
+gestionnaire de secrets à la main.
+
+Ce n'est pas une réserve sur la validité du test : ce que je reproche à GNOME est son
+**interface**, pas sa plomberie. `gnome-keyring`, `gvfs`, Nautilus me vont très bien et
+resteront. « Sway par-dessus les utilitaires GNOME » est donc la configuration que je
+vise, pas un artefact.
+
+Ce que ça change quand même, pour les itérations suivantes : sur une distro qui ne livre
+pas ces utilitaires aussi facilement que Fedora Workstation, le temps passé à les gréer
+sera à chronométrer comme n'importe quelle autre friction. C'est une donnée de
+comparaison entre distros, pas un doute sur l'axe bureaux.
+
 ### Détail à ne pas oublier en relisant ce journal
 
 `dnf history` affiche les heures en **UTC**, alors que les dates de ce journal et du

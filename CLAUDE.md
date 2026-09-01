@@ -122,6 +122,19 @@ jour même, tant que le détail est frais.
   (Nautilus) le fait ; `gvfsd` sait ensuite y *lire*. Rien à voir avec Sway, identique
   sous GNOME. Piège de méthode général : quand deux nouveautés sont testées en même
   temps, ne pas imputer chaque friction à la plus visible — ça pollue l'axe d'évaluation.
+- **`systemctl --user set-environment` n'alimente que les processus lancés par
+  `systemd --user`.** Sway est lancé par GDM dans `session-2.scope`, pas par le
+  gestionnaire systemd utilisateur — il n'en hérite donc pas directement. Ce qui sauve
+  la mise sous Fedora : `/etc/sway/config.d/10-systemd-session.conf` lance
+  `/usr/libexec/sway-systemd/session.sh`, qui propage l'environnement dans les deux sens
+  et démarre `sway-session.target`. **Avant d'écrire un contournement, vérifier si la
+  distro n'a pas déjà traité le problème** — ici c'était le cas, et le point ouvert
+  `SSH_AUTH_SOCK` était obsolète depuis l'activation de `gcr-ssh-agent.socket`.
+- **Un agent automatisé tourne dans un environnement filtré — ses échecs ne sont pas des
+  symptômes système.** Claude Code n'a ni `SSH_AUTH_SOCK` ni accès à `/proc/<pid>/environ`
+  (bac à sable, et retrait délibéré de l'accès à l'agent SSH). Un `git fetch` qui échoue
+  de son côté pendant qu'il marche dans le terminal ne prouve **rien** sur la machine.
+  Toujours refaire la mesure dans un vrai terminal avant de conclure.
 
 ## Hors périmètre — ne pas relancer le sujet
 
@@ -136,19 +149,13 @@ cocher, pas une invitation à rouvrir le débat.
 
 ## Points ouverts
 
-- **`SSH_AUTH_SOCK` non persistant sous Sway.** `gcr-ssh-agent.socket` est activé
-  (donc relancé au démarrage), mais la variable n'est posée que dans le gestionnaire
-  systemd utilisateur en cours — rien sur le disque, elle disparaîtra à la
-  déconnexion. À figer dans `~/.config/environment.d/`, versionnable via Stow.
-  Cause de fond : l'agent SSH de GNOME vient d'un autostart XDG marqué
-  `OnlyShowIn=GNOME;Unity;MATE;` que Sway ne traite pas.
-  **Piste révisée (2026-09-01)** : `sway-session.target` *et* `graphical-session.target`
-  sont actives — Fedora fournit une vraie intégration systemd pour Sway. Une unité
-  `systemd --user` accrochée à `graphical-session.target` vaut donc **sous GNOME comme
-  sous Sway**, avec un seul fichier. Probablement meilleur que `environment.d/`. Modèle
-  déjà en place : le paquet Stow `nas`.
-- **Friction agent SSH pas encore au journal** — première vraie friction de l'axe
-  « bureaux », elle a bloqué un `git push`. À écrire.
+- **L'axe « bureaux » porte sur l'interface, pas sur la pile logicielle.** Ce que Julien
+  reproche à GNOME est esthétique et ergonomique ; les utilitaires GNOME
+  (`gnome-keyring`, `gvfs`, Nautilus, l'agent SSH) ne posent aucun problème et sont
+  assumés. « Sway par-dessus les utilitaires GNOME » est donc la **configuration cible**,
+  pas un artefact de test — ne pas présenter cette dépendance comme un biais.
+  Ce qui reste utile à en tirer : sur une distro qui ne fournit pas ces utilitaires aussi
+  facilement, le coût d'installation sera à noter comme n'importe quelle autre friction.
 - **Ressenti Sway à froid** : noter dans quelques jours si l'usage quotidien est plus
   rapide qu'avec GNOME, ou s'il y a repli vers GNOME dès qu'il y a urgence. C'est ça
   qui tranchera l'axe, pas la liste des raccourcis.
