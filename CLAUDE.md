@@ -11,6 +11,10 @@ choisir la distribution et l'environnement de travail pour une alternance en
 de l'usage réel plutôt que sur une impression.
 
 Utilisateur : Julien Zielona (`Nadiuxm` sur GitHub), **début d'alternance**.
+Il administre des postes utilisateurs et traite des tickets — d'où RustDesk
+(client généré par ses soins, donc portable sur toute distro) et l'accès NAS.
+Ce n'est pas un poste de développement : les outils qui comptent sont ceux de
+l'administration et du support.
 Dépôt privé : `git@github.com:Nadiuxm/linux.git`
 
 ## Méthode : bare-metal successif
@@ -54,6 +58,13 @@ Itération en cours : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4
 (transaction 8) en plus de GNOME, hors protocole de baseline mais après sa capture,
 donc sans la polluer. GNOME reste la session par défaut. Cadrage détaillé dans le
 `README.md` de l'itération 01. Si l'axe grossit (KDE, Xfce), lui donner son dossier.
+
+**Noctalia depuis le 2026-09-01** (transaction 10) : shell Wayland complet qui
+remplace `swaybar` et `wmenu-run` sous Sway — barre, lanceur (`Super+D`),
+notifications, verrouillage, 112 commandes IPC (`noctalia msg --help`). En
+version **beta**, risque accepté : ce n'est pas le compositeur, s'il tombe Sway
+continue. Configuré dans le paquet Stow `sway`. Le grief contre GNOME étant
+esthétique et non technique, c'est bien l'interface qui est évaluée ici.
 
 ## Comment travailler avec Julien
 
@@ -106,6 +117,11 @@ jour même, tant que le détail est frais.
   vaut qu'à un événement futur (`workspace ... output`, appliquée à la *création* de
   l'espace). Un `reload` ne déplace pas un espace déjà ouvert — ça fait douter de sa
   propre manipulation alors que la config est juste.
+- **Un paquet installé n'est pas un paquet utilisé.** `waybar` était installé (tiré par
+  le groupe `swaywm`) et supposé actif ; en réalité c'était `swaybar` qui tournait, lancé
+  par le bloc `bar { }` de `/etc/sway/config`. Vérifier ce qui **tourne** (`pgrep`,
+  `swaymsg -t get_bar_config`), pas ce qui est installé. Même famille que « un dépôt
+  activé n'est pas un paquet installé ».
 - **Un montage système ne peut pas interroger un trousseau de session.** `mount.cifs`
   ne lit qu'un fichier ou une variable d'environnement ; une ligne de `fstab` s'exécute
   en root **avant le login**, sans bus de session ni trousseau déverrouillé. Avant de
