@@ -1,17 +1,60 @@
 # Sway — configuration personnelle
 #
-# ATTENTION : dès que ce fichier existe, Sway ignore /etc/sway/config
-# ENTIÈREMENT. Il ne fusionne pas les deux. Le include ci-dessous n'est
-# donc pas un confort : sans lui, tous les raccourcis par défaut
-# disparaissent (terminal, lanceur, sortie de session).
+# PRINCIPE : Sway ne fait que du TUILAGE. Tout ce qui relève du shell — barre,
+# lanceur, fond d'écran, notifications, verrouillage, OSD, capture d'écran,
+# menu de session — appartient à Noctalia.
 #
-# À ne pas confondre avec /etc/sway/config.d/, qui lui est bien fusionné —
-# mais qui appartient à root et ne peut donc pas être versionné ici.
+# Ce fichier ne s'appuie plus sur /etc/sway/config, et c'est le point le plus
+# important à comprendre ici.
+#
+# Pourquoi. Sway ne sait pas DÉSACTIVER une directive : il n'existe aucun
+# « défaire », seulement « en poser une autre par-dessus ». Tant qu'on incluait
+# /etc/sway/config, on héritait d'un environnement de bureau complet dont on ne
+# voulait pas, et le fichier s'est rempli de contournements :
+#
+#   - 22 « unbindsym » pour neutraliser les liaisons chiffres par symbole
+#   - « bar bar-0 mode invisible » pour masquer swaybar sous la barre Noctalia
+#   - « output * bg #000000 » PLUS un « sleep 1 ; pkill -x swaybg », parce que
+#     la directive « bg » fait lancer un processus swaybg qui recouvrait le fond
+#     d'écran de Noctalia à chaque rechargement
+#
+# Chacun compensait une ligne du fichier système. Les directives non voulues
+# n'étant plus héritées, elles n'ont plus besoin d'être recouvertes : les trois
+# contournements ont disparu avec l'include. En particulier, Sway ne reçoit plus
+# AUCUNE directive « bg », donc il ne lance plus swaybg du tout — il n'y a plus
+# rien à tuer, plus de temporisation, plus de course entre deux surfaces.
+#
+# Ce que ça coûte, assumé : une mise à jour du paquet sway ne se propage plus
+# dans cette configuration. En contrepartie l'environnement est identique quelle
+# que soit la distribution, ce qui est le bon compromis pour ce dépôt.
+#
+# ATTENTION — LA LIGNE À NE JAMAIS PERDRE
+#
+# La dernière ligne de /etc/sway/config était « include /etc/sway/config.d/* ».
+# Abandonner l'include principal sans reprendre CELLE-CI casserait la session :
+# c'est elle qui charge 10-systemd-session.conf, donc sway-systemd/session.sh,
+# donc la propagation de l'environnement vers systemd et D-Bus (WAYLAND_DISPLAY,
+# SWAYSOCK, XDG_CURRENT_DESKTOP), le démarrage de sway-session.target et, par
+# ricochet, l'agent SSH et les portails xdg-desktop-portal.
+# Ces fichiers appartiennent à root : ils sont inclus, pas versionnés.
 
-include /etc/sway/config
+include /etc/sway/config.d/*
 
 
-# Disposition du clavier
+# ─── Variables ───────────────────────────────────────────────────────────────
+#
+# Reprises telles quelles de /etc/sway/config. $menu a disparu : le lanceur
+# n'est plus wmenu-run mais un panneau Noctalia, appelé en IPC (voir plus bas).
+
+set $mod Mod4
+set $left h
+set $down j
+set $up k
+set $right l
+set $term foot
+
+
+# ─── Clavier ─────────────────────────────────────────────────────────────────
 #
 # Sway ne lit PAS /etc/X11/xorg.conf.d/00-keyboard.conf : ce fichier est
 # destiné à Xorg. Il ne lit pas non plus les réglages GNOME (gsettings).
@@ -26,7 +69,7 @@ input type:keyboard {
 }
 
 
-# Disposition des écrans
+# ─── Écrans ──────────────────────────────────────────────────────────────────
 #
 # Sway ne connaît ni « écran 1/2/3 » ni « écran principal » : uniquement des
 # sorties placées par coordonnées dans un plan virtuel commun. C'est la position
@@ -49,22 +92,24 @@ input type:keyboard {
 # Si un câble change de prise, ce bloc est à corriger — l'identifiant durable
 # serait « marque modèle série », p.ex. "Dell Inc. DELL P2725DE FVTKM84".
 # Pour retrouver les noms et l'état réels :  swaymsg -t get_outputs
+#
+# Aucune directive « bg » ici, volontairement : le fond d'écran est à Noctalia.
 
 output HDMI-A-2 position 0 180
 output DP-3     position 1920 0
 output DP-1     position 4480 180
 
 
-# Répartition des espaces de travail
+# ─── Répartition des espaces de travail ──────────────────────────────────────
 #
 # Une colonne d'écran par position dans la rangée de chiffres :
 #
 #     gauche      centre      droite
 #     1 4 7 10    2 5 8       3 6 9
 #
-# La rangée du clavier reproduit la disposition physique du bureau : Super+&
-# part à gauche, Super+é au centre, Super+" à droite, puis on recommence. Rien
-# à mémoriser, la main sait où elle va.
+# La rangée du clavier reproduit la disposition physique du bureau : la première
+# touche part à gauche, la deuxième au centre, la troisième à droite, puis on
+# recommence. Rien à mémoriser, la main sait où elle va.
 #
 # ATTENTION — ces affectations s'appliquent à la CRÉATION d'un espace, pas au
 # rechargement. Un espace déjà ouvert n'est pas déplacé par « swaymsg reload » :
@@ -89,145 +134,230 @@ workspace 10 output HDMI-A-2
 exec swaymsg workspace number 2
 
 
-# ─── Corrections de raccourcis ───────────────────────────────────────────────
+# ─── Apparence des fenêtres ──────────────────────────────────────────────────
 #
-# Ce bloc vient APRÈS le include, il a donc le dernier mot sur /etc/sway/config.
-
-
-# 1. Les flèches déplacent la fenêtre, plus le focus
+# Par défaut Sway dessine une bordure « normal » : un liseré de 2 px surmonté
+# d'une BARRE DE TITRE affichant le nom de la fenêtre, sur fond bleu (#285577,
+# la couleur client.focused par défaut).
 #
-# Par défaut Super+flèches fait « focus », en doublon de Super+h/j/k/l. Déplacer
-# une fenêtre est plus fréquent que déplacer le focus, donc on échange :
-#     flèches  → déplacer la fenêtre     (h/j/k/l gardent le focus)
-# Au bord d'un écran, « move » passe la fenêtre sur l'écran voisin.
+# Ce titre est écrit par l'application elle-même — « Claude Code » pour le
+# terminal quand l'agent tourne, le nom de l'onglet pour Firefox. Le cadre bleu
+# n'appartient donc à aucun de ces programmes : c'est Sway qui l'affiche.
+# Chercher le réglage du côté de l'application aurait été une impasse.
 #
-# --no-warn : on réécrit sciemment une liaison existante, sans quoi swaynag
-# affiche un avertissement à chaque rechargement.
-
-bindsym --no-warn $mod+Left  move left
-bindsym --no-warn $mod+Down  move down
-bindsym --no-warn $mod+Up    move up
-bindsym --no-warn $mod+Right move right
-
-
-# 2. Espaces de travail : lier le CODE de touche, pas le symbole
+# « pixel 2 » garde le liseré et retire la barre de titre : plus de texte, mais
+# la couleur continue d'indiquer quelle fenêtre a le focus — nécessaire en
+# tuilage sur trois écrans. Pour tout supprimer : « none » à la place.
 #
-# Bug constaté : Super+Maj+& changeait d'espace au lieu d'y envoyer la fenêtre,
-# et « envoyer la fenêtre sur l'espace N » était inatteignable au clavier.
+# ATTENTION — comme « workspace ... output », ces directives sont des règles
+# appliquées à la CRÉATION d'une fenêtre : un « swaymsg reload » ne retouche pas
+# les fenêtres déjà ouvertes. Pour essayer une valeur à chaud sur tout l'écran,
+# c'est un sélecteur qu'il faut, pas la directive :
+#     swaymsg '[title=".*"] border pixel 2'    # bordure fine
+#     swaymsg '[title=".*"] border none'       # rien du tout
+#     swaymsg '[title=".*"] border normal'     # retour au défaut de Sway
 #
-# Cause : « bindsym $mod+1 » lie le SYMBOLE « 1 ». Sur AZERTY ce symbole exige
-# déjà Maj (la touche donne « & » sans Maj). Super+Maj+& produit donc « 1 » et
-# déclenche la liaison sans-Maj ; atteindre $mod+Shift+1 demanderait un second
-# Maj. Impossible.
-#
-# Correctif : --to-code traduit le symbole en code de touche physique dans la
-# première disposition configurée — man 5 sway : « Bindings to keysyms are
-# layout-dependent. This can be changed with the --to-code flag ». C'est la
-# touche qui compte, plus le caractère qu'elle produit.
-#
-# Les anciennes liaisons sont retirées explicitement : une liaison par symbole
-# et une liaison par code sont deux objets distincts pour Sway, une simple
-# redéfinition les laisserait coexister et se marcher dessus.
+# En disposition onglets (Super+w) ou piles (Super+s), les titres réapparaissent
+# quoi qu'il arrive : ils sont le principe même de ces dispositions, pas la
+# bordure des fenêtres.
 
-unbindsym $mod+1
-unbindsym $mod+2
-unbindsym $mod+3
-unbindsym $mod+4
-unbindsym $mod+5
-unbindsym $mod+6
-unbindsym $mod+7
-unbindsym $mod+8
-unbindsym $mod+9
-unbindsym $mod+0
-unbindsym $mod+Shift+1
-unbindsym $mod+Shift+2
-unbindsym $mod+Shift+3
-unbindsym $mod+Shift+4
-unbindsym $mod+Shift+5
-unbindsym $mod+Shift+6
-unbindsym $mod+Shift+7
-unbindsym $mod+Shift+8
-unbindsym $mod+Shift+9
-unbindsym $mod+Shift+0
-
-# Aller sur l'espace N            →  Super + touche du chiffre (sans Maj)
-bindsym --to-code $mod+1 workspace number 1
-bindsym --to-code $mod+2 workspace number 2
-bindsym --to-code $mod+3 workspace number 3
-bindsym --to-code $mod+4 workspace number 4
-bindsym --to-code $mod+5 workspace number 5
-bindsym --to-code $mod+6 workspace number 6
-bindsym --to-code $mod+7 workspace number 7
-bindsym --to-code $mod+8 workspace number 8
-bindsym --to-code $mod+9 workspace number 9
-bindsym --to-code $mod+0 workspace number 10
-
-# Y envoyer la fenêtre active     →  Super + Maj + touche du chiffre
-bindsym --to-code $mod+Shift+1 move container to workspace number 1
-bindsym --to-code $mod+Shift+2 move container to workspace number 2
-bindsym --to-code $mod+Shift+3 move container to workspace number 3
-bindsym --to-code $mod+Shift+4 move container to workspace number 4
-bindsym --to-code $mod+Shift+5 move container to workspace number 5
-bindsym --to-code $mod+Shift+6 move container to workspace number 6
-bindsym --to-code $mod+Shift+7 move container to workspace number 7
-bindsym --to-code $mod+Shift+8 move container to workspace number 8
-bindsym --to-code $mod+Shift+9 move container to workspace number 9
-bindsym --to-code $mod+Shift+0 move container to workspace number 10
+default_border          pixel 2
+default_floating_border pixel 2
 
 
-# 3. Cycler entre les fenêtres d'un même espace
+# ═══ TUILAGE — ce qui reste à Sway ═══════════════════════════════════════════
+
+
+# --- Lancer, fermer, recharger ---
+
+bindsym $mod+Return  exec $term
+bindsym $mod+Shift+q kill
+bindsym $mod+Shift+c reload
+
+# Souris + Super : glisser une fenêtre flottante, clic droit pour redimensionner.
+floating_modifier $mod normal
+
+
+# --- Déplacer le focus et les fenêtres ---
 #
-# En tuilage on se déplace par direction (Super+h/j/k/l), pas par cycle. Mais la
-# direction ne dit plus rien dès que les fenêtres se superposent — dispositions
-# en onglets (Super+w) ou en piles (Super+s). D'où ce cycle, indépendant de la
-# disposition, que Sway fournit sans le lier à quoi que ce soit.
+# hjkl déplace le FOCUS, les flèches déplacent la FENÊTRE. C'est un écart
+# assumé au défaut de Sway, qui liait les flèches au focus en doublon de hjkl :
+# déplacer une fenêtre est plus fréquent que déplacer le focus.
+# Au bord d'un écran, « move » fait passer la fenêtre sur l'écran voisin.
+
+bindsym $mod+$left  focus left
+bindsym $mod+$down  focus down
+bindsym $mod+$up    focus up
+bindsym $mod+$right focus right
+
+bindsym $mod+Left  move left
+bindsym $mod+Down  move down
+bindsym $mod+Up    move up
+bindsym $mod+Right move right
+
+# Doublons hérités du défaut de Sway : même action que les flèches nues
+# ci-dessus. Conservés par habitude ; quatre raccourcis à récupérer si besoin.
+bindsym $mod+Shift+$left  move left
+bindsym $mod+Shift+$down  move down
+bindsym $mod+Shift+$up    move up
+bindsym $mod+Shift+$right move right
+
+
+# --- Cycler entre les fenêtres d'un même espace ---
 #
-# --to-code obligatoire ici, et pour la même raison que pour les chiffres :
-# Maj+Tab ne produit pas le symbole « Tab » mais « ISO_Left_Tab ». Une liaison
-# par symbole sur $mod+Shift+Tab ne se déclencherait jamais.
+# En tuilage on se déplace par direction (Super+h/j/k/l), mais la direction ne
+# dit plus rien dès que les fenêtres se superposent — onglets (Super+w) ou
+# piles (Super+s). D'où ce cycle, que Sway fournit sans le lier par défaut.
+#
+# --to-code obligatoire ici : Maj+Tab ne produit pas le symbole « Tab » mais
+# « ISO_Left_Tab ». Une liaison par symbole sur $mod+Shift+Tab ne se
+# déclencherait jamais.
 
 bindsym --to-code $mod+Tab       focus next
 bindsym --to-code $mod+Shift+Tab focus prev
 
 
-# 4. Collision AZERTY sur la touche « 6 » — le scratchpad contre l'espace 6
+# --- Espaces de travail : bindcode, et surtout pas bindsym ---
 #
-# En fr-azerty :  key <AE06> { [ minus, 6, bar, fiveeighths ] }
-# La touche produit « minus » SANS Maj, « 6 » avec. Or /etc/sway/config lie le
-# scratchpad à ce symbole :
-#     bindsym $mod+Shift+minus move scratchpad     (ligne 171)
-#     bindsym $mod+minus scratchpad show           (ligne 175)
+# Trois façons de lier la rangée des chiffres, deux mauvaises. L'historique
+# vaut d'être gardé, c'est le piège AZERTY le plus coûteux de cette config.
 #
-# Deux liaisons se disputaient donc la touche physique « 6 », et Super+Maj+-
-# ne répondait plus. Même piège que le bloc 2, vu sous un autre angle : un
-# unbindsym par CODE ne retire pas une liaison par SYMBOLE, ce sont deux objets
-# distincts. Il fallait retirer « minus », pas « 6 ».
+# 1. « bindsym $mod+1 » (le défaut de Sway) lie le SYMBOLE « 1 ». Sur AZERTY ce
+#    symbole est au NIVEAU 2 de la touche : elle donne « & » seule et « 1 » avec
+#    Maj. Super+Maj+& produit donc « 1 » et déclenchait la liaison sans-Maj ;
+#    atteindre $mod+Shift+1 aurait demandé un second Maj. Impossible.
 #
-# C'est la seule collision possible : la rangée AZERTY produit & é " ' ( - è _ ç à
-# et « minus » est le seul de ces symboles que Sway lie par défaut. D'où le
-# symptôme « une seule touche ne répond pas », qui a permis de trouver la cause.
+# 2. « bindsym --to-code » traduit le symbole en code de touche — mais sans
+#    retirer le Maj qu'exige ce symbole. $mod+1 devenait $mod+Shift+AE01, et
+#    $mod+Shift+1 la MÊME chose. Les deux liaisons se retrouvaient sur la même
+#    combinaison, la première inscrite gagnait. Symptôme observé : Super+touche
+#    ne faisait rien, Super+Maj+touche changeait d'espace au lieu d'y envoyer la
+#    fenêtre. Le correctif n'avait pas résolu le bug, il l'avait DÉPLACÉ.
 #
-# Conséquence assumée : le scratchpad n'est plus atteignable au clavier.
-# À réattribuer — voir les points ouverts du CLAUDE.md.
+# 3. « bindcode » prend directement le code de la touche PHYSIQUE, sans passer
+#    par un symbole ni par un niveau. Plus d'ambiguïté possible.
+#
+# Codes lus dans /usr/share/X11/xkb/keycodes/evdev — rangée du haut, de gauche
+# à droite : AE01=10, AE02=11 … AE10=19. Sur ce clavier ce sont les touches
+# & é " ' ( - è _ ç à, celles qui portent les chiffres 1 à 0.
+#
+# Leçon générale : un symbole, un code de touche et un niveau sont trois choses
+# distinctes. Toute config de WM tuilant écrite pour QWERTY est à relire ainsi.
 
-unbindsym $mod+minus
-unbindsym $mod+Shift+minus
+# Aller sur l'espace N        →  Super + touche du chiffre (sans Maj)
+bindcode $mod+10 workspace number 1
+bindcode $mod+11 workspace number 2
+bindcode $mod+12 workspace number 3
+bindcode $mod+13 workspace number 4
+bindcode $mod+14 workspace number 5
+bindcode $mod+15 workspace number 6
+bindcode $mod+16 workspace number 7
+bindcode $mod+17 workspace number 8
+bindcode $mod+18 workspace number 9
+bindcode $mod+19 workspace number 10
+
+# Y envoyer la fenêtre active →  Super + Maj + touche du chiffre
+bindcode $mod+Shift+10 move container to workspace number 1
+bindcode $mod+Shift+11 move container to workspace number 2
+bindcode $mod+Shift+12 move container to workspace number 3
+bindcode $mod+Shift+13 move container to workspace number 4
+bindcode $mod+Shift+14 move container to workspace number 5
+bindcode $mod+Shift+15 move container to workspace number 6
+bindcode $mod+Shift+16 move container to workspace number 7
+bindcode $mod+Shift+17 move container to workspace number 8
+bindcode $mod+Shift+18 move container to workspace number 9
+bindcode $mod+Shift+19 move container to workspace number 10
 
 
-# ─── Noctalia ────────────────────────────────────────────────────────────────
+# --- Dispositions ---
+
+bindsym $mod+b splith
+bindsym $mod+v splitv
+bindsym $mod+s layout stacking
+bindsym $mod+w layout tabbed
+bindsym $mod+e layout toggle split
+bindsym $mod+f fullscreen
+bindsym $mod+Shift+space floating toggle
+bindsym $mod+space       focus mode_toggle
+bindsym $mod+a           focus parent
+
+
+# --- Scratchpad ---
 #
-# Shell Wayland complet — barre, lanceur, notifications, verrouillage, réglages —
-# qui remplace swaybar et wmenu-run. Installé le 2026-09-01 (transaction 10),
-# hors protocole de baseline mais après sa capture, donc sans la polluer.
+# Le défaut de Sway le liait à $mod+minus / $mod+Shift+minus. Sur AZERTY
+# « minus » est le niveau 1 de AE06 — la touche du 6. Deux liaisons se
+# disputaient donc la même touche physique et l'espace 6 ne répondait plus.
 #
-# La barre de /etc/sway/config ne peut pas être SUPPRIMÉE : le include ne se
-# retire pas, il se surcharge. On la neutralise par son identifiant, que Sway
-# génère seul et que « swaymsg -t get_bar_config » révèle — ici « bar-0 ».
-# Sans ça, deux barres se superposent.
+# Réattribué sur « ² » (TLDE, code 49), touche libre, isolée en haut à gauche
+# et hors de la rangée des chiffres — plus aucune collision possible.
+
+bindcode $mod+Shift+49 move scratchpad
+bindcode $mod+49       scratchpad show
+
+
+# --- Mode redimensionnement ---
+
+mode "resize" {
+    bindsym $left  resize shrink width 10px
+    bindsym $down  resize grow height 10px
+    bindsym $up    resize shrink height 10px
+    bindsym $right resize grow width 10px
+
+    bindsym Left  resize shrink width 10px
+    bindsym Down  resize grow height 10px
+    bindsym Up    resize shrink height 10px
+    bindsym Right resize grow width 10px
+
+    bindsym Return mode "default"
+    bindsym Escape mode "default"
+}
+bindsym $mod+r mode "resize"
+
+
+# ═══ NOCTALIA — tout le reste ════════════════════════════════════════════════
+#
+# Shell Wayland complet : barre, lanceur, notifications, fond d'écran, OSD,
+# verrouillage, menu de session. Installé le 2026-09-01 (transaction 10), hors
+# protocole de baseline mais après sa capture, donc sans la polluer.
+# En version beta, risque accepté : ce n'est pas le compositeur, s'il tombe
+# Sway continue de tuiler.
+#
+# POURQUOI LES RACCOURCIS RESTENT ICI ET NON DANS NOCTALIA.
+# Noctalia n'a aucun système de raccourcis — son settings.toml ne contient que
+# [theme] et [wallpaper.*]. C'est normal : sous Wayland, seul le compositeur voit
+# le clavier. Le partage est donc : Sway capte la FRAPPE, Noctalia fournit le
+# COMPORTEMENT et l'AFFICHAGE (l'OSD notamment). Les lignes ci-dessous sont des
+# appels IPC, pas des implémentations.
+#
+# Aucun binaire de sous-commande : tout passe par « noctalia msg ».
+# Les 112 commandes :        noctalia msg --help
+# Aide d'une commande :      noctalia msg session --help
+# Panneaux disponibles :     clipboard, control-center, launcher, polkit,
+#                            session, setup-wizard, test, tray-drawer, wallpaper
 
 exec noctalia --daemon
-bar bar-0 mode invisible
 
-# Noctalia n'expose pas de binaire de lanceur : tout se pilote en IPC, via
-# « noctalia msg ». Liste des 112 commandes disponibles :  noctalia msg --help
-bindsym --no-warn $mod+d exec noctalia msg panel-toggle launcher
+# Lanceur d'applications — remplace wmenu-run.
+bindsym $mod+d exec noctalia msg panel-toggle launcher
+
+# Menu de session — remplace le swaynag « do you really want to exit sway ».
+# Le panneau couvre lock, suspend, logout, reboot, shutdown ; inutile de leur
+# donner un raccourci chacun. Actions directes si besoin un jour :
+#     noctalia msg session <lock|suspend|lock-and-suspend|logout|reboot|shutdown>
+bindsym $mod+Shift+e exec noctalia msg panel-toggle session
+
+# Son et luminosité — remplacent les appels directs à pactl et brightnessctl.
+# Le gain n'est pas la commande mais l'OSD : Noctalia affiche le niveau, ce que
+# pactl ne faisait pas. --locked : actif écran verrouillé.
+bindsym --locked XF86AudioMute        exec noctalia msg volume-mute
+bindsym --locked XF86AudioLowerVolume exec noctalia msg volume-down
+bindsym --locked XF86AudioRaiseVolume exec noctalia msg volume-up
+bindsym --locked XF86AudioMicMute     exec noctalia msg mic-mute
+bindsym --locked XF86MonBrightnessDown exec noctalia msg brightness-down
+bindsym --locked XF86MonBrightnessUp   exec noctalia msg brightness-up
+
+# Capture d'écran — remplace « grim » nu, qui écrivait un PNG dans le dossier
+# courant sans rien afficher. Print prend l'écran focalisé, Maj+Print ouvre la
+# sélection interactive de zone.
+bindsym Print       exec noctalia msg screenshot-fullscreen
+bindsym Shift+Print exec noctalia msg screenshot-region

@@ -59,12 +59,19 @@ Itération en cours : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4
 donc sans la polluer. GNOME reste la session par défaut. Cadrage détaillé dans le
 `README.md` de l'itération 01. Si l'axe grossit (KDE, Xfce), lui donner son dossier.
 
-**Noctalia depuis le 2026-09-01** (transaction 10) : shell Wayland complet qui
-remplace `swaybar` et `wmenu-run` sous Sway — barre, lanceur (`Super+D`),
-notifications, verrouillage, 112 commandes IPC (`noctalia msg --help`). En
-version **beta**, risque accepté : ce n'est pas le compositeur, s'il tombe Sway
-continue. Configuré dans le paquet Stow `sway`. Le grief contre GNOME étant
-esthétique et non technique, c'est bien l'interface qui est évaluée ici.
+**Noctalia depuis le 2026-09-01** (transaction 10) : shell Wayland complet — barre,
+lanceur, notifications, fond d'écran, OSD, verrouillage, menu de session, 112 commandes
+IPC (`noctalia msg --help`). En version **beta**, risque accepté : ce n'est pas le
+compositeur, s'il tombe Sway continue de tuiler. Le grief contre GNOME étant esthétique
+et non technique, c'est bien l'interface qui est évaluée ici.
+
+**Partage assumé depuis le 2026-09-01 (fin de journée) : Sway ne fait que du TUILAGE,
+Noctalia fait tout le shell.** La config Sway n'inclut donc plus `/etc/sway/config` —
+elle est **possédée**, pas héritée (voir les pièges). Conséquence : une mise à jour du
+paquet `sway` ne se propage plus dans le fichier versionné.
+Attention à ne pas mal lire ce partage : **les raccourcis restent dans Sway** et
+appellent `noctalia msg …`. Noctalia n'a aucun système de raccourcis et ne peut pas en
+avoir — sous Wayland, seul le compositeur voit le clavier.
 
 ## Comment travailler avec Julien
 
@@ -102,16 +109,32 @@ jour même, tant que le détail est frais.
   compositeurs wlroots ne lisent ni l'un ni l'autre et retombent sur **US QWERTY**.
   Avant de conclure qu'un réglage est « fait au niveau système », vérifier *qui* le lit.
   À refaire sur chaque distro où un compositeur Wayland est testé.
-- **`~/.config/sway/config` remplace `/etc/sway/config`, il ne le complète pas.** D'où
-  le `include /etc/sway/config` en tête du fichier versionné. `/etc/sway/config.d/`,
-  lui, est bien fusionné — mais appartient à root, donc non versionnable.
+- **Sway ne sait pas *désactiver* une directive, seulement en poser une autre par-dessus.**
+  Tant que le fichier versionné incluait `/etc/sway/config`, il héritait d'un bureau
+  complet dont on ne voulait pas et se remplissait de contournements : 22 `unbindsym`,
+  `bar bar-0 mode invisible`, `output * bg` doublé d'un `pkill`. Chacun compensait une
+  ligne héritée. Quand les contournements s'accumulent, la question n'est plus « comment
+  mieux recouvrir » mais « faut-il encore hériter ».
+- **La ligne vitale d'un fichier peut être la dernière.** En abandonnant
+  `include /etc/sway/config`, il fallait impérativement reprendre sa dernière ligne,
+  `include /etc/sway/config.d/*` : c'est elle qui charge `sway-systemd/session.sh`, donc
+  la propagation d'environnement vers systemd et D-Bus, `sway-session.target`, l'agent SSH
+  et les portails. Un fichier qu'on remplace se lit **en entier** d'abord.
 - **`dnf history` affiche l'heure en UTC**, le journal est en heure locale (UTC+2).
   Deux heures d'écart au moment de recouper une transaction avec une entrée datée.
-- **`bindsym` lie un *symbole*, pas une touche — piège AZERTY.** `bindsym $mod+1`
-  exige le symbole `1`, qui sur AZERTY demande déjà `Maj` : `$mod+Shift+1` devient
-  inatteignable. Correctif `bindsym --to-code` (traduit en code de touche physique),
-  avec `unbindsym` de l'ancienne — symbole et code sont deux objets distincts pour
-  Sway. Vaut pour toute config de WM tuilant écrite pour QWERTY, sur toute distro.
+- **`bindsym` lie un *symbole*, pas une touche — et `--to-code` ne suffit PAS.** Sur
+  AZERTY le symbole `1` est au niveau 2 de `AE01` (il exige `Maj`), donc `bindsym $mod+1`
+  rend `$mod+Shift+1` inatteignable. `bindsym --to-code` traduit bien en code de touche
+  **mais sans retirer le `Maj` qu'exige le symbole** : `$mod+1` et `$mod+Shift+1`
+  atterrissent tous deux sur `$mod+Shift+AE01`, la première liaison inscrite gagne — le
+  bug est *déplacé*, pas résolu. Seule réponse correcte : **`bindcode`** avec les codes
+  physiques, lus dans `/usr/share/X11/xkb/keycodes/evdev` (`AE01`=10 … `AE10`=19,
+  `TLDE`=49). Un symbole, un code et un niveau sont trois objets distincts. Vaut pour
+  toute config de WM tuilant écrite pour QWERTY, sur toute distro.
+- **Un symptôme qui change de forme n'est pas un symptôme qui disparaît.** Le correctif
+  `--to-code` ci-dessus avait l'air de marcher : le bug s'était juste décalé d'un rang.
+  Avant de clore, vérifier que le comportement attendu est là — pas seulement que
+  l'ancien symptôme a bougé.
 - **Recharger une config ≠ repartir d'un état neuf.** Certaines directives décrivent
   un état appliqué tout de suite (`output ... position`), d'autres une règle qui ne
   vaut qu'à un événement futur (`workspace ... output`, appliquée à la *création* de
@@ -122,6 +145,23 @@ jour même, tant que le détail est frais.
   par le bloc `bar { }` de `/etc/sway/config`. Vérifier ce qui **tourne** (`pgrep`,
   `swaymsg -t get_bar_config`), pas ce qui est installé. Même famille que « un dépôt
   activé n'est pas un paquet installé ».
+- **Le programme dont le nom s'affiche n'est pas celui qui dessine.** Le cadre bleu
+  « Claude Code » sur chaque fenêtre venait de la **barre de titre de Sway**
+  (`border normal` + `client.focused #285577`), pas de l'application : le titre est écrit
+  par le programme, le cadre est peint par le compositeur. Vérifier *qui peint le pixel*
+  (`swaymsg -t get_tree`) avant de chercher un réglage dans l'application.
+- **Deux composants qui peignent la même couche : c'est l'ordre de CRÉATION qui décide,
+  pas une priorité.** `swaybg` (lancé par la directive `bg` de Sway) et le fond d'écran de
+  Noctalia occupent tous deux la couche layer-shell `background` ; la surface la plus
+  récente passe devant. D'où un fond correct à la connexion et repris par Sway à chaque
+  `reload`, qui relance swaybg. La vraie réponse n'était pas de gagner la course mais de
+  supprimer le concurrent (plus de directive `bg` → plus de swaybg du tout).
+- **Une commande qui réussit n'est pas une commande qui fait ce qu'on croit.**
+  `exec_always pkill -x swaybg` tuait bien un processus — l'ancien : `exec_always`
+  s'exécute *avant* que Sway ait fini d'appliquer la config des sorties, donc avant que le
+  nouveau swaybg n'existe. Vérifier l'**effet** (`pgrep` après coup), pas le code retour.
+  Corollaire : un correctif qui a besoin d'un `sleep` est un pari sur un ordonnancement
+  qu'on ne maîtrise pas — signal qu'il faut traiter la cause.
 - **Un montage système ne peut pas interroger un trousseau de session.** `mount.cifs`
   ne lit qu'un fichier ou une variable d'environnement ; une ligne de `fstab` s'exécute
   en root **avant le login**, sans bus de session ni trousseau déverrouillé. Avant de
@@ -172,23 +212,19 @@ cocher, pas une invitation à rouvrir le débat.
   pas un artefact de test — ne pas présenter cette dépendance comme un biais.
   Ce qui reste utile à en tirer : sur une distro qui ne fournit pas ces utilitaires aussi
   facilement, le coût d'installation sera à noter comme n'importe quelle autre friction.
-- **Les chiffres font l'inverse de ce qui est écrit — `--to-code` suspect.** Constaté le
-  2026-09-01 : `Super+chiffre` ne fait rien, `Super+Maj+chiffre` va sur l'espace au lieu
-  d'y envoyer la fenêtre. Hypothèse à vérifier : `--to-code` traduit le keysym `1` en
-  keycode, mais `1` est au **niveau 2** de `AE01` en AZERTY (il exige Maj) et Sway a pu
-  garder ce Maj dans la liaison — `$mod+1` deviendrait `$mod+Shift+AE01`, et
-  `$mod+Shift+1` demanderait deux Maj, donc inatteignable. Si c'est ça, le correctif du
-  bloc 2 a **déplacé** le bug au lieu de le résoudre, et il faut passer à `bindcode` avec
-  les codes physiques (`10` à `19`). Non bloquant, mais à trancher — et le journal est à
-  corriger si l'hypothèse se confirme.
-- **Scratchpad orphelin.** `$mod+minus` / `$mod+Shift+minus` ont été retirés (ils
-  entraient en collision avec l'espace 6 en AZERTY), le scratchpad n'a donc plus de
-  raccourci. À réattribuer — `²` (`$mod+twosuperior`) est libre et bien placé — ou à
-  abandonner explicitement. À traiter avec le point ci-dessus, même zone de config.
+- **Un `swaybg` résiduel après la bascule — à confirmer d'un coup d'œil.** La config ne
+  contient plus aucune directive `bg`, mais après `swaymsg reload` un processus `swaybg`
+  reste lancé par Sway, cette fois **sans aucun argument** (ni `-i` ni `-c`) — l'ancien
+  portait `-o * -c #000000`. Reste à voir s'il peint quoi que ce soit : si le fond
+  d'écran Noctalia est bien visible, c'est un processus inerte et le sujet est clos ;
+  s'il y a du noir, il faudra comprendre pourquoi Sway le lance sans configuration.
+  Se règle en regardant le bureau, pas en lisant du code.
 - **Ressenti Sway à froid** : noter dans quelques jours si l'usage quotidien est plus
   rapide qu'avec GNOME, ou s'il y a repli vers GNOME dès qu'il y a urgence. C'est ça
   qui tranchera l'axe, pas la liste des raccourcis.
-- **`waybar` laissée par défaut** — prochain fichier naturel du paquet Stow `sway`.
+- **`waybar` est installée mais inutilisée** (tirée par le groupe `swaywm`). Depuis que
+  Noctalia fournit la barre et que le bloc `bar { }` n'est plus hérité, elle n'a plus de
+  rôle. À laisser dormir, ou à retirer si la baseline doit rester lisible.
 - **Snapshot à relancer** après quelques jours d'usage de Sway.
 - **Disque non chiffré — à trancher avant l'itération 02.** Pas de LUKS, pas de
   `/etc/crypttab`. Le trousseau `gnome-keyring` protège les mots de passe contre les

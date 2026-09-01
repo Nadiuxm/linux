@@ -206,6 +206,12 @@ Correctif : `bindsym --to-code`, qui traduit le symbole en **code de touche phys
 dans la première disposition configurée. C'est alors la touche qui compte, plus le
 caractère qu'elle produit.
 
+> **CORRECTION, fin de journée — ce correctif était faux.** `--to-code` traduit bien le
+> symbole en code, mais **sans retirer le `Maj` que ce symbole exige** : `$mod+1` et
+> `$mod+Shift+1` se retrouvaient tous deux sur `$mod+Shift+AE01`, et la première liaison
+> inscrite gagnait. Le bug n'était pas résolu, il était **déplacé**. La bonne réponse est
+> `bindcode` (codes `10`–`19`) — voir « Le point ouvert des chiffres, soldé » plus bas.
+
 Détail qui a son importance : les anciennes liaisons ont été retirées à l'`unbindsym`
 plutôt que simplement redéfinies. Une liaison par symbole et une liaison par code sont
 **deux objets distincts** pour Sway ; les deux auraient coexisté et se seraient marché
@@ -540,6 +546,146 @@ Si ça se confirme, **mon correctif du 1er septembre n'a pas résolu le problèm
 déplacé** — et l'entrée correspondante de ce journal est à corriger. À vérifier avec
 `bindcode` et les codes physiques (`10` à `19`) plutôt qu'avec `--to-code`. Non bloquant,
 mais c'est le genre de chose qu'on ne retrouve jamais si on ne l'écrit pas le jour même.
+
+### Le cadre bleu « Claude Code » — chercher le pixel du bon côté
+
+Un cadre bleu portant « Claude Code » sur chaque fenêtre, entre la barre Noctalia et
+l'invite. J'ai d'abord cherché du côté de Claude Code. Mauvaise piste.
+
+C'est la **barre de titre de Sway**. `swaymsg -t get_tree` le dit sans ambiguïté :
+
+```
+'foot'                border='normal'  bw=2  name='◐ Cadre bleu Claude Code…'
+'org.mozilla.firefox' border='normal'  bw=2  name='Fedora Start | …'
+```
+
+`border=normal`, c'est le défaut de Sway : un liseré **plus** une barre de titre. Le
+texte est écrit par l'application (Claude Code renomme le titre du terminal, Firefox y
+met le nom de l'onglet), le bleu vient de `client.focused` (`#285577`) — jamais redéfini,
+`/etc/sway/config` ne contient aucune directive `border`, `client.*` ni `font`.
+
+Réglé en `default_border pixel 2` : le liseré reste (il indique le focus, indispensable
+en tuilage sur trois écrans), la barre de titre disparaît.
+
+**Ce que ça apprend :** le programme dont le nom s'affiche n'est pas celui qui dessine.
+Même famille que « un paquet installé n'est pas un paquet utilisé » — avant de chercher
+un réglage dans une application, vérifier qui peint réellement le pixel.
+
+Deux détails de méthode au passage. `default_border` est une règle appliquée à la
+**création** d'une fenêtre : un `reload` ne retouche pas les fenêtres ouvertes, il faut
+un sélecteur (`swaymsg '[title=".*"] border pixel 2'`) pour voir l'effet tout de suite.
+Et en disposition onglets ou piles, les titres reviennent forcément — c'est le principe
+de ces dispositions, pas la bordure.
+
+### Le fond d'écran : deux surfaces sur la même couche
+
+Voulu supprimer le papier peint de Sway pour laisser Noctalia gérer le fond. Le premier
+réflexe — recouvrir avec `output * bg #000000 solid_color` — a produit un bug bien plus
+instructif que le réglage lui-même : **à la connexion c'était le fond Noctalia, mais au
+moindre `swaymsg reload` Sway reprenait la main.**
+
+La cause n'est pas une histoire de priorité. La directive `bg` ne fait pas dessiner Sway :
+elle lui fait **lancer un processus `swaybg`** (`pgrep -a swaybg` le montre). Or swaybg et
+Noctalia peignent tous deux sur la même couche layer-shell `background`, où c'est la
+surface **la plus récemment créée** qui passe devant. À la connexion, Noctalia démarre
+après swaybg et gagne. Au rechargement, Sway tue et relance swaybg : le nouveau devient
+le plus récent et recouvre Noctalia.
+
+Deux corrections écartées, vérifiées et pas supposées :
+
+- swaybg transparent (`#00000000`) pour voir Noctalia au travers : Sway refuse l'alpha,
+  `Colors should be of the form #RRGGBB`. `swaybg -c` non plus.
+- retirer la directive : impossible, le `include` se surcharge et `bg none` n'existe pas.
+
+J'ai donc essayé de tuer le processus : `exec_always pkill -x swaybg`. **Ça n'a pas
+marché, et l'échec était trompeur** — la commande tuait bien quelque chose, mais
+`exec_always` s'exécute *avant* que Sway ait fini d'appliquer la config des sorties.
+Elle tuait l'ancien swaybg, et le nouveau — celui qui gêne — survivait. Il a fallu
+`exec_always sh -c 'sleep 1; pkill -x swaybg'` pour que ça tienne.
+
+**Ce que ça apprend :** une commande qui réussit n'est pas une commande qui fait ce qu'on
+croit. `pkill` renvoyait un succès en frappant la mauvaise cible. Et une temporisation qui
+marche reste un aveu : on ne sait pas *quand* l'autre composant agit, on parie.
+
+### Sortir de l'`include` — Sway ne fait plus que du tuilage
+
+Le `sleep 1` m'a décidé. Ce n'est pas propre d'attendre qu'un processus se lance pour le
+tuer aussitôt, et surtout ce n'était pas un cas isolé. Le fichier accumulait des
+contournements qui disaient tous la même chose :
+
+| Contournement | Ce qu'il compensait |
+|---|---|
+| 22 × `unbindsym` | les liaisons chiffres par symbole |
+| `bar bar-0 mode invisible` | le bloc `bar { }` |
+| `output * bg` + `sleep 1; pkill` | la ligne 24 du fichier système |
+
+**Cause commune : `include /etc/sway/config`.** Sway ne sait pas *désactiver* une
+directive — il n'existe aucun « défaire », seulement « en poser une autre par-dessus ».
+Tant qu'on hérite d'un environnement de bureau complet dont on ne veut pas, on ne peut
+que le recouvrir pièce par pièce.
+
+D'où la bascule : reprendre le fichier au lieu de l'hériter. Les 91 directives actives du
+fichier système découpées en deux, selon ce que je veux vraiment — **Sway ne fait que du
+tuilage, Noctalia fait le shell.** Passent à Noctalia : le fond d'écran, le lanceur
+(`wmenu-run`), le menu de session (`swaynag`), le son et la luminosité (`pactl`,
+`brightnessctl`), la capture (`grim`), la barre. Reste à Sway : variables, focus et
+déplacement, espaces de travail, dispositions, scratchpad, mode resize.
+
+Résultat : **plus aucune directive `bg`, donc Sway ne lance plus swaybg du tout.** Rien à
+tuer, pas de temporisation, pas de course entre deux surfaces. Les 22 `unbindsym` et le
+`bar bar-0 mode invisible` disparaissent dans le même mouvement. 100 directives actives,
+un seul fichier.
+
+**Le piège de l'opération, à ne jamais oublier.** La *dernière* ligne de
+`/etc/sway/config` est `include /etc/sway/config.d/*`. Abandonner l'include principal
+sans reprendre celle-là aurait cassé la session : c'est elle qui charge
+`10-systemd-session.conf`, donc `sway-systemd/session.sh`, donc la propagation de
+l'environnement vers systemd et D-Bus (`WAYLAND_DISPLAY`, `SWAYSOCK`,
+`XDG_CURRENT_DESKTOP`), le démarrage de `sway-session.target`, et par ricochet l'agent
+SSH et les portails. Un fichier qu'on remplace, ça se lit **en entier** d'abord — la
+ligne vitale était la dernière.
+
+Ce que la bascule coûte, assumé : une mise à jour du paquet `sway` ne se propage plus
+dans ma config. Pour le lab ça déplace aussi légèrement l'axe — l'`include` montrait *ce
+que Fedora fournit*, un fichier possédé donne le même environnement partout. Compte tenu
+de l'objectif « Sway ne fait que du tuilage », c'est le bon compromis.
+
+Une précision qui a orienté tout le découpage : **les raccourcis restent dans Sway.**
+Noctalia n'a aucun système de raccourcis — son `settings.toml` ne contient que `[theme]`
+et `[wallpaper.*]` — et ne peut pas en avoir, puisque sous Wayland seul le compositeur
+voit le clavier. Le partage réel est : Sway capte la frappe, Noctalia fournit le
+comportement et l'affichage. Les lignes `bindsym … exec noctalia msg …` sont des appels
+IPC, pas des implémentations. « Déléguer à Noctalia » ne veut donc pas dire « vider la
+config Sway ».
+
+### Le point ouvert des chiffres, soldé — `--to-code` était bien coupable
+
+Hypothèse notée hier, confirmée aujourd'hui. `bindsym --to-code` traduit bien le symbole
+en code de touche, **mais sans retirer le Maj que ce symbole exige**. Sur AZERTY, `1` est
+au niveau 2 de `AE01` :
+
+- `bindsym --to-code $mod+1` devenait `$mod+Shift+AE01`
+- `bindsym --to-code $mod+Shift+1` devenait… la même chose
+
+Les deux liaisons atterrissaient sur la même combinaison physique et la première inscrite
+gagnait. D'où le symptôme exact : `Super+touche` ne faisait rien, `Super+Maj+touche`
+changeait d'espace au lieu d'y envoyer la fenêtre.
+
+**Mon correctif du matin n'avait donc pas résolu le bug, il l'avait déplacé d'un rang.**
+C'est la vraie leçon de la journée, plus que la syntaxe : un symptôme qui change de forme
+n'est pas un symptôme qui disparaît.
+
+Corrigé en `bindcode`, qui prend le code de la touche **physique** sans passer par un
+symbole ni par un niveau. Codes lus dans `/usr/share/X11/xkb/keycodes/evdev`, pas devinés :
+rangée du haut `AE01`=10 … `AE10`=19, et `TLDE`=49. Testé : `Super+&` va sur l'espace 1,
+`Super+Maj+&` y envoie la fenêtre. Les deux fonctionnent enfin.
+
+Trois objets distincts, à ne plus confondre : un **symbole**, un **code de touche**, un
+**niveau**. Toute config de WM tuilant écrite pour QWERTY est à relire avec ça en tête.
+
+Le scratchpad, orphelin depuis que j'ai retiré les liaisons `minus` qui entraient en
+collision avec l'espace 6, est réattribué à `²` (`bindcode 49`) — touche libre, isolée en
+haut à gauche, hors de la rangée des chiffres.
 
 ### Détail à ne pas oublier en relisant ce journal
 
