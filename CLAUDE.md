@@ -120,4 +120,16 @@ cocher, pas une invitation à rouvrir le débat.
 
 ## Points ouverts
 
-*(aucun pour l'instant)*
+- **`SSH_AUTH_SOCK` non persistant sous Sway.** `gcr-ssh-agent.socket` est activé
+  (donc relancé au démarrage), mais la variable n'est posée que dans le gestionnaire
+  systemd utilisateur en cours — rien sur le disque, elle disparaîtra à la
+  déconnexion. À figer dans `~/.config/environment.d/`, versionnable via Stow.
+  Cause de fond : l'agent SSH de GNOME vient d'un autostart XDG marqué
+  `OnlyShowIn=GNOME;Unity;MATE;` que Sway ne traite pas.
+- **Friction agent SSH pas encore au journal** — première vraie friction de l'axe
+  « bureaux », elle a bloqué un `git push`. À écrire.
+- **Ressenti Sway à froid** : noter dans quelques jours si l'usage quotidien est plus
+  rapide qu'avec GNOME, ou s'il y a repli vers GNOME dès qu'il y a urgence. C'est ça
+  qui tranchera l'axe, pas la liste des raccourcis.
+- **`waybar` laissée par défaut** — prochain fichier naturel du paquet Stow `sway`.
+- **Snapshot à relancer** après quelques jours d'usage de Sway.
