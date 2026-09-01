@@ -188,3 +188,46 @@ bindsym --to-code $mod+Shift+0 move container to workspace number 10
 
 bindsym --to-code $mod+Tab       focus next
 bindsym --to-code $mod+Shift+Tab focus prev
+
+
+# 4. Collision AZERTY sur la touche « 6 » — le scratchpad contre l'espace 6
+#
+# En fr-azerty :  key <AE06> { [ minus, 6, bar, fiveeighths ] }
+# La touche produit « minus » SANS Maj, « 6 » avec. Or /etc/sway/config lie le
+# scratchpad à ce symbole :
+#     bindsym $mod+Shift+minus move scratchpad     (ligne 171)
+#     bindsym $mod+minus scratchpad show           (ligne 175)
+#
+# Deux liaisons se disputaient donc la touche physique « 6 », et Super+Maj+-
+# ne répondait plus. Même piège que le bloc 2, vu sous un autre angle : un
+# unbindsym par CODE ne retire pas une liaison par SYMBOLE, ce sont deux objets
+# distincts. Il fallait retirer « minus », pas « 6 ».
+#
+# C'est la seule collision possible : la rangée AZERTY produit & é " ' ( - è _ ç à
+# et « minus » est le seul de ces symboles que Sway lie par défaut. D'où le
+# symptôme « une seule touche ne répond pas », qui a permis de trouver la cause.
+#
+# Conséquence assumée : le scratchpad n'est plus atteignable au clavier.
+# À réattribuer — voir les points ouverts du CLAUDE.md.
+
+unbindsym $mod+minus
+unbindsym $mod+Shift+minus
+
+
+# ─── Noctalia ────────────────────────────────────────────────────────────────
+#
+# Shell Wayland complet — barre, lanceur, notifications, verrouillage, réglages —
+# qui remplace swaybar et wmenu-run. Installé le 2026-09-01 (transaction 10),
+# hors protocole de baseline mais après sa capture, donc sans la polluer.
+#
+# La barre de /etc/sway/config ne peut pas être SUPPRIMÉE : le include ne se
+# retire pas, il se surcharge. On la neutralise par son identifiant, que Sway
+# génère seul et que « swaymsg -t get_bar_config » révèle — ici « bar-0 ».
+# Sans ça, deux barres se superposent.
+
+exec noctalia --daemon
+bar bar-0 mode invisible
+
+# Noctalia n'expose pas de binaire de lanceur : tout se pilote en IPC, via
+# « noctalia msg ». Liste des 112 commandes disponibles :  noctalia msg --help
+bindsym --no-warn $mod+d exec noctalia msg panel-toggle launcher

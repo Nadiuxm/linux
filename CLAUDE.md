@@ -156,6 +156,19 @@ cocher, pas une invitation à rouvrir le débat.
   pas un artefact de test — ne pas présenter cette dépendance comme un biais.
   Ce qui reste utile à en tirer : sur une distro qui ne fournit pas ces utilitaires aussi
   facilement, le coût d'installation sera à noter comme n'importe quelle autre friction.
+- **Les chiffres font l'inverse de ce qui est écrit — `--to-code` suspect.** Constaté le
+  2026-09-01 : `Super+chiffre` ne fait rien, `Super+Maj+chiffre` va sur l'espace au lieu
+  d'y envoyer la fenêtre. Hypothèse à vérifier : `--to-code` traduit le keysym `1` en
+  keycode, mais `1` est au **niveau 2** de `AE01` en AZERTY (il exige Maj) et Sway a pu
+  garder ce Maj dans la liaison — `$mod+1` deviendrait `$mod+Shift+AE01`, et
+  `$mod+Shift+1` demanderait deux Maj, donc inatteignable. Si c'est ça, le correctif du
+  bloc 2 a **déplacé** le bug au lieu de le résoudre, et il faut passer à `bindcode` avec
+  les codes physiques (`10` à `19`). Non bloquant, mais à trancher — et le journal est à
+  corriger si l'hypothèse se confirme.
+- **Scratchpad orphelin.** `$mod+minus` / `$mod+Shift+minus` ont été retirés (ils
+  entraient en collision avec l'espace 6 en AZERTY), le scratchpad n'a donc plus de
+  raccourci. À réattribuer — `²` (`$mod+twosuperior`) est libre et bien placé — ou à
+  abandonner explicitement. À traiter avec le point ci-dessus, même zone de config.
 - **Ressenti Sway à froid** : noter dans quelques jours si l'usage quotidien est plus
   rapide qu'avec GNOME, ou s'il y a repli vers GNOME dès qu'il y a urgence. C'est ça
   qui tranchera l'axe, pas la liste des raccourcis.

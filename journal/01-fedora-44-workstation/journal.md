@@ -453,6 +453,94 @@ pas ces utilitaires aussi facilement que Fedora Workstation, le temps passé à 
 sera à chronométrer comme n'importe quelle autre friction. C'est une donnée de
 comparaison entre distros, pas un doute sur l'axe bureaux.
 
+### Noctalia remplace swaybar et wmenu — et une collision AZERTY de plus
+
+Point de départ trivial : le menu de `Super+D` est illisible et minuscule. En cherchant
+à le remplacer, j'ai découvert deux choses que je croyais savoir et qui étaient fausses.
+
+**Ma barre n'était pas `waybar`.** Le paquet est installé — tiré par le groupe
+`swaywm` — mais rien ne le lance. Ce que j'avais en haut de l'écran, c'était `swaybar`,
+démarré par le bloc `bar { }` de `/etc/sway/config`, avec pour toute barre d'état :
+
+```
+status_command while date +'%Y-%m-%d %X'; do sleep 1; done
+```
+
+Une boucle shell qui affiche la date. Mon point ouvert « waybar laissée par défaut »
+était faux depuis le début : **un paquet installé n'est pas un paquet utilisé**, variante
+directe du piège « un dépôt activé n'est pas un paquet installé » du 28 août.
+
+**Noctalia n'est pas un lanceur.** C'est un shell Wayland complet — barre, lanceur,
+notifications, verrouillage, fond d'écran, réglages, 112 commandes IPC. Le confondre
+avec un remplaçant de `wmenu` aurait mené à un chantier trois fois plus gros que prévu
+sans que je l'aie décidé. Ici c'est ce que je voulais, mais il fallait le savoir avant.
+
+Bonne surprise : **packagé dans Fedora officiel** (dépôt `updates`), pas un COPR.
+`noctalia 5.0.0~beta.10`, 9 paquets, 45 Mo. C'est une **beta**, ce qui sur une machine
+unique mérite d'être pesé — mais le risque est plus faible qu'il n'y paraît : Noctalia
+n'est pas le compositeur. S'il tombe, Sway continue et je perds la barre, pas la session.
+Une beta de shell et une beta de noyau ne se jugent pas pareil.
+
+#### La méthode qui a payé : tout tester à chaud avant d'écrire
+
+Démon lancé à la main, `swaymsg bar bar-0 mode invisible`, lanceur testé en IPC —
+**rien d'écrit tant que ce n'était pas validé de visu**. Un redémarrage de session
+suffisait à tout effacer en cas d'échec. Ça n'a rien coûté et ça évite de versionner
+une configuration qu'on n'a jamais vue tourner.
+
+Détail de config qui vaut d'être noté : la barre de `/etc/sway/config` **ne peut pas être
+supprimée**, puisque le `include` ne se retire pas. Il faut la neutraliser par son
+identifiant — que Sway génère seul et que `swaymsg -t get_bar_config` révèle (`bar-0`) :
+
+```sway
+bar bar-0 mode invisible
+```
+
+Sans ça, deux barres se superposent. Même logique que les `unbindsym` : le fichier
+personnel n'efface pas la config système, il la surcharge.
+
+#### `Super+Maj+-` muet : le piège symbole/code, vu par l'autre bout
+
+Un seul raccourci ne répondait plus. Un seul — et c'est ce détail qui a donné la cause.
+
+En fr-azerty : `key <AE06> { [ minus, 6, bar, fiveeighths ] }`. La touche « 6 » produit
+`minus` **sans** Maj. Or `/etc/sway/config` lie le scratchpad à ce symbole :
+
+```sway
+bindsym $mod+Shift+minus move scratchpad
+bindsym $mod+minus scratchpad show
+```
+
+Mes `unbindsym $mod+6` / `$mod+Shift+6` n'y touchaient pas : **un symbole et un code sont
+deux objets distincts**, et je n'avais retiré que le mauvais des deux. Deux liaisons se
+disputaient la même touche physique.
+
+Et c'est la **seule** collision possible : la rangée AZERTY produit `& é " ' ( - è _ ç à`,
+et `minus` est le seul de ces symboles que Sway lie par défaut. Le symptôme « une seule
+touche est muette » n'était donc pas une anomalie à côté du problème — c'était la
+signature exacte de la cause. Une panne qui ne touche qu'un seul cas mérite qu'on cherche
+ce que ce cas a d'unique avant de suspecter le hasard.
+
+Correctif : `unbindsym $mod+minus` et `unbindsym $mod+Shift+minus`. Conséquence assumée,
+le scratchpad n'a plus de raccourci — noté dans les points ouverts plutôt que réattribué
+à la va-vite.
+
+#### Ce que ça met au jour, et qui reste à traiter
+
+En vérifiant, j'ai constaté que `Super+chiffre` ne fait **rien** et que
+`Super+Maj+chiffre` va sur l'espace au lieu d'y envoyer la fenêtre. Les deux rôles sont
+décalés d'un cran.
+
+Hypothèse : `--to-code` traduit le keysym `1` en keycode, mais `1` est au **niveau 2** de
+`AE01` en AZERTY — il exige déjà Maj — et Sway a pu conserver ce Maj dans la liaison.
+`$mod+1` serait devenu `$mod+Shift+AE01`, et `$mod+Shift+1` demanderait deux Maj, donc
+serait inatteignable. Ce serait exactement le bug d'origine, déplacé d'un rang.
+
+Si ça se confirme, **mon correctif du 1er septembre n'a pas résolu le problème, il l'a
+déplacé** — et l'entrée correspondante de ce journal est à corriger. À vérifier avec
+`bindcode` et les codes physiques (`10` à `19`) plutôt qu'avec `--to-code`. Non bloquant,
+mais c'est le genre de chose qu'on ne retrouve jamais si on ne l'écrit pas le jour même.
+
 ### Détail à ne pas oublier en relisant ce journal
 
 `dnf history` affiche les heures en **UTC**, alors que les dates de ce journal et du

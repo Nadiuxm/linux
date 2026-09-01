@@ -39,6 +39,8 @@ Chronologie réelle, lue dans `dnf history` :
 | 28 août 17:02 | 6 | `dnf install stow` — 3 paquets (outillage du lab) |
 | 1er sept. 09:50 | 7 | `dnf update` — 111 paquets. Aucun problème constaté. |
 | 1er sept. 10:01 | 8 | `dnf group install swaywm` — 38 paquets. **Hors protocole de baseline**, voir plus bas. |
+| 1er sept. 14:45 | 9 | `dnf install ./rustdeskadmin-x86_64.rpm` — 5 paquets. Client **RustDesk** d'administration des postes utilisateurs, utilisé en résolution de ticket (équivalent libre de TeamViewer). Paquet généré par mes soins, donc disponible dans n'importe quel format (`.deb`, `.pkg.tar.zst`…) : **ce n'est pas une contrainte de distro**. Hors protocole de baseline. |
+| 1er sept. 16:09 | 10 | `dnf install noctalia` — 9 paquets. Shell Wayland complet, remplace swaybar et wmenu. **Hors protocole de baseline**, même cadre que la transaction 8. |
 
 Deux `dnf install` volontaires, et ils ne jouent pas le même rôle :
 
