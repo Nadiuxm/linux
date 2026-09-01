@@ -5,6 +5,190 @@ Noter **le problème et le temps perdu**, pas seulement la solution.
 
 ---
 
+## 2026-09-01 — Sway : un second bureau, et le clavier qui saute
+
+Première sortie du protocole de baseline, assumée. La baseline Fedora était déjà
+capturée et poussée, donc ce qui suit est daté et traçable sans la polluer.
+
+### Mise à jour du matin
+
+`dnf update` (transaction 7, 09:50) — **111 paquets, aucun problème constaté**.
+C'est une donnée, pas un non-événement : le critère « stabilité » de cette itération
+se construit exactement comme ça, une mise à jour à la fois. La deuxième depuis
+l'install, la deuxième sans casse.
+
+### Pourquoi un gestionnaire de fenêtres
+
+Le projet vise à choisir une distro **et** un environnement de travail. GNOME est le
+défaut de Fedora, pas un choix — il fallait bien un comparatif. Un WM tuilant est le
+bon premier pas : il ne remplace rien, il ajoute une session dans GDM, et il se retire
+sans traces. Un bureau complet type KDE aurait tiré SDDM en concurrence de GDM.
+
+**Sway plutôt que Hyprland, et le dépôt a tranché tout seul :**
+
+```console
+$ dnf info sway        →  sway 1.11-3.fc44, dépôt « fedora »
+$ dnf list hyprland    →  Aucun paquet correspondant à lister
+```
+
+Hyprland aurait demandé un COPR tiers. Ajouter un dépôt non maintenu par Fedora sur
+la machine de baseline pour découvrir le tuilant : mauvais rapport risque/bénéfice.
+À reconsidérer plus tard si Sway convainc.
+
+### Ce que « minimal » veut dire — transaction 8
+
+`dnf group install swaywm` (10:01) — **38 paquets**. Le détail de `dnf history info 8`
+vaut le détour, grâce à la colonne `Reason` :
+
+- **14 en `Group`** : ce que j'ai demandé (`sway`, `swaybg`, `swayidle`, `swaylock`,
+  `foot`, `waybar`, `dunst`, `grim`, `slurp`, `xdg-desktop-portal-wlr`…)
+- **le reste en `Dependency` / `Weak Dependency`** : `wlroots` (le moteur de
+  compositeur sous Sway), les dépendances de `waybar`, les polices FontAwesome
+
+**Le WM « léger » coûte donc 2,7× ce qu'on croit demander.** Retenir la colonne
+`Reason` : elle distingue une intention d'une conséquence, ce que la simple liste
+des paquets installés ne dit pas.
+
+Le groupe `swaywm` valait mieux que `dnf install sway` seul : ce dernier aurait donné
+un WM sans terminal, sans lanceur, sans barre et sans outil de capture — c'est-à-dire
+un écran noir dont on ne sait pas sortir.
+
+### Le vrai enseignement : trois piles clavier qui ne se parlent pas
+
+En arrivant sur Sway, le clavier serait passé en **US QWERTY**. Repéré avant de me
+connecter, en croisant trois vérifications :
+
+```console
+$ cat /etc/X11/xorg.conf.d/00-keyboard.conf
+# Written by systemd-localed(8), read by systemd-localed and Xorg.
+        Option "XkbLayout" "fr"
+        Option "XkbVariant" "azerty"
+
+$ grep -rl XKB_DEFAULT_LAYOUT /etc/environment /etc/environment.d/ ...
+(rien)
+
+$ grep -iE "xkb|input" /etc/sway/config
+(rien)
+```
+
+Le système *sait* que je suis en AZERTY — mais chaque environnement l'apprend par un
+canal différent, et aucun n'est partagé :
+
+| Pile | Source lue |
+|---|---|
+| Xorg | `/etc/X11/xorg.conf.d/00-keyboard.conf` |
+| GNOME | `gsettings` → `[('xkb', 'fr+azerty')]` |
+| Sway / wlroots | `XKB_DEFAULT_LAYOUT`, ou sa propre section `input` — sinon **`us`** |
+
+L'en-tête du fichier Xorg le dit lui-même : *« read by systemd-localed and Xorg »*.
+Sway est Wayland, il ne le lit jamais.
+
+**Leçon, et c'est la même que celle des dépôts tiers, vue sous un autre angle :
+un fichier de configuration présent dans `/etc` n'est pas un fichier lu par tout
+le monde.** Avant de conclure qu'un réglage est « fait au niveau système », vérifier
+*qui* le lit. Le corollaire pratique : ce sera à refaire sur chaque distro où je
+testerai un compositeur Wayland — ce n'est pas un défaut de Fedora.
+
+Temps perdu : zéro, parce que le problème a été vu avant. Il aurait coûté un bon
+quart d'heure de tâtonnement à taper des commandes en QWERTY sans le savoir.
+
+### Config Sway versionnée — et le piège du `include`
+
+Config posée en paquet Stow : `dotfiles/sway/.config/sway/config`, deux réglages
+seulement (`include` + section `input`).
+
+Le `include /etc/sway/config` n'est pas cosmétique : **dès que `~/.config/sway/config`
+existe, Sway ignore `/etc/sway/config` entièrement, il ne fusionne pas.** Sans cette
+ligne, tous les raccourcis par défaut disparaissaient d'un coup. À ne pas confondre
+avec `/etc/sway/config.d/`, qui lui est bien fusionné — mais qui appartient à root et
+ne peut donc pas vivre dans le dépôt.
+
+### Tree folding, vu dans l'autre sens
+
+```
+LINK: .config/sway => ../linux/dotfiles/sway/.config/sway
+```
+
+Stow pose toujours le lien **le plus haut possible**. Pour `bash` il avait pu prendre
+`~/.bashrc.d` en entier ; ici il s'arrête à `~/.config/sway` parce que `~/.config`
+existait déjà avec 15 entrées à GNOME — impossible de monter plus haut sans les
+écraser. Même mécanisme, résultat différent selon l'état de la cible.
+
+Conséquence identique en revanche : `~/.config/sway/` **est** le dépôt. Tout fichier
+déposé dedans sera versionné — jamais de secret là-dedans.
+
+### Vérification finale
+
+```console
+$ swaymsg -t get_inputs | grep xkb_active_layout_name
+    "xkb_active_layout_name": "French (AZERTY)"     (sur chaque périphérique)
+```
+
+`input type:keyboard` s'applique à toute la **classe**, pas à un modèle nommé : un
+clavier USB branché demain sera en AZERTY sans rien toucher. Effet de bord amusant,
+les faux claviers (`Power Button`, `Video Bus`, `Dell WMI hotkeys`) sont listés aussi.
+
+### Trois écrans : Sway ne sait pas ce qu'est un « écran principal »
+
+Disposition à remettre d'aplomb — le grand 27" devait être au centre, il était à
+gauche dans le plan virtuel. Deux notions manquantes côté Wayland, et c'est le
+vrai apprentissage du sujet :
+
+- **Pas de numérotation d'écrans.** Sway ne connaît que des *sorties* nommées
+  (`DP-3`, `HDMI-A-2`, `DP-1`) placées par **coordonnées en pixels** dans un plan
+  virtuel commun. « Écran 1 » n'existe nulle part : c'est la position X qui décide
+  du bord par lequel la souris passe, et rien d'autre.
+- **Pas d'écran principal.** `--primary` est une notion **X11/RandR** qui n'a pas
+  d'équivalent Wayland. Ce qui s'en rapproche, c'est de décider où atterrissent les
+  espaces de travail (`workspace 1 output DP-3`) : la session s'ouvre sur l'espace 1,
+  donc sur cet écran-là.
+
+Identification physique des dalles avec `swaynag -o <sortie> -m "<sortie>"` : un
+bandeau nommé s'affiche sur chaque écran. Indispensable — les noms de sortie ne
+disent rien de la place sur le bureau, et inverser deux écrans se paie en souris
+qui part du mauvais côté.
+
+**Le détail qui compte, l'alignement vertical.** Le central fait 1440 de haut, les
+deux latéraux 1080. Collés à `y=0`, leurs bords hauts sont alignés et les petits
+« pendent » de 360 px : la souris décroche en traversant. `(1440-1080)/2 = 180`
+les centre verticalement. Testé, adopté — le passage est fluide.
+
+```
+   HDMI-A-2            DP-3              DP-1
+   1920x1080         2560x1440         1920x1080
+   ┌────────┐      ┌──────────────┐      ┌────────┐
+   │ y=180  │      │     y=0      │      │ y=180  │
+   └────────┘      └──────────────┘      └────────┘
+   x=0             x=1920                x=4480
+```
+
+**Méthode de travail à réutiliser :** `swaymsg output ... position ...` applique
+**immédiatement et ne persiste pas**. On essaie à chaud, on compare, et seulement
+une fois convaincu on écrit dans la config. Un `Super+Maj+C` annule tout.
+Et avant de recharger une config modifiée :
+
+```console
+$ sway --validate --config ~/.config/sway/config
+```
+
+Elle vérifie la syntaxe **sans appliquer** — de quoi ne pas se retrouver avec une
+session cassée pour une accolade oubliée.
+
+**Nommage par port, choix assumé.** La config utilise `DP-3`/`HDMI-A-2`/`DP-1`,
+c'est-à-dire les **prises**. Un câble déplacé d'un port à l'autre rend le bloc faux.
+L'alternative durable est l'identifiant `marque modèle série`
+(`"Dell Inc. DELL P2725DE FVTKM84"`), qui suit la dalle et pas le connecteur — noté
+en commentaire dans la config. Le branchement ne bougeant pas, le plus lisible a été
+préféré, en connaissance de cause.
+
+### Détail à ne pas oublier en relisant ce journal
+
+`dnf history` affiche les heures en **UTC**, alors que les dates de ce journal et du
+`README.md` sont en heure locale (UTC+2). La transaction 8 y apparaît à 08:01, elle a
+été lancée à 10:01. Deux heures d'écart, de quoi se tromper en recoupant plus tard.
+
+---
+
 ## 2026-08-28 — Mise en place du lab
 
 Fedora 44 Workstation installé avec les options par défaut. Premier vrai geste :

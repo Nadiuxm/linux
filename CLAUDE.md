@@ -45,10 +45,15 @@ Dell Pro Slim QCS1250 — Intel Core i5-14500 (20 threads) — 16 Go RAM — SSD
 | Chemin | Rôle |
 |---|---|
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
-| `dotfiles/` | Paquets **GNU Stow**. `stow -v -t ~ bash git` depuis `dotfiles/`. |
+| `dotfiles/` | Paquets **GNU Stow**. `stow -v -t ~ bash git sway` depuis `dotfiles/`. |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
 Itération en cours : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland).
+
+**Second axe ouvert le 2026-09-01 : environnements de bureau.** Sway installé
+(transaction 8) en plus de GNOME, hors protocole de baseline mais après sa capture,
+donc sans la polluer. GNOME reste la session par défaut. Cadrage détaillé dans le
+`README.md` de l'itération 01. Si l'axe grossit (KDE, Xfce), lui donner son dossier.
 
 ## Comment travailler avec Julien
 
@@ -81,6 +86,16 @@ jour même, tant que le détail est frais.
   demande de réécrire l'historique côté distant.
 - **`~/.bashrc.d` est un lien vers le dépôt** (tree folding de Stow). Tout fichier
   déposé dedans sera versionné : jamais de token ni de secret là-dedans.
+- **Un fichier de conf dans `/etc` n'est pas lu par tout le monde.** `00-keyboard.conf`
+  dit `fr/azerty` mais n'est lu que par **Xorg** ; GNOME lit `gsettings` ; Sway et les
+  compositeurs wlroots ne lisent ni l'un ni l'autre et retombent sur **US QWERTY**.
+  Avant de conclure qu'un réglage est « fait au niveau système », vérifier *qui* le lit.
+  À refaire sur chaque distro où un compositeur Wayland est testé.
+- **`~/.config/sway/config` remplace `/etc/sway/config`, il ne le complète pas.** D'où
+  le `include /etc/sway/config` en tête du fichier versionné. `/etc/sway/config.d/`,
+  lui, est bien fusionné — mais appartient à root, donc non versionnable.
+- **`dnf history` affiche l'heure en UTC**, le journal est en heure locale (UTC+2).
+  Deux heures d'écart au moment de recouper une transaction avec une entrée datée.
 
 ## Hors périmètre — ne pas relancer le sujet
 

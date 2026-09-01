@@ -23,8 +23,10 @@ veux pas passer mes journées à réparer des mises à jour.
 
 ## Configuration installée
 
-**Install strictement vierge.** C'est délibéré : une baseline ne vaut que si elle est
-reproductible à l'identique sur les distros suivantes.
+**Install strictement vierge jusqu'à la capture de la baseline (28 août).** C'est
+délibéré : une baseline ne vaut que si elle est reproductible à l'identique sur les
+distros suivantes. Ce qui a été ajouté ensuite est daté ci-dessous et relève d'un
+second axe — voir « Second axe » plus bas.
 
 Chronologie réelle, lue dans `dnf history` :
 
@@ -35,6 +37,8 @@ Chronologie réelle, lue dans `dnf history` :
 | 28 août 16:18 | 4 | `dnf update` — 1550 paquets |
 | 28 août 16:29 | 5 | `dnf install keepassxc` — 16 paquets |
 | 28 août 17:02 | 6 | `dnf install stow` — 3 paquets (outillage du lab) |
+| 1er sept. 09:50 | 7 | `dnf update` — 111 paquets. Aucun problème constaté. |
+| 1er sept. 10:01 | 8 | `dnf group install swaywm` — 38 paquets. **Hors protocole de baseline**, voir plus bas. |
 
 Deux `dnf install` volontaires, et ils ne jouent pas le même rôle :
 
@@ -54,6 +58,25 @@ que ce soit — sinon je ne compare plus les distros mais mes propres bricolages
 
 Le temps passé sur chaque étape est lui-même une donnée : si obtenir KeePassXC
 demande trois manipulations sur une distro et zéro sur une autre, c'est noté.
+
+### Second axe : environnements de bureau (hors baseline)
+
+Le 1er septembre, Sway (WM tuilant Wayland) a été installé — **transaction 8, 38 paquets**.
+C'est une sortie assumée du protocole ci-dessus, et elle demande d'être cadrée pour ne
+pas fausser le verdict de cette itération :
+
+- **Elle ne pollue pas la baseline.** Celle-ci était capturée et poussée depuis le
+  28 août ; `baseline/` décrit toujours la machine vierge. Tout ce qui a suivi est
+  daté dans `dnf history` et défaisable (`sudo dnf history undo 8`).
+- **Ce n'est pas le même axe d'évaluation.** Le protocole compare des *distributions* ;
+  Sway relève du choix de l'*environnement de travail*, second objectif du projet.
+  GNOME reste la session par défaut, Sway s'ajoute dans GDM sans rien remplacer.
+- **Un WM tuilant a été choisi précisément pour ça** : il n'entre en concurrence avec
+  rien. Un bureau complet type KDE aurait tiré SDDM face à GDM déjà actif, et là
+  l'itération aurait été réellement contaminée.
+
+Conséquence pour le verdict plus bas : les notes « distro » se jugent sur la baseline
+du 28 août. Si l'axe bureaux prend de l'ampleur (KDE, Xfce), il aura son propre dossier.
 
 ### Les dépôts tiers ne sont pas des ajouts
 

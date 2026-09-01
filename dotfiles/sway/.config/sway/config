@@ -1,0 +1,73 @@
+# Sway — configuration personnelle
+#
+# ATTENTION : dès que ce fichier existe, Sway ignore /etc/sway/config
+# ENTIÈREMENT. Il ne fusionne pas les deux. Le include ci-dessous n'est
+# donc pas un confort : sans lui, tous les raccourcis par défaut
+# disparaissent (terminal, lanceur, sortie de session).
+#
+# À ne pas confondre avec /etc/sway/config.d/, qui lui est bien fusionné —
+# mais qui appartient à root et ne peut donc pas être versionné ici.
+
+include /etc/sway/config
+
+
+# Disposition du clavier
+#
+# Sway ne lit PAS /etc/X11/xorg.conf.d/00-keyboard.conf : ce fichier est
+# destiné à Xorg. Il ne lit pas non plus les réglages GNOME (gsettings).
+# Sans la section ci-dessous, il retombe sur son défaut, US QWERTY.
+#
+# Vérifier ce que voit Sway :  swaymsg -t get_inputs
+# Tester à chaud sans relancer :  swaymsg input type:keyboard xkb_layout fr
+
+input type:keyboard {
+    xkb_layout "fr"
+    xkb_variant "azerty"
+}
+
+
+# Disposition des écrans
+#
+# Sway ne connaît ni « écran 1/2/3 » ni « écran principal » : uniquement des
+# sorties placées par coordonnées dans un plan virtuel commun. C'est la position
+# qui décide de tout, à commencer par le bord par lequel la souris passe.
+#
+#   HDMI-A-2            DP-3              DP-1
+#   P2425H              P2725DE           P2414H
+#   1920x1080           2560x1440         1920x1080
+#   ┌────────┐      ┌──────────────┐      ┌────────┐
+#   │ gauche │      │    centre    │      │ droite │
+#   └────────┘      └──────────────┘      └────────┘
+#   x=0             x=1920                x=4480
+#
+# Le y=180 des deux latéraux n'est pas arbitraire : ils font 1080 de haut contre
+# 1440 pour le central. (1440-1080)/2 = 180 les centre verticalement au lieu de
+# les aligner par le haut — la souris traverse alors sans décrochage.
+# Variantes : y=0 aligne les bords hauts, y=360 aligne les bords bas.
+#
+# Nommage par PORT (DP-3, HDMI-A-2…), choix assumé : le branchement ne bouge pas.
+# Si un câble change de prise, ce bloc est à corriger — l'identifiant durable
+# serait « marque modèle série », p.ex. "Dell Inc. DELL P2725DE FVTKM84".
+# Pour retrouver les noms et l'état réels :  swaymsg -t get_outputs
+
+output HDMI-A-2 position 0 180
+output DP-3     position 1920 0
+output DP-1     position 4480 180
+
+
+# Répartition des espaces de travail
+#
+# À défaut d'« écran principal » (notion X11 qui n'existe pas côté Wayland), ceci
+# en tient lieu : le central reçoit les espaces par défaut, donc la session s'y
+# ouvre et les fenêtres y atterrissent sauf demande contraire.
+
+workspace 1 output DP-3
+workspace 2 output DP-3
+workspace 3 output DP-3
+workspace 4 output DP-3
+workspace 5 output DP-3
+workspace 6 output HDMI-A-2
+workspace 7 output HDMI-A-2
+workspace 8 output DP-1
+workspace 9 output DP-1
+workspace 10 output DP-1
