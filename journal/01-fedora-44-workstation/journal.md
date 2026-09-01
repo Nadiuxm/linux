@@ -5,7 +5,7 @@ Noter **le problème et le temps perdu**, pas seulement la solution.
 
 ---
 
-## 2026-09-01 — Sway : un second bureau, et le clavier qui saute
+## 2026-09-01 — Sway : un second bureau, le clavier qui saute, et l'accès au NAS
 
 Première sortie du protocole de baseline, assumée. La baseline Fedora était déjà
 capturée et poussée, donc ce qui suit est daté et traçable sans la polluer.
@@ -254,6 +254,132 @@ sa propre manipulation.
   bonne répartition remplace une famille entière de raccourcis.
 - `exec swaymsg workspace number 2` pour démarrer au centre, l'espace 1 étant
   désormais à gauche. C'est ce qui tient lieu d'« écran principal ».
+
+### Accès au NAS de l'alternance — trois façons de garder un mot de passe
+
+Le NAS `pdc-nas-info` contient mon travail d'alternance : sans accès, je ne travaille
+pas. Il fallait donc un montage automatique. Contrainte que je me suis fixée : **pas de
+mot de passe en clair sur le disque**, d'autant que ce disque n'est pas chiffré.
+
+Ces deux exigences se sont révélées **incompatibles telles quelles**, et c'est le vrai
+enseignement de la journée.
+
+#### Un montage système ne peut pas interroger un trousseau
+
+`mount.cifs` ne sait lire qu'un fichier ou une variable d'environnement. Aucun hook,
+aucun rappel vers un gestionnaire de secrets. Ce n'est pas une lacune de configuration :
+un montage déclaré dans `/etc/fstab` s'exécute **en root, avant mon login**, à un moment
+où ni le bus de session ni le trousseau déverrouillé n'existent. Il n'y a rien à
+appeler.
+
+Donc : « monté par le système » et « secret dans un trousseau de session » ne peuvent
+pas aller ensemble. Il faut lâcher l'un des deux. J'ai lâché « système » — le montage se
+fait maintenant dans ma session, au login.
+
+À retenir plus largement : **avant de chercher comment brancher deux composants,
+vérifier qu'ils sont éveillés au même moment.** C'est la même erreur de raisonnement que
+pour le clavier — croire qu'un réglage est disponible partout parce qu'il existe.
+
+#### Le trousseau fonctionne sous Sway, l'agent SSH non — et ce n'est pas contradictoire
+
+J'aurais parié le contraire, vu le point ouvert sur `SSH_AUTH_SOCK`. Vérifié :
+
+```
+org.freedesktop.secrets   3714  gnome-keyring-d  jzielona  session-2.scope
+```
+
+Le trousseau répond, déverrouillé, en session Sway. Écriture et lecture testées.
+
+Alors que les trois `/etc/xdg/autostart/gnome-keyring-*.desktop` portent bien
+`OnlyShowIn=GNOME;Unity;MATE;` — Sway ne les lance pas. La contradiction n'est
+qu'apparente : **deux composants du même paquet démarrent par deux mécanismes
+différents.**
+
+| Composant | Démarrage | Sous Sway |
+|---|---|---|
+| `ssh` | autostart XDG, filtré `OnlyShowIn` | absent → d'où `SSH_AUTH_SOCK` vide |
+| `secrets` | activation **D-Bus** à la demande | présent |
+| déverrouillage | **PAM** (`pam_gnome_keyring` dans `/etc/pam.d/gdm-password`) | fait au login GDM, quel que soit le bureau lancé ensuite |
+
+Correction de ma règle précédente : « vérifier *qui* lit un réglage » ne suffit pas, il
+faut aussi vérifier **par quel mécanisme un service démarre**. Un même paquet peut être
+à moitié disponible.
+
+#### `gio mount` ne sait pas écrire dans le trousseau — une heure perdue
+
+Le montage en ligne de commande fonctionnait, mais le mot de passe n'était jamais
+enregistré. J'ai d'abord cru rater l'invite `[0] Never, [1] Session, [2] Permanently` :
+en réalité **elle ne m'a jamais été proposée**, et `gio mount --help` ne montre aucune
+option de sauvegarde.
+
+Le composant qui écrit dans `gnome-keyring`, c'est le **dialogue GTK**
+(`GtkMountOperation`), celui de Nautilus — pas l'outil en ligne de commande. Un montage
+depuis Nautilus, « se souvenir pour toujours », et l'entrée apparaît :
+
+```
+label = jzielona@pdc-nas-info.te-mgmt.io
+schema = org.gnome.keyring.NetworkPassword
+attribute.server = pdc-nas-info.te-mgmt.io
+attribute.domain = /
+```
+
+Ensuite seulement, `gio mount` monte sans rien demander : il ne sait pas écrire dans le
+trousseau, mais `gvfsd` sait y lire.
+
+**Ce n'est pas un problème de Sway** — `gio mount` se comporterait pareil sous GNOME.
+Piège de méthode : quand on teste deux choses nouvelles en même temps (un bureau et un
+protocole), la tentation est d'imputer chaque friction à la nouveauté la plus visible.
+Ici ça aurait pollué l'axe « bureaux » avec une limite d'outil qui n'a rien à y voir.
+
+#### Nautilus sous Sway : dégradé mais utilisable
+
+Lancé depuis Sway, Nautilus crache une série d'erreurs — `org.gnome.Mutter.ServiceChannel`
+sans propriétaire, portail `Inhibit` absent, `Tracker3.Miner.Files` en échec — puis
+s'ouvre et fonctionne. L'indexation et la recherche sont mortes, le reste marche.
+
+Donnée pour l'axe « bureaux » : les applications GNOME ne sont pas binaires sous un
+compositeur tiers. Elles perdent des morceaux sans le dire clairement. Pour un usage
+ponctuel c'est acceptable ; en usage quotidien il faudra voir ce qui manque vraiment.
+
+#### Ce qui a été retenu
+
+Montage GVFS déclenché par une unité `systemd --user` accrochée à
+`graphical-session.target` (paquet Stow `nas`). Le mot de passe reste dans le trousseau,
+l'unité ne contient aucun secret.
+
+**Découverte au passage, qui vaut au-delà du NAS :** `sway-session.target` *et*
+`graphical-session.target` sont toutes les deux actives — Fedora fournit une vraie
+intégration systemd pour Sway. Une unité utilisateur accrochée à `graphical-session.target`
+se déclenche donc **sous GNOME comme sous Sway**, avec un seul fichier. C'est
+probablement la bonne piste pour régler `SSH_AUTH_SOCK`, plutôt que
+`~/.config/environment.d/`.
+
+Détail attrapé au test : `ExecStop` échouait quand le partage était déjà démonté à la
+main, laissant l'unité en `failed` sans raison. Corrigé par un `-` préfixé
+(`ExecStop=-/usr/bin/gio ...`), qui dit à systemd d'ignorer l'échec de cette commande.
+Une commande d'arrêt doit tolérer que le travail soit déjà fait.
+
+#### Ce que ça change pour la procédure de bascule
+
+Le trousseau (`~/.local/share/keyrings/`) est chiffré par le mot de passe de session :
+**il ne se transporte pas** d'une installation à l'autre, et n'a rien à faire dans le
+dépôt. Donc après chaque réinstallation, `stow nas` remet l'unité en place, mais il
+faudra **réenregistrer le mot de passe une fois via Nautilus**.
+
+Trente secondes — à condition de savoir que l'étape existe. Sinon c'est un quart d'heure
+à se demander pourquoi le partage ne monte pas. Noté dans `dotfiles/README.md`.
+
+#### Constat non résolu : le disque n'est pas chiffré
+
+`lsblk` : pas de LUKS, `/etc/crypttab` absent. Le trousseau protège le mot de passe
+contre les autres comptes de la machine, mais quelqu'un qui démarre sur une clé USB ou
+repart avec le SSD accède à tout — y compris à `login.keyring`, dont le chiffrement ne
+tient qu'à mon mot de passe de session.
+
+Pour un poste qui porte des accès à l'infrastructure d'un employeur, c'est le vrai trou,
+et ni GVFS ni le trousseau n'y changent quoi que ce soit. **Le chiffrement se décide au
+moment de l'installation** : c'est donc une case à cocher à la prochaine bascule de
+distro, pas quelque chose à rattraper aujourd'hui. À trancher avant l'itération 02.
 
 ### Détail à ne pas oublier en relisant ce journal
 

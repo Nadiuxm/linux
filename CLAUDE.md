@@ -45,7 +45,7 @@ Dell Pro Slim QCS1250 — Intel Core i5-14500 (20 threads) — 16 Go RAM — SSD
 | Chemin | Rôle |
 |---|---|
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
-| `dotfiles/` | Paquets **GNU Stow**. `stow -v -t ~ bash git sway` depuis `dotfiles/`. |
+| `dotfiles/` | Paquets **GNU Stow**. `stow -v -t ~ bash git sway nas` depuis `dotfiles/`. |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
 Itération en cours : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland).
@@ -106,6 +106,22 @@ jour même, tant que le détail est frais.
   vaut qu'à un événement futur (`workspace ... output`, appliquée à la *création* de
   l'espace). Un `reload` ne déplace pas un espace déjà ouvert — ça fait douter de sa
   propre manipulation alors que la config est juste.
+- **Un montage système ne peut pas interroger un trousseau de session.** `mount.cifs`
+  ne lit qu'un fichier ou une variable d'environnement ; une ligne de `fstab` s'exécute
+  en root **avant le login**, sans bus de session ni trousseau déverrouillé. Avant de
+  chercher comment brancher deux composants, vérifier qu'ils sont **éveillés au même
+  moment**. Corollaire : « monté par le système » et « secret dans un trousseau de
+  session » sont incompatibles — il faut lâcher l'un des deux.
+- **Deux composants d'un même paquet peuvent démarrer par des mécanismes différents.**
+  `gnome-keyring` : le composant `ssh` vient d'un autostart XDG filtré `OnlyShowIn`
+  (donc absent sous Sway), le composant `secrets` est activé par **D-Bus** à la demande
+  et déverrouillé par **PAM** au login GDM (donc présent sous Sway). Un paquet peut être
+  **à moitié** disponible. Vérifier *par quel mécanisme* un service démarre, pas
+  seulement s'il est installé.
+- **`gio mount` ne sait pas écrire dans `gnome-keyring`** — seul le dialogue GTK
+  (Nautilus) le fait ; `gvfsd` sait ensuite y *lire*. Rien à voir avec Sway, identique
+  sous GNOME. Piège de méthode général : quand deux nouveautés sont testées en même
+  temps, ne pas imputer chaque friction à la plus visible — ça pollue l'axe d'évaluation.
 
 ## Hors périmètre — ne pas relancer le sujet
 
@@ -126,6 +142,11 @@ cocher, pas une invitation à rouvrir le débat.
   déconnexion. À figer dans `~/.config/environment.d/`, versionnable via Stow.
   Cause de fond : l'agent SSH de GNOME vient d'un autostart XDG marqué
   `OnlyShowIn=GNOME;Unity;MATE;` que Sway ne traite pas.
+  **Piste révisée (2026-09-01)** : `sway-session.target` *et* `graphical-session.target`
+  sont actives — Fedora fournit une vraie intégration systemd pour Sway. Une unité
+  `systemd --user` accrochée à `graphical-session.target` vaut donc **sous GNOME comme
+  sous Sway**, avec un seul fichier. Probablement meilleur que `environment.d/`. Modèle
+  déjà en place : le paquet Stow `nas`.
 - **Friction agent SSH pas encore au journal** — première vraie friction de l'axe
   « bureaux », elle a bloqué un `git push`. À écrire.
 - **Ressenti Sway à froid** : noter dans quelques jours si l'usage quotidien est plus
@@ -133,3 +154,9 @@ cocher, pas une invitation à rouvrir le débat.
   qui tranchera l'axe, pas la liste des raccourcis.
 - **`waybar` laissée par défaut** — prochain fichier naturel du paquet Stow `sway`.
 - **Snapshot à relancer** après quelques jours d'usage de Sway.
+- **Disque non chiffré — à trancher avant l'itération 02.** Pas de LUKS, pas de
+  `/etc/crypttab`. Le trousseau `gnome-keyring` protège les mots de passe contre les
+  autres comptes de la machine, pas contre un démarrage sur clé USB ni contre le vol du
+  SSD. Ce poste porte des accès au NAS de l'employeur. **Le chiffrement se décide à
+  l'installation**, donc c'est une case à cocher à la prochaine bascule, pas un
+  rattrapage. À décider, pas à débattre indéfiniment.

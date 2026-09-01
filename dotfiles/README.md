@@ -26,6 +26,7 @@ manuelle ni script de synchronisation à maintenir. Et `stow -D` défait tout pr
 | `bash` | `.bashrc`, `.bash_profile`, `.bashrc.d/` | Rendu portable : gère `/etc/bashrc` (Fedora/RHEL) **et** `/etc/bash.bashrc` (Debian/Ubuntu). Historique élargi et horodaté. |
 | `git` | `.gitconfig` | Identité, `main` par défaut, quelques alias. |
 | `sway` | `.config/sway/config` | WM tuilant Wayland. `include /etc/sway/config` **obligatoire** (Sway ne fusionne pas), + disposition clavier `fr/azerty` que Sway ne récupère nulle part ailleurs. |
+| `nas` | `.config/systemd/user/nas-infoadmin.service` | Montage automatique du partage SMB au login, sous GNOME **et** Sway. Crée aussi le lien `~/nas`. Le mot de passe n'est **pas** dans ce fichier — voir ci-dessous. |
 
 ## Installation sur une machine neuve
 
@@ -81,6 +82,12 @@ Une copie laissée dans `$HOME` et l'on ne sait plus laquelle des deux fait foi.
   Utiliser `dconf dump /org/gnome/ > gnome-settings.ini` et `dconf load` pour recharger.
 - **Secrets** : clés SSH/GPG, base KeePassXC. Exclus par le `.gitignore`, à sauvegarder
   hors du dépôt.
+- **Trousseau `gnome-keyring`** (`~/.local/share/keyrings/`) : chiffré par le mot de
+  passe de session, non transposable d'une installation à l'autre. Conséquence pour le
+  paquet `nas` : `stow` remet l'unité en place, mais le mot de passe du partage doit être
+  **réenregistré une fois** après chaque réinstallation, en montant le partage depuis
+  Nautilus et en choisissant « se souvenir pour toujours ». `gio mount` en ligne de
+  commande ne sait pas écrire dans le trousseau — seul le dialogue GTK le fait.
 - **Attention aux liens de dossier** (`~/.bashrc.d/`, `~/.config/sway/`) : Stow les a
   posés en *tree folding*, c'est-à-dire un
   lien vers le dossier entier du dépôt, pas un dossier réel. Tout fichier déposé

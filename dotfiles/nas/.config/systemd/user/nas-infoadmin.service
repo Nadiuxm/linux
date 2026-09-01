@@ -1,0 +1,17 @@
+[Unit]
+Description=Montage GVFS du partage NAS infoadmin
+# gvfs a besoin du bus de session, et le trousseau doit etre deverrouille
+# (fait par PAM au login GDM, y compris en session Sway).
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Aucun secret ici : le mot de passe vient de gnome-keyring, via gvfsd.
+ExecStart=/usr/bin/gio mount smb://pdc-nas-info.te-mgmt.io/infoadmin
+ExecStartPost=/usr/bin/ln -sfn /run/user/%U/gvfs/smb-share:server=pdc-nas-info.te-mgmt.io,share=infoadmin %h/nas
+ExecStop=-/usr/bin/gio mount -u smb://pdc-nas-info.te-mgmt.io/infoadmin
+
+[Install]
+WantedBy=graphical-session.target
