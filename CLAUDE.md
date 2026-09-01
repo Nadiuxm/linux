@@ -96,6 +96,16 @@ jour même, tant que le détail est frais.
   lui, est bien fusionné — mais appartient à root, donc non versionnable.
 - **`dnf history` affiche l'heure en UTC**, le journal est en heure locale (UTC+2).
   Deux heures d'écart au moment de recouper une transaction avec une entrée datée.
+- **`bindsym` lie un *symbole*, pas une touche — piège AZERTY.** `bindsym $mod+1`
+  exige le symbole `1`, qui sur AZERTY demande déjà `Maj` : `$mod+Shift+1` devient
+  inatteignable. Correctif `bindsym --to-code` (traduit en code de touche physique),
+  avec `unbindsym` de l'ancienne — symbole et code sont deux objets distincts pour
+  Sway. Vaut pour toute config de WM tuilant écrite pour QWERTY, sur toute distro.
+- **Recharger une config ≠ repartir d'un état neuf.** Certaines directives décrivent
+  un état appliqué tout de suite (`output ... position`), d'autres une règle qui ne
+  vaut qu'à un événement futur (`workspace ... output`, appliquée à la *création* de
+  l'espace). Un `reload` ne déplace pas un espace déjà ouvert — ça fait douter de sa
+  propre manipulation alors que la config est juste.
 
 ## Hors périmètre — ne pas relancer le sujet
 

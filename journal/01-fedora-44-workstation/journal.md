@@ -181,6 +181,80 @@ L'alternative durable est l'identifiant `marque modèle série`
 en commentaire dans la config. Le branchement ne bougeant pas, le plus lisible a été
 préféré, en connaissance de cause.
 
+### Deux pièges de raccourcis, dont un vrai bug AZERTY
+
+Première vraie session d'usage. Deux frictions, et les deux sont des mécanismes à
+comprendre plutôt que des réglages à ajuster.
+
+#### `bindsym` lie un symbole, pas une touche
+
+Constaté à l'usage : `Super+Maj+&` **changeait d'espace de travail** au lieu d'y
+envoyer la fenêtre. Autrement dit, « déplacer une fenêtre vers l'espace N » était
+purement **inatteignable au clavier**.
+
+La cause est dans le manuel, noir sur blanc :
+
+> *Bindings to keysyms are layout-dependent. This can be changed with the
+> `--to-code` flag.* — `man 5 sway`
+
+`/etc/sway/config` écrit `bindsym $mod+1`, ce qui lie le **symbole** `1`. Sur AZERTY,
+ce symbole n'existe qu'avec `Maj` (la touche donne `&` sans). Donc `Super+Maj+&`
+produit bien le symbole `1`, et déclenche la liaison **sans**-Maj — celle qui change
+d'espace. Pour atteindre `$mod+Shift+1` il faudrait un *second* `Maj`. Il n'y en a pas.
+
+Correctif : `bindsym --to-code`, qui traduit le symbole en **code de touche physique**
+dans la première disposition configurée. C'est alors la touche qui compte, plus le
+caractère qu'elle produit.
+
+Détail qui a son importance : les anciennes liaisons ont été retirées à l'`unbindsym`
+plutôt que simplement redéfinies. Une liaison par symbole et une liaison par code sont
+**deux objets distincts** pour Sway ; les deux auraient coexisté et se seraient marché
+dessus.
+
+**Portée du problème :** ce n'est ni un défaut de Fedora ni de Sway, c'est la rencontre
+entre une config écrite pour QWERTY et un clavier AZERTY. Le même piège attend sur i3,
+Hyprland, et toute config de WM tuilant récupérée sur Internet. À vérifier
+systématiquement : *ce raccourci lie-t-il un caractère ou une touche ?*
+
+#### Une affectation d'espace ne vaut qu'à la création
+
+Après avoir écrit `workspace 2 output DP-3` et rechargé, l'espace 2 restait obstinément
+sur l'écran de gauche. Réflexe d'abord : « j'ai dû me tromper de manip ». Non.
+
+`workspace <n> output <sortie>` s'applique **au moment où l'espace est créé**. Les
+espaces 1 et 2 avaient été créés automatiquement au démarrage de la session — Sway en
+ouvre un par écran — donc *avant* que la règle n'existe. `swaymsg reload` prend bien la
+règle pour la suite, mais ne **déplace pas** ce qui est déjà là.
+
+Deux sorties : relancer la session, ou déplacer à la main.
+
+```console
+$ swaymsg 'workspace number 2; move workspace to output DP-3'
+```
+
+**Leçon générale, et c'est la troisième fois de la journée que je la croise :**
+recharger une configuration n'est pas la même chose que repartir d'un état neuf.
+Certaines directives décrivent un *état* (`output ... position`, appliqué
+immédiatement), d'autres une *règle appliquée à un événement futur*
+(`workspace ... output`, appliqué à la création). Confondre les deux fait douter de
+sa propre manipulation.
+
+#### Réglages retenus
+
+- **Flèches = déplacer la fenêtre**, `h/j/k/l` = déplacer le focus. Les flèches
+  faisaient doublon avec `hjkl` sur le focus ; déplacer une fenêtre est le geste le
+  plus fréquent, il méritait les touches les plus évidentes.
+- **Une colonne d'écran par position dans la rangée de chiffres** : `1 4 7 10` à
+  gauche, `2 5 8` au centre, `3 6 9` à droite. La rangée du clavier reproduit la
+  disposition du bureau — `Super+&` part à gauche, `Super+é` au centre, `Super+"` à
+  droite. Plus rien à mémoriser.
+- **Pas besoin de `move container to output`.** Avec des espaces épinglés à des
+  sorties, envoyer une fenêtre sur l'espace 4 l'envoie *de fait* sur l'écran de
+  gauche. Le raccourci « déplacer vers l'écran voisin » devient superflu — une
+  bonne répartition remplace une famille entière de raccourcis.
+- `exec swaymsg workspace number 2` pour démarrer au centre, l'espace 1 étant
+  désormais à gauche. C'est ce qui tient lieu d'« écran principal ».
+
 ### Détail à ne pas oublier en relisant ce journal
 
 `dnf history` affiche les heures en **UTC**, alors que les dates de ce journal et du
