@@ -378,10 +378,27 @@ exec noctalia --daemon
 bindsym $mod+d exec noctalia msg panel-toggle launcher
 
 # Menu de session — remplace le swaynag « do you really want to exit sway ».
-# Le panneau couvre lock, suspend, logout, reboot, shutdown ; inutile de leur
-# donner un raccourci chacun. Actions directes si besoin un jour :
-#     noctalia msg session <lock|suspend|lock-and-suspend|logout|reboot|shutdown>
+# Le panneau couvre lock, suspend, logout, reboot, shutdown. Autres actions
+# directes si besoin un jour :
+#     noctalia msg session <suspend|lock-and-suspend|logout|reboot|shutdown>
 bindsym $mod+Shift+e exec noctalia msg panel-toggle session
+
+# Verrouillage direct, sans passer par le panneau.
+#
+# POURQUOI PAS Super+L, LE RÉFLEXE WINDOWS.
+# « l » est $right dans ce fichier : $mod+l est déjà « focus right » et
+# $mod+Shift+l « move right ». Les libérer casserait la symétrie hjkl, qui est
+# un choix assumé plus haut. Ctrl+Alt+L est l'autre convention répandue — GNOME,
+# Xfce et Cinnamon la lient toutes — donc la mémoire musculaire reste valable
+# ailleurs, y compris sur les postes administrés.
+#
+# À NOTER SUR ALT. Sway ne distingue pas l'Alt gauche du droit : les deux sont
+# Mod1. Ce qui les sépare ici, c'est la disposition AZERTY, où l'Alt droit est
+# AltGr (ISO_Level3_Shift) et non Mod1 — un effet du clavier, pas du
+# compositeur. Ne pas transposer ce raisonnement sur une disposition QWERTY.
+#
+# Pas de --locked : verrouiller un écran déjà verrouillé n'a pas de sens.
+bindsym Control+Mod1+l exec noctalia msg session lock
 
 # Son et luminosité — remplacent les appels directs à pactl et brightnessctl.
 # Le gain n'est pas la commande mais l'OSD : Noctalia affiche le niveau, ce que
