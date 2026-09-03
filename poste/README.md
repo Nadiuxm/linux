@@ -289,6 +289,64 @@ Aucun n'est un dysfonctionnement : à chaque fois, le nom affiché ne décrit pa
    Prendre celui **sans** « pass-through ». Chemin dans l'ISO : `\amd64\w11`
    (équivalent : `\viostor\w11\amd64`).
 
+#### L'agent invité : installé dans Windows ≠ joignable depuis l'hôte
+
+`virtio-win-guest-tools.exe` installe bien `qemu-ga` dans Windows, mais **virt-manager ne
+crée pas le canal virtio-serial correspondant côté hôte**. L'agent tourne alors dans le
+vide : pas d'IP remontée, pas d'arrêt propre, pas de gel du système de fichiers pour un
+snapshot cohérent.
+
+Même famille que « un paquet installé n'est pas un paquet utilisé » — ici, un agent
+installé sans le tuyau qui le rend joignable.
+
+Le canal à ajouter, VM **éteinte** (un redémarrage invité ne change pas le matériel virtuel) :
+
+```xml
+<channel type='unix'>
+  <target type='virtio' name='org.qemu.guest_agent.0'/>
+</channel>
+```
+
+```bash
+virsh -c qemu:///system attach-device win11 canal.xml --config
+```
+
+Vérification, une fois la VM démarrée :
+
+```bash
+virsh -c qemu:///system qemu-agent-command win11 '{"execute":"guest-ping"}'   # -> {"return":{}}
+virsh -c qemu:///system domifaddr win11 --source agent
+```
+
+La seconde donne l'IP de la VM depuis l'hôte, sans passer par `ipconfig`. C'est aussi la
+façon la plus directe de vérifier que le pont fait son travail : **la VM doit apparaître
+dans le même sous-réseau que l'hôte**. Constaté le 2026-09-03 — hôte `10.11.65.1/27`,
+VM `10.11.65.29/27`, même bail DHCP, donc même LAN.
+
+#### Deux canaux ne peuvent pas porter le même nom
+
+En ajoutant le canal ci-dessus, la VM a refusé de démarrer :
+
+```
+virtio-serial-bus: A port already exists by name com.redhat.spice.0
+```
+
+La définition contenait **deux** canaux nommés `com.redhat.spice.0` : un `spicevmc` et un
+`qemu-vdagent`. Les deux font la même chose — presse-papiers et souris — par deux
+implémentations concurrentes. Avec un affichage **SPICE + QXL**, c'est `spicevmc` qui va
+de pair avec le `spice-vdagent` installé par les guest tools ; `qemu-vdagent` est
+l'alternative native de QEMU, utile quand on n'utilise *pas* SPICE. Il a été retiré.
+
+> **Une configuration invalide n'échoue qu'au moment où elle est relue.** Le doublon
+> existait avant l'ajout du canal, et la VM tournait quand même : elle vivait sur ce
+> qu'elle avait lu à son démarrage, la définition sur disque ayant divergé depuis sans que
+> rien ne le signale. C'est « recharger une config ≠ repartir d'un état neuf » vu par
+> l'autre bout — ce n'est pas le rechargement qui n'applique pas, c'est **l'absence** de
+> rechargement qui masque.
+>
+> Corollaire : après toute modification du XML d'une VM, seul un **arrêt/démarrage
+> complet** est un test valable. Un redémarrage invité ne relit rien.
+
 #### Après l'installation, dans cet ordre
 
 1. **`virtio-win-guest-tools.exe`**, à la racine de l'ISO virtio-win. Windows n'a aucun

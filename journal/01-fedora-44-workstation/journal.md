@@ -242,6 +242,54 @@ avait simplement pris du retard sur le correctif.
 Le raisonnement restait juste, la prémisse ne l'était plus. **Une note de piège qu'on ne
 re-teste pas devient elle-même un piège.**
 
+### L'agent invité, et une config invalide qui attendait son heure
+
+Windows installé, guest tools posés, première série de mises à jour passée. Deux choses
+se sont enchaînées et la seconde vaut mieux que la première.
+
+**L'agent invité était installé sans être joignable.** `virtio-win-guest-tools.exe` pose
+bien `qemu-ga` dans Windows, mais virt-manager n'avait créé aucun canal virtio-serial
+`org.qemu.guest_agent.0` côté hôte. L'agent tournait dans le vide : pas d'IP remontée, pas
+d'arrêt propre, pas de gel du système de fichiers. Encore « un paquet installé n'est pas
+un paquet utilisé », version tuyauterie.
+
+**Et en ajoutant ce canal, la VM a refusé de démarrer :**
+
+```
+virtio-serial-bus: A port already exists by name com.redhat.spice.0
+```
+
+Deux canaux portaient déjà le même nom — un `spicevmc` et un `qemu-vdagent`, deux
+implémentations concurrentes du presse-papiers. Le doublon **existait avant** mon ajout,
+et la VM tournait quand même. Elle vivait sur la définition qu'elle avait lue à son
+démarrage ; celle sur disque avait divergé depuis sans que rien ne le signale.
+
+C'est le piège « recharger une config ≠ repartir d'un état neuf » vu par l'autre bout :
+là il s'agissait d'un rechargement qui n'appliquait pas tout, ici c'est **l'absence** de
+rechargement qui masque une configuration déjà cassée.
+
+> **Une configuration invalide n'échoue qu'au moment où elle est relue.** Après toute
+> modification du XML d'une VM, seul un arrêt/démarrage **complet** est un test valable —
+> un redémarrage invité ne relit rien côté hôte.
+
+L'affichage étant en SPICE + QXL, c'est `spicevmc` qui va de pair avec le `spice-vdagent`
+des guest tools ; `qemu-vdagent` a été retiré.
+
+#### Ce que ça débloque, et la validation du pont
+
+```console
+$ virsh -c qemu:///system qemu-agent-command win11 '{"execute":"guest-ping"}'
+{"return":{}}
+
+$ virsh -c qemu:///system domifaddr win11 --source agent
+ Ethernet   52:54:00:f8:62:8b   ipv4   10.11.65.29/27
+```
+
+**C'est la validation de bout en bout du pont.** L'hôte est en `10.11.65.1/27`, la VM en
+`10.11.65.29/27` : même sous-réseau, même serveur DHCP, même domaine de recherche. Elle
+est une machine de plus sur le LAN, ce qui était toute la raison de préférer le pont au
+NAT — sans ça, la jointure au domaine et Kerberos n'avaient aucune chance.
+
 ### Mattermost en Flatpak — et une règle du dépôt prise en défaut
 
 Deuxième outil du poste ajouté aujourd'hui : la messagerie interne de l'entreprise.
@@ -336,7 +384,8 @@ visio réelle, c'est justement une des frictions Wayland à évaluer.
 - Pont `br0` : STP coupé, MAC figée, même bail DHCP, profils persistants dans `/etc`
 - `br_netfilter` non chargé — le point ouvert se referme, aucun `sysctl` à poser
 - VM `win11` : Q35, Secure Boot, TPM 2.0, 8 vCPU, 8 Gio, disque virtio, pont `br0`
-- Installation de Windows 11 25H2 en cours
+- Windows 11 25H2 installé, guest tools posés, premières mises à jour passées
+- Agent invité joignable (`guest-ping` OK), VM en `10.11.65.29/27` sur le LAN
 - Mattermost installé en Flatpak (Flathub), **Wayland natif**, tray Noctalia fonctionnel
 - `poste/` ouvert avec deux fiches : VM Windows et Mattermost
 

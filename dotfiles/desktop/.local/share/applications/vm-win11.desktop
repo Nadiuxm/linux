@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+Name=VM Windows — administration
+GenericName=Machine virtuelle
+Comment=Démarre la VM win11 si elle est arrêtée, puis ouvre sa console
+# Deux commandes en une : « start » ne fait rien si la VM tourne déjà, son
+# erreur est donc jetée. « exec » remplace le shell par virt-manager pour ne
+# pas laisser un sh orphelin.
+#
+# Aucune règle Sway n'est nécessaire : la fenêtre de console porte l'app_id
+# « virt-manager », déjà attrapée par le bloc « Placement des applications »
+# de ~/.config/sway/config, qui l'envoie sur l'espace 6 (DP-1) et l'y focalise.
+#
+# Pas de chemin absolu ni de script dans ~/.local/bin : un .desktop lancé par
+# le shell graphique ne passe pas par .bashrc, donc ~/.local/bin peut ne pas
+# être dans son PATH. virsh et virt-manager sont dans /usr/bin, toujours vu.
+Exec=sh -c "virsh -c qemu:///system start win11 2>/dev/null; exec virt-manager --connect qemu:///system --show-domain-console win11"
+Icon=virt-manager
+Terminal=false
+Categories=System;Emulator;
+Keywords=vm;windows;win11;virt;kvm;virtuelle;admin;domaine;
+StartupNotify=true

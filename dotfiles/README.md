@@ -25,8 +25,9 @@ manuelle ni script de synchronisation à maintenir. Et `stow -D` défait tout pr
 |---|---|---|
 | `bash` | `.bashrc`, `.bash_profile`, `.bashrc.d/` | Rendu portable : gère `/etc/bashrc` (Fedora/RHEL) **et** `/etc/bash.bashrc` (Debian/Ubuntu). Historique élargi et horodaté. |
 | `git` | `.gitconfig` | Identité, `main` par défaut, quelques alias. |
-| `sway` | `.config/sway/config` | WM tuilant Wayland. `include /etc/sway/config` **obligatoire** (Sway ne fusionne pas), + disposition clavier `fr/azerty` que Sway ne récupère nulle part ailleurs. |
+| `sway` | `.config/sway/config` | WM tuilant Wayland, **tuilage seul** — le shell est à Noctalia. Config **possédée**, plus héritée : depuis le 2026-09-01 elle n'inclut plus `/etc/sway/config`, seulement `/etc/sway/config.d/*` (la ligne vitale, qui charge `sway-systemd`). Contient aussi la disposition `fr/azerty`, que Sway ne récupère nulle part ailleurs, et les liaisons en `bindcode`. |
 | `nas` | `.config/systemd/user/nas-infoadmin.service` | Montage automatique du partage SMB au login, sous GNOME **et** Sway. Crée aussi le lien `~/nas`. Le mot de passe n'est **pas** dans ce fichier — voir ci-dessous. |
+| `desktop` | `.local/share/applications/*.desktop` | Entrées de lanceur maison, visibles dans le lanceur Noctalia (`Super+d`). Une seule à ce jour : la VM Windows d'administration. |
 
 ## Installation sur une machine neuve
 
@@ -48,8 +49,12 @@ for f in .bashrc .bash_profile .gitconfig; do
 done
 
 # 4. Poser les liens
-stow -v -t ~ bash git
+stow -v -t ~ bash git sway nas desktop
 ```
+
+> Les paquets `sway`, `nas` et `desktop` ne servent que sur une machine où ils ont un
+> sens (compositeur Wayland, accès au partage, lanceur graphique). Sur une machine sans
+> session graphique, `stow -v -t ~ bash git` suffit.
 
 ## Usage courant
 

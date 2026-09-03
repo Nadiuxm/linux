@@ -50,7 +50,7 @@ Dell Pro Slim QCS1250 — Intel Core i5-14500 (20 threads) — 16 Go RAM — SSD
 |---|---|
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
 | `poste/` | Inventaire **vivant** des outils de travail, indépendant de la distro. |
-| `dotfiles/` | Paquets **GNU Stow**. `stow -v -t ~ bash git sway nas` depuis `dotfiles/`. |
+| `dotfiles/` | Paquets **GNU Stow**. `stow -v -t ~ bash git sway nas desktop` depuis `dotfiles/`. |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
 Itération en cours : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland).
