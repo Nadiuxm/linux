@@ -305,6 +305,40 @@ cocher, pas une invitation à rouvrir le débat.
   l'écraser ; les captures suivantes vont dans `etats/<AAAA-MM-JJ>/`, et le script affiche
   l'écart de paquets avec la baseline. Première capture datée : `etats/2026-09-03/`,
   19 paquets au-delà du protocole.
+- **KeePassXC à la place de `gnome-keyring` comme fournisseur Secret Service — SUJET À
+  DISCUTER, rien n'est tranché.** Demandé par Julien le 2026-09-03 pour une prochaine
+  session. Ne pas arriver avec une recommandation toute faite : le but est d'en parler.
+
+  **Ce dont il s'agit, et ce dont il ne s'agit PAS.** Il s'agit de savoir *quel composant
+  implémente l'API D-Bus `org.freedesktop.secrets`* pour le bureau. Ce n'est **pas** une
+  réouverture du sujet « gestion et sauvegarde des secrets », qui reste hors périmètre
+  (voir plus haut) : on ne parle ni d'audit de la clé SSH, ni de passphrase, ni de
+  stratégie de sauvegarde de la base `.kdbx`.
+
+  **L'état actuel, vérifié le 2026-09-03 :**
+  - `org.freedesktop.secrets` est détenu par `gnome-keyring-daemon` (composant `secrets`),
+    déclaré dans `/usr/share/dbus-1/services/org.freedesktop.secrets.service`, donc
+    **activable par D-Bus à la demande** et déverrouillé par **PAM au login**.
+  - Ses clients connus ici : `gvfsd` pour le montage NAS, et le trousseau en général.
+  - **KeePassXC sait le faire** : la construction Fedora de `keepassxc-2.7.12` contient
+    bien l'implémentation `FdoSecrets` (symboles `FdoSecrets::Service`, `::Collection`,
+    `::Session` dans le binaire). L'option n'est pas activée aujourd'hui.
+  - **Mais KeePassXC ne livre aucun fichier de service D-Bus.** Il ne peut donc pas être
+    activé à la demande : il doit **déjà tourner et être déverrouillé** pour répondre.
+
+  **Les questions à instruire, sans y répondre d'avance :**
+  - Deux fournisseurs ne peuvent pas détenir `org.freedesktop.secrets` en même temps.
+    Comment se fait la bascule, et que devient `gnome-keyring` ?
+  - **Le problème d'ordonnancement** : `gvfsd` monte le NAS au login, KeePassXC doit être
+    lancé et déverrouillé avant. Même famille que « un montage système ne peut pas
+    interroger un trousseau de session » — vérifier que les deux sont **éveillés au même
+    moment** avant de chercher à les brancher.
+  - Que devient le déverrouillage PAM, qui n'existe pas côté KeePassXC ?
+  - Qu'est-ce qu'on y gagne réellement ? Un seul magasin au lieu de deux, et un secret qui
+    suit la base `.kdbx` déjà sauvegardée — à confronter au coût ci-dessus.
+  - Effet sur la note « Cible pour l'installation finale » de `poste/`, qui liste
+    aujourd'hui `gnome-keyring` comme **gardé**.
+
 - **Disque non chiffré — à trancher avant l'itération 02.** Pas de LUKS, pas de
   `/etc/crypttab`. Le trousseau `gnome-keyring` protège les mots de passe contre les
   autres comptes de la machine, pas contre un démarrage sur clé USB ni contre le vol du
