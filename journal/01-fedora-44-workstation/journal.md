@@ -377,6 +377,118 @@ Le lanceur passe aussi `--enable-features=WebRTCPipeWireCapturer`, donc la captu
 par PipeWire et les portails : le partage d'écran est prévu pour Wayland. À confirmer en
 visio réelle, c'est justement une des frictions Wayland à évaluer.
 
+### Instantanés Btrfs — et un garde-fou que j'avais écrit faux
+
+Constat de départ : **rien ne sauvegarde le système.** `bin/snapshot.sh` porte un nom
+trompeur de ce point de vue — il capture une *description* du système pour comparer les
+distros, il ne restaure aucune donnée.
+
+Trois besoins distincts, qu'il fallait séparer avant de choisir quoi que ce soit :
+
+| Besoin | Réponse | État |
+|---|---|---|
+| Annuler une bêtise, une mise à jour ratée | Instantanés Btrfs, sur le même disque | traité aujourd'hui |
+| Survivre à une panne ou au wipe | Copie **hors machine** | **toujours rien** |
+| Reconstruire un poste opérationnel | Le dépôt + `poste/` | déjà fait |
+
+Décision assumée : **instantanés locaux seulement**. Ils vivent sur le disque qu'ils
+protègent et ne survivent ni à une panne du boîtier USB ni à la bascule suivante. Le
+risque est cohérent tant que le Windows interne sert de secours — mais il faudra rouvrir
+le sujet le jour où ce Windows sera formaté.
+
+#### Ce que Fedora ne fournit PAS, et qu'il valait mieux savoir avant
+
+- **`grub-btrfs` n'est pas dans les dépôts** : pas d'entrée GRUB pour démarrer sur un
+  instantané. Si `/` ne boote plus, la restauration est manuelle.
+- **Aucun greffon snapper pour dnf5.** `python3-dnf-plugin-snapper` existe mais vise
+  dnf4 ; le système utilise dnf5. Donc pas d'instantané automatique avant/après
+  transaction — c'est un geste manuel.
+- **Timeshift est éliminé par sa propre description** : « supported only on BTRFS systems
+  having an Ubuntu-type subvolume layout (with @ and @home subvolumes) ». Fedora nomme ses
+  sous-volumes `root` et `home`. Il retomberait en mode rsync, c'est-à-dire des copies
+  complètes — exactement ce qu'on veut éviter quand le système de fichiers sait faire des
+  instantanés gratuits.
+
+Le scénario « la mise à jour casse, je reboote sur l'instantané d'avant » qu'on associe à
+openSUSE **n'est donc pas livré clé en main ici**. Ce qui marche sans effort : l'instantané
+manuel avant opération risquée, et la récupération de fichiers.
+
+#### Le prérequis : sortir le disque de la VM
+
+`/var/lib/libvirt/images` est devenu un **sous-volume Btrfs**. Un sous-volume n'entre
+jamais dans l'instantané de son parent, ce qui règle deux problèmes :
+
+1. **Le `chattr +C` du matin aurait été annulé en pratique** — un instantané force le
+   copy-on-write à revenir : la première écriture après doit recopier.
+2. **L'espace aurait explosé** — chaque instantané quotidien retenant les anciens blocs du
+   qcow2 à mesure que Windows écrit.
+
+Vérifié après coup : le dossier existe dans l'instantané et contient **0 entrée**.
+
+#### Le garde-fou faux — fichiers creux
+
+Le script s'est arrêté net au premier essai :
+
+```
+taille apparente : 109G
+ARRÊT : espace insuffisant (il en faut le double le temps de la copie)
+```
+
+J'avais mesuré avec `du -sb`, qui donne la taille **apparente**. Or un qcow2 est un fichier
+**creux** : 100 Go annoncés pour 31 Go réellement occupés. Le besoin réel tenait
+largement dans les 190 Go libres.
+
+Deux corrections, et **la seconde était plus grave que la première** :
+
+- `du -s --block-size=1` au lieu de `du -sb`, pour mesurer l'occupation réelle ;
+- `cp --sparse=always`, car rien ne garantissait que la copie reproduise les trous. Sans
+  ça, la copie aurait occupé ses **100 Go pleins** — sans erreur, sans avertissement. Elle
+  serait passée, et le disque se serait rempli aux trois quarts pour rien.
+
+> **La taille d'un fichier n'est pas son occupation disque**, et un outil qui copie un
+> fichier creux doit être *explicitement* chargé de préserver les trous.
+
+Ajout d'une étape de contrôle qui compare l'occupation réelle des deux côtés après la
+copie, plutôt que de supposer que ça s'est bien passé.
+
+À noter au passage : la tentation immédiate était de supprimer la VM et de la redéployer.
+Ça aurait coûté la réinstallation de Windows, les mises à jour, les guest tools, le canal
+de l'agent et la jointure au domaine — **pour un `du` mal choisi**. Vérifier la mesure
+avant de renoncer à l'objet mesuré.
+
+#### `restorecon` qui refuse, et qui a raison
+
+Après la copie, deux messages :
+
+```
+Win11_25H2_French_x64_v2.iso not reset as customized by admin to ...virt_content_t
+```
+
+`virt_content_t` figure dans `/etc/selinux/targeted/contexts/customizable_types` :
+**`restorecon` refuse délibérément de réinitialiser ces types-là**, parce qu'ils sont posés
+intentionnellement par une application ou un administrateur. C'est libvirt qui avait
+étiqueté les ISO ainsi — le type dédié au contenu virtuel en **lecture seule**, exactement
+ce qu'est une ISO montée en CD-ROM. Le `win11.qcow2`, disque **inscriptible**, est resté en
+`virt_image_t`. Chaque fichier porte l'étiquette de son rôle, et un refus de `restorecon`
+n'est pas forcément un échec.
+
+#### La configuration retenue
+
+Deux configurations, `root` et `home` : quotidien, rétention **7 jours**, plus un
+garde-fou séparé de 10 instantanés manuels. `ALLOW_USERS` + `SYNC_ACL` pour s'en servir
+sans `sudo`.
+
+Deux détails à ne pas mal lire plus tard :
+
+- **Le « quotidien » fonctionne par soustraction** : le minuteur crée un instantané toutes
+  les heures, le nettoyage ne garde que le premier de chaque journée. Les voir disparaître
+  est normal.
+- **Instantanier `/` et `/home` ne veut pas dire les restaurer ensemble.** Un `dnf update`
+  n'écrit jamais dans `/home` — restaurer `/` seul suffit à défaire la mise à jour. Le
+  `/home` sert à récupérer *chirurgicalement* la config d'une application qui aurait migré
+  son format, pas à tout annuler. Restaurer `/home` en entier écraserait le travail de la
+  journée.
+
 ### État en fin de journée
 
 - `virt-manager` installé, groupe `libvirt` effectif après reboot
@@ -387,7 +499,10 @@ visio réelle, c'est justement une des frictions Wayland à évaluer.
 - Windows 11 25H2 installé, guest tools posés, premières mises à jour passées
 - Agent invité joignable (`guest-ping` OK), VM en `10.11.65.29/27` sur le LAN
 - Mattermost installé en Flatpak (Flathub), **Wayland natif**, tray Noctalia fonctionnel
-- `poste/` ouvert avec deux fiches : VM Windows et Mattermost
+- `poste/` ouvert avec trois fiches : VM Windows, Mattermost, instantanés Btrfs
+- `/var/lib/libvirt/images` converti en sous-volume ; snapper configuré sur `/` et `/home`
+- Toujours **aucune sauvegarde hors machine** — décision assumée, à rouvrir quand le
+  Windows interne de secours sera formaté
 
 Reste à faire : `virtio-win-guest-tools.exe` dès le bureau ouvert (sans lui, aucun pilote
 réseau, donc pas de jointure possible), puis la jointure au domaine et le test Kerberos

@@ -42,7 +42,21 @@ mots de passe personnels. Une distro qui ne le fournit pas facilement n'est pas
 ## Machine
 
 Dell Pro Slim QCS1250 — Intel Core i5-14500 (20 threads) — 16 Go RAM — SSD 233 Go.
-**Machine unique** : aucun poste de secours pendant une réinstallation.
+**Le système tourne sur un SSD EXTERNE** (boîtier USB 3.2, pont générique — `lsblk`
+donne `TRAN=usb`, modèle « Generic PCIE »). C'est délibéré et ça change la lecture de
+toute la méthode :
+
+- **Le disque interne porte toujours un Windows opérationnel**, intact. En cas d'urgence
+  — quelque chose manque sous Fedora et il faut travailler tout de suite — il suffit de
+  redémarrer dessus. **Il y a donc bien un poste de secours**, contrairement à ce que ce
+  fichier a affirmé jusqu'au 2026-09-03.
+- Une bascule de distro est un formatage du disque **externe** : elle ne touche pas au
+  secours. La méthode bare-metal est nettement moins risquée qu'elle n'en a l'air.
+- À terme, le Windows interne sera formaté pour une installation propre. **Ce jour-là le
+  filet disparaît**, et les conclusions ci-dessus tombent avec lui.
+- Contrepartie à surveiller : un boîtier USB ajoute des modes de panne qu'un disque
+  interne n'a pas (débranchement, câble, puce du pont). Et un disque qui se débranche
+  pèse plus lourd qu'un disque vissé dans le débat sur le chiffrement.
 
 ## Structure
 
@@ -219,6 +233,14 @@ jour même, tant que le détail est frais.
   `gcr-ssh-agent.socket` + `sway-systemd/session.sh` : la note avait pris du retard sur
   lui. La leçon tient, la prémisse ne tenait plus — **une note de piège se re-teste**,
   sinon elle devient un piège à elle seule.
+
+- **La taille d'un fichier n'est pas son occupation disque.** `ls -l` et `du -b` donnent la
+  taille *apparente* ; sur un fichier **creux** — image de VM, base de données — l'écart
+  atteint un facteur 4. Le 2026-09-03, un garde-fou écrit avec `du -sb` a refusé une copie
+  de 31 Go en croyant devoir en écrire 109. `du` **sans** `-b` donne l'occupation réelle.
+  Corollaire moins évident et plus dangereux : un outil qui copie un tel fichier doit être
+  **explicitement** chargé de reproduire les trous (`cp --sparse=always`), sinon la copie
+  occupe sa taille apparente pleine — sans erreur, sans avertissement.
 
 - **Une commande locale rapporte un RÉGLAGE, jamais un RÔLE d'infrastructure.** Deux
   adresses dans `IP4.DNS` disent « voici les résolveurs configurés » — pas « voici les

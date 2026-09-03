@@ -379,8 +379,10 @@ Dans cet ordre — chaque étape conditionne la suivante :
    pas seulement qu'elle est installée.
 2. S'ajouter au groupe `libvirt`. **Effectif seulement après une nouvelle session** :
    ouvrir un autre terminal ne suffit pas.
-3. Recréer le dossier d'images **et y poser `chattr +C` tant qu'il est vide**, avant toute
-   image. Posé après, il ne fait rien sur les fichiers déjà écrits.
+3. Recréer le dossier d'images. Depuis le 2026-09-03 ce n'est plus un dossier mais un
+   **sous-volume Btrfs** (`btrfs subvolume create`), pour qu'il reste hors des instantanés
+   — voir la fiche « Instantanés Btrfs » plus bas. Y poser `chattr +C` **tant qu'il est
+   vide** : posé après, il ne fait rien sur les fichiers déjà écrits.
 4. Recréer le pont réseau — la configuration NetworkManager est propre à la machine.
 5. **Récupérer l'ISO `virtio-win`** : elle n'est dans aucun dépôt de distro.
 6. Replacer les images sauvegardées, puis **`restorecon`** (voir ci-dessous).
@@ -545,3 +547,126 @@ des jetons de session.
 > (`dnf` en UTC, `flatpak` en heure locale). `bin/snapshot.sh` couvre déjà les deux :
 > il produit un `flatpaks.txt`, absent de la baseline du 28 août uniquement parce qu'il
 > était vide et que le script supprime les fichiers vides.
+
+---
+
+## Instantanés Btrfs — snapper
+
+> **Statut : en place le 2026-09-03.**
+
+### Rôle
+
+Retour arrière local : annuler une mise à jour qui casse, rattraper une manipulation
+ratée, récupérer un fichier écrasé. Et, pour ce lab spécifiquement, **voir ce qu'une mise
+à jour a changé** (`snapper diff`), ce qui est une donnée d'évaluation en soi.
+
+> **Ce n'est PAS une sauvegarde.** Les instantanés vivent sur le disque qu'ils protègent.
+> Ils ne survivent ni à une panne du support, ni au wipe de l'itération suivante. Le
+> choix est assumé : le disque interne porte un Windows opérationnel qui sert de secours
+> (voir `CLAUDE.md`, section Machine). **Le jour où ce Windows sera formaté, la question
+> de la sauvegarde hors machine se reposera entièrement.**
+
+### Obtention
+
+`snapper` 0.13.0, dépôt Fedora, 4 paquets pour 3 Mio. Rien d'autre à installer.
+
+Trois choses **n'existent pas** sur Fedora et il vaut mieux le savoir avant d'espérer :
+
+| Manquant | Conséquence |
+|---|---|
+| `grub-btrfs` absent des dépôts | **Pas d'entrée GRUB pour démarrer sur un instantané.** Si `/` ne boote plus, la restauration est manuelle (live USB, ou `rootflags=subvol=…` à la main dans GRUB) |
+| Pas de greffon snapper pour **dnf5** | **Aucun instantané automatique avant/après transaction.** `python3-dnf-plugin-snapper` existe mais vise dnf4 ; le système utilise dnf5 |
+| Timeshift inutilisable en mode Btrfs | Sa propre description l'annonce : « supported only on BTRFS systems having an Ubuntu-type subvolume layout (with @ and @home subvolumes) ». Fedora nomme ses sous-volumes `root` et `home` |
+
+Autrement dit, le scénario « la mise à jour casse, je reboote sur l'instantané d'avant »
+qu'on associe à openSUSE **n'est pas livré clé en main ici**. Ce qui marche sans effort,
+c'est l'instantané manuel avant opération risquée, et la récupération de fichiers.
+
+### Portabilité
+
+Dépend entièrement du **système de fichiers**, pas de la distro : sans Btrfs (ou ZFS avec
+un autre outillage), rien de tout ceci n'existe. À noter comme critère lors du choix du
+partitionnement de la prochaine itération — c'est décidé **à l'installation**, comme le
+chiffrement.
+
+### Prérequis : sortir le disque de la VM des instantanés
+
+`/var/lib/libvirt/images` a été converti en **sous-volume Btrfs**. Un sous-volume n'est
+jamais inclus dans l'instantané de son parent, ce qui règle deux problèmes d'un coup :
+
+1. **Le `nodatacow` serait annulé** — un instantané force le copy-on-write à revenir sur
+   un fichier `chattr +C` : la première écriture après l'instantané doit recopier.
+2. **L'espace exploserait** — chaque instantané quotidien retiendrait les anciens blocs du
+   qcow2 à mesure que Windows écrit.
+
+Vérifié après coup : le dossier existe dans l'instantané mais contient **0 entrée**.
+
+### Configuration retenue
+
+Deux configurations, `root` et `home`, réglages identiques :
+
+```
+TIMELINE_CREATE=yes      TIMELINE_CLEANUP=yes     TIMELINE_MIN_AGE=1800
+TIMELINE_LIMIT_HOURLY=0  TIMELINE_LIMIT_DAILY=7   (weekly/monthly/yearly = 0)
+NUMBER_CLEANUP=yes       NUMBER_LIMIT=10          NUMBER_LIMIT_IMPORTANT=5
+ALLOW_USERS=jzielona     SYNC_ACL=yes
+```
+
+Deux minuteurs : `snapper-timeline.timer` crée, `snapper-cleanup.timer` applique la
+rétention. Les deux `enabled`.
+
+**Le « quotidien » de snapper fonctionne par soustraction** : le minuteur crée un
+instantané *toutes les heures*, et c'est le nettoyage qui ne conserve que le premier de
+chaque journée. Voir passer des instantanés horaires éphémères est le comportement normal,
+pas un réglage raté. Passer `TIMELINE_LIMIT_HOURLY` à 6 garderait en plus les six
+dernières heures, pour quasiment rien.
+
+Les instantanés **manuels** (`single`) et **automatiques** (`timeline`) relèvent de deux
+politiques distinctes : `NUMBER_LIMIT=10` pour les premiers, `TIMELINE_LIMIT_DAILY=7` pour
+les seconds. **La rotation quotidienne n'efface donc jamais un instantané pris à la main.**
+
+### Usage
+
+```bash
+snapper -c root create -d "avant dnf update"   # avant toute opération risquée
+snapper -c root list
+snapper -c root status 1..2                    # quels fichiers ont changé
+snapper -c root diff  1..2                     # ce qui a changé dedans
+```
+
+`ALLOW_USERS` + `SYNC_ACL` rendent tout ceci utilisable **sans `sudo`**.
+
+Le cas le plus fréquent ne demande aucune commande snapper — les instantanés sont montés
+en lecture seule et se parcourent comme des dossiers ordinaires :
+
+```bash
+cp -a /home/.snapshots/1/snapshot/jzielona/.config/foo ~/.config/
+```
+
+### Restaurer `/` sans casser `/home` — la nuance qui compte
+
+Un `dnf update` écrit dans `/`, **jamais dans `/home`**. Restaurer `/` seul défait donc
+complètement la mise à jour. Le risque résiduel est ailleurs : **les applications migrent
+leur propre configuration dans `$HOME`** au premier lancement d'une nouvelle version
+(schéma `gsettings`, base d'un client mail, `settings.toml`…). L'ancien binaire retrouve
+alors une configuration qu'il ne comprend plus.
+
+> **Instantanier les deux ne veut pas dire les restaurer ensemble.** Restaurer `/home` en
+> entier écraserait tout le travail depuis l'instantané. La bonne séquence : restaurer `/`,
+> puis, si une application boude encore, aller copier **son seul dossier** depuis
+> l'instantané `/home`. Le `/home` est un filet, pas un bouton « tout annuler ».
+
+### À refaire à la main après une bascule
+
+1. Vérifier que la nouvelle distro est bien en **Btrfs** — sinon toute cette fiche tombe.
+2. Installer `snapper`.
+3. **Convertir `/var/lib/libvirt/images` en sous-volume avant tout instantané** (voir la
+   fiche VM Windows) — sinon le disque de la VM entre dans les instantanés.
+4. `create-config` pour `root` et `home`, réappliquer les réglages ci-dessus.
+5. Activer `snapper-timeline.timer` et `snapper-cleanup.timer`.
+
+### Versionné dans le dépôt
+
+Rien. Les configurations vivent dans `/etc/snapper/configs/`, hors du périmètre de Stow
+qui ne gère que `$HOME`. Les réglages sont reproduits dans cette fiche — c'est elle qui
+fait foi.
