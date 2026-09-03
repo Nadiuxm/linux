@@ -165,6 +165,43 @@ default_border          pixel 2
 default_floating_border pixel 2
 
 
+# ─── Placement des applications ──────────────────────────────────────────────
+#
+# On désigne un ESPACE, jamais une sortie. L'espace 6 vit déjà sur DP-1 (bloc
+# « workspace ... output » plus haut), donc l'écran de droite : « bureau 6 » et
+# « écran de droite » nomment le même endroit, et une seule affectation fait foi.
+# Si un écran change de prise un jour, il n'y a que le bloc « output » à corriger.
+#
+# Espace 6 et non 3 : 3 est le premier espace généraliste de DP-1, la VM le
+# partagerait. 6 lui est dédié, et reste atteignable au clavier ($mod+15).
+#
+# Deux directives, deux rôles distincts :
+#   - « assign » place la fenêtre sur l'espace 6 dès sa création, sans qu'elle
+#     apparaisse d'abord sur l'espace courant.
+#   - « for_window ... focus » lui donne le focus, ce qui bascule l'affichage
+#     sur l'espace 6 ET y amène le clavier. C'est la bascule voulue à l'ouverture.
+# « assign » seul déposerait la fenêtre sans y aller.
+#
+# Le critère est « app_id » et non « class » : virt-manager est un client
+# Wayland natif. Un client XWayland n'a pas d'app_id et demande « class ».
+# Ne pas deviner lequel — le lire sur une fenêtre réellement ouverte :
+#     swaymsg -t get_tree | grep -E '"(app_id|class)"'
+#
+# La règle attrape TOUTES les fenêtres de virt-manager, gestionnaire comme
+# consoles de machines : elles partagent le même app_id. Pour ne basculer que
+# sur la console d'une machine, il faudrait discriminer par titre — le
+# gestionnaire s'appelle « Gestionnaire de machines virtuelles », une console
+# « <nom de la VM> sur QEMU/KVM ».
+#
+# ATTENTION — même piège que « workspace ... output » et « default_border » :
+# c'est une règle appliquée à la CRÉATION d'une fenêtre. Un « swaymsg reload »
+# ne déplace pas une fenêtre déjà ouverte. Pour celle-là, à la main :
+#     swaymsg '[app_id="^virt-manager$"] move to workspace number 6'
+
+assign     [app_id="^virt-manager$"] workspace number 6
+for_window [app_id="^virt-manager$"] focus
+
+
 # ═══ TUILAGE — ce qui reste à Sway ═══════════════════════════════════════════
 
 
