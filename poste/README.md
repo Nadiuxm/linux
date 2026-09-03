@@ -355,3 +355,135 @@ Dans cet ordre — chaque étape conditionne la suivante :
 Ne le sont pas, et ne le seront pas : l'image disque, le NVRAM, les ISO. Le XML de
 définition pourrait l'être une fois la VM stabilisée — à décider alors, en vérifiant
 qu'il ne porte aucun identifiant.
+
+---
+
+## Mattermost — messagerie interne de l'entreprise
+
+> **Statut : installé le 2026-09-03** (12:12 locales), Flatpak Flathub, version 6.3.0.
+
+### Rôle
+
+Outil de communication interne de l'entreprise. Au même titre que la VM Windows, c'est un
+**outil bloquant** : sans lui, on est coupé de l'équipe.
+
+### Obtention
+
+**Flatpak, et c'est un choix assumé** — pas un défaut de disponibilité.
+
+```bash
+flatpak install flathub com.mattermost.Desktop
+```
+
+| | |
+|---|---|
+| Référence | `app/com.mattermost.Desktop/x86_64/stable` |
+| Version | 6.3.0 |
+| Runtime | `org.freedesktop.Platform` 25.08 |
+
+### Portabilité — c'est tout l'intérêt du canal
+
+**Le même Flatpak s'installe à l'identique sur Debian, openSUSE, Arch ou Fedora.** Une
+seule commande, la même partout, la même version. Coût de bascule : **zéro**.
+
+C'est le contraire des deux autres entrées de ce dossier : `virt-manager` est un paquet
+de distro dont le nom et la disponibilité changent, l'ISO `virtio-win` n'est dans aucun
+dépôt. Ici il n'y a rien à réapprendre d'une distro à l'autre.
+
+> À retenir pour la méthode de comparaison : **un outil livré en Flatpak sort de fait du
+> périmètre de comparaison des distributions.** Il ne dira rien sur la distro puisqu'il
+> s'y comporte pareil. Ce qui reste comparable, c'est ce qui l'entoure — présence de
+> Flatpak, de Flathub, et intégration au bureau.
+
+### Le coût réel du premier Flatpak
+
+Mesuré ici, et c'est une donnée de comparaison à part entière :
+
+| Composant | Taille installée |
+|---|---|
+| `com.mattermost.Desktop` | 357,3 Mo |
+| `org.freedesktop.Platform` 25.08 | 659,9 Mo |
+| `org.freedesktop.Platform.GL.default` (25.08) | 457,0 Mo |
+| `org.freedesktop.Platform.GL.default` (25.08-extra) | 457,1 Mo |
+| `org.freedesktop.Platform.VAAPI.Intel` | 46,3 Mo |
+| `org.freedesktop.Platform.codecs-extra` | 43,4 Mo |
+| **Total** | **≈ 2,0 Go** |
+
+**Une application de 357 Mo a coûté 2 Go.** Le runtime est le prix d'entrée, payé une
+seule fois : les Flatpaks suivants qui partagent `org.freedesktop.Platform 25.08` ne
+coûteront que leur propre taille. À ne pas présenter comme un défaut de Flatpak sans
+préciser ça — mais à garder en tête sur un SSD de 233 Go.
+
+### Intégration au bureau — ce qui a été vérifié sous Sway
+
+- **Wayland natif**, vérifié dans l'arbre Sway : `app_id = com.mattermost.Desktop`,
+  aucune `class` X11. L'application ne passe pas par XWayland alors que le manifeste
+  demande les deux permissions. Aucun défaut d'affichage constaté à l'usage.
+- **L'icône de zone de notification fonctionne**, et le repli dans la barre est utilisable
+  comme mode de travail normal. Le Flatpak demande `org.kde.StatusNotifierWatcher` ; ce
+  service est enregistré sur le bus de session par **Noctalia**, pas par Sway
+  (`busctl --user list | grep StatusNotifier`). Point pour l'axe « bureaux » : un WM
+  tuilant nu ne fournit aucun hôte de tray, c'est le shell qui l'apporte.
+- **Le partage d'écran est prévu pour Wayland.** Le lanceur passe
+  `--enable-features=WebRTCPipeWireCapturer`, donc capture via PipeWire et portails plutôt
+  que X11. À confirmer en usage réel — le partage d'écran est justement une des
+  « frictions Wayland » listées dans l'itération 01.
+- **Accès au trousseau** : le Flatpak demande `org.freedesktop.secrets`, déjà fonctionnel
+  sous Sway (activé par D-Bus, déverrouillé par PAM au login GDM).
+
+#### La méthode, pour le prochain outil
+
+Le manifeste demandait **les deux** permissions (`wayland` et `x11`) : il ne tranchait
+rien, beaucoup d'applications Electron retombant sur XWayland faute de
+`--ozone-platform=wayland`. Seule la fenêtre ouverte répond :
+
+```bash
+swaymsg -t get_tree | grep -E '"(app_id|class)"'
+```
+
+`app_id` renseigné = client Wayland natif ; `class` seul = XWayland. Même méthode que pour
+virt-manager. À refaire pour chaque application ajoutée au poste — une permission déclarée
+dit ce qui est *possible*, pas ce qui est *utilisé*.
+
+### Permissions déclarées
+
+Relevé factuel, pour l'inventaire :
+
+```
+ipc  network  pcsc  pulseaudio  wayland  x11  devices
+file access : home
+dbus        : com.canonical.AppMenu.Registrar, org.freedesktop.Notifications,
+              org.freedesktop.secrets, org.kde.StatusNotifierWatcher,
+              org.kde.kwalletd, org.kde.kwalletd5, org.kde.kwalletd6
+```
+
+`file access: home` est un accès complet au dossier personnel, dépôt compris — c'est la
+permission la plus large du lot, et elle est déclarée par l'application, pas imposée par
+le canal. `pcsc` donne accès aux lecteurs de cartes à puce.
+
+### À refaire à la main après une bascule
+
+1. Vérifier que **Flathub est configuré** (`flatpak remotes`). Sur Fedora Workstation,
+   les dépôts Flatpak s'ajoutent à l'écran de bienvenue ; ailleurs, c'est une manipulation
+   à chronométrer.
+2. `flatpak install flathub com.mattermost.Desktop`
+3. Se reconnecter à l'instance de l'entreprise (URL du serveur + identifiants).
+
+### À sauvegarder avant un wipe
+
+Rien de critique. La configuration du client vit dans `~/.var/app/com.mattermost.Desktop/`
+et se reconstitue en se reconnectant — l'historique est côté serveur. À noter simplement
+pour ne pas chercher : ce dossier n'est **pas** dans `~/.config`, c'est le
+cloisonnement Flatpak.
+
+### Versionné dans le dépôt
+
+Rien. Le `~/.var/app/` d'un Flatpak n'a pas vocation à être versionné, et il contiendrait
+des jetons de session.
+
+> **Conséquence sur le suivi du lab :** un Flatpak n'apparaît **pas** dans `dnf history`.
+> Depuis cette installation, il faut interroger deux historiques pour savoir ce qui est
+> présent sur la machine — et ils ne sont même pas dans le même fuseau horaire
+> (`dnf` en UTC, `flatpak` en heure locale). `bin/snapshot.sh` couvre déjà les deux :
+> il produit un `flatpaks.txt`, absent de la baseline du 28 août uniquement parce qu'il
+> était vide et que le script supprime les fichiers vides.

@@ -49,10 +49,22 @@ Dell Pro Slim QCS1250 — Intel Core i5-14500 (20 threads) — 16 Go RAM — SSD
 | Chemin | Rôle |
 |---|---|
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
+| `poste/` | Inventaire **vivant** des outils de travail, indépendant de la distro. |
 | `dotfiles/` | Paquets **GNU Stow**. `stow -v -t ~ bash git sway nas` depuis `dotfiles/`. |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
 Itération en cours : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland).
+
+**Troisième axe ouvert le 2026-09-03 : les outils du poste de travail** (`poste/`).
+Ni `baseline/` (photo figée, sert à comparer les distros) ni `journal/` (daté, propre à
+une itération) ne répondaient à « que dois-je réinstaller et reconfigurer pour
+**retravailler** après une bascule ». `poste/` est cet inventaire, **explicitement hors
+protocole de baseline** : rien de ce qu'il liste ne doit être installé avant la capture
+de la baseline d'une nouvelle itération. Il se déroule de haut en bas après une
+réinstallation, et alimente la procédure de bascule.
+Une fiche par outil, toujours la même structure : rôle, obtention, portabilité, ce
+qu'aucun `stow` ne restaurera, ce qu'il faut sauvegarder, ce qui est versionné.
+Deux fiches à ce jour : **VM Windows d'administration** et **Mattermost**.
 
 **Second axe ouvert le 2026-09-01 : environnements de bureau.** Sway installé
 (transaction 8) en plus de GNOME, hors protocole de baseline mais après sa capture,
@@ -99,7 +111,13 @@ jour même, tant que le détail est frais.
   tiers » du premier démarrage les active. Vérifier avec `rpm -qf` (ou `dpkg -S`) à
   qui appartient un fichier avant d'en conclure quoi que ce soit.
 - **`dnf history` fait foi** pour savoir ce qui a été installé et quand — pas la date
-  de `rpm -q`, qui change à chaque mise à jour.
+  de `rpm -q`, qui change à chaque mise à jour. **Mais il ne voit que les paquets de la
+  distro.** Un Flatpak n'y laisse aucune trace : son historique est ailleurs
+  (`flatpak history`, `flatpak list --app`). Constaté le 2026-09-03 avec Mattermost.
+  Depuis qu'il y a des Flatpaks sur la machine, **aucune source unique ne dit ce qui est
+  installé** : il faut interroger les deux. Vaut pour toute distro — et c'est justement
+  ce qui rend Flatpak intéressant pour la comparaison, puisqu'il est le seul canal
+  identique partout.
 - **Vérifier `git config user.email` avant le premier commit.** Corriger après un push
   demande de réécrire l'historique côté distant.
 - **`~/.bashrc.d` est un lien vers le dépôt** (tree folding de Stow). Tout fichier
@@ -122,6 +140,10 @@ jour même, tant que le détail est frais.
   et les portails. Un fichier qu'on remplace se lit **en entier** d'abord.
 - **`dnf history` affiche l'heure en UTC**, le journal est en heure locale (UTC+2).
   Deux heures d'écart au moment de recouper une transaction avec une entrée datée.
+  **Et `flatpak history` affiche l'heure LOCALE** — les deux historiques de la même
+  machine ne sont donc pas dans le même fuseau. Vérifié le 2026-09-03 : `dnf` disait
+  `07:57:12` pour une transaction de `09:57` locales, `flatpak` disait `12:12:47` pour
+  12:12 locales. Convertir avant de comparer deux lignes d'historique entre elles.
 - **`bindsym` lie un *symbole*, pas une touche — et `--to-code` ne suffit PAS.** Sur
   AZERTY le symbole `1` est au niveau 2 de `AE01` (il exige `Maj`), donc `bindsym $mod+1`
   rend `$mod+Shift+1` inatteignable. `bindsym --to-code` traduit bien en code de touche
@@ -187,10 +209,27 @@ jour même, tant que le détail est frais.
   distro n'a pas déjà traité le problème** — ici c'était le cas, et le point ouvert
   `SSH_AUTH_SOCK` était obsolète depuis l'activation de `gcr-ssh-agent.socket`.
 - **Un agent automatisé tourne dans un environnement filtré — ses échecs ne sont pas des
-  symptômes système.** Claude Code n'a ni `SSH_AUTH_SOCK` ni accès à `/proc/<pid>/environ`
-  (bac à sable, et retrait délibéré de l'accès à l'agent SSH). Un `git fetch` qui échoue
-  de son côté pendant qu'il marche dans le terminal ne prouve **rien** sur la machine.
-  Toujours refaire la mesure dans un vrai terminal avant de conclure.
+  symptômes système.** Un `git fetch` qui échoue de son côté pendant qu'il marche dans le
+  terminal ne prouve **rien** sur la machine : les deux environnements ne se ressemblent
+  pas (bac à sable, variables et accès aux fichiers). Toujours refaire la mesure dans un
+  vrai terminal avant de conclure.
+  **Vérifié le 2026-09-03, et la note d'origine était devenue fausse :** elle affirmait
+  que Claude Code n'avait pas `SSH_AUTH_SOCK`. Il l'a — `/run/user/1000/gcr/ssh`, l'agent
+  lui sert la clé, `git ls-remote` aboutit. Le correctif est celui de la transaction
+  `gcr-ssh-agent.socket` + `sway-systemd/session.sh` : la note avait pris du retard sur
+  lui. La leçon tient, la prémisse ne tenait plus — **une note de piège se re-teste**,
+  sinon elle devient un piège à elle seule.
+
+- **Une commande locale rapporte un RÉGLAGE, jamais un RÔLE d'infrastructure.** Deux
+  adresses dans `IP4.DNS` disent « voici les résolveurs configurés » — pas « voici les
+  contrôleurs de domaine ». Le 2026-09-03, cette déduction a été faite et corrigée : ce
+  sont des serveurs de cache DNS. De même, un `/27` observé ne dit ni s'il y a du DHCP,
+  ni si une adresse est libre, ni comment le parc est découpé. L'architecture réseau de
+  l'employeur ne se déduit pas du poste : **elle se demande**. Vaut aussi pour un agent
+  automatisé, à qui il faut interdire d'inventer ce genre de conclusion. Même famille que
+  « un dépôt activé n'est pas un paquet installé » et « un paquet installé n'est pas un
+  paquet utilisé » : l'outil rapporte un fait étroit, l'interprétation est ajoutée par le
+  lecteur.
 
 ## Hors périmètre — ne pas relancer le sujet
 

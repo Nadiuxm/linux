@@ -32,5 +32,19 @@ En bare-metal, une réinstallation détruit tout — ce dépôt local inclus.
 4. `git add -A && git commit && git push` — **vérifier que le push est bien passé sur GitHub**.
 5. Sauvegarder hors machine ce que git ne porte pas : clés SSH/GPG, base KeePassXC,
    comptes navigateur, documents. Le `.gitignore` les exclut volontairement du dépôt.
-6. Vérifier depuis un autre appareil que le dépôt distant est à jour et complet.
-7. Seulement là, installer la distro suivante — puis `git clone` en premier geste.
+6. **Machines virtuelles** — trois fichiers, et le deuxième s'oublie :
+   - l'image disque, `/var/lib/libvirt/images/*.qcow2` (des dizaines de Go) ;
+   - **le NVRAM**, `/var/lib/libvirt/qemu/nvram/*_VARS.qcow2` — minuscule, mais il porte
+     les variables UEFI : clés Secure Boot et entrées d'amorçage. Sans lui, la VM
+     restaurée ne redémarre pas comme avant ;
+   - la définition, `virsh -c qemu:///system dumpxml <vm>`, légère et lisible.
+
+   Au retour, replacer les images **puis** `restorecon` : `mv` conserve l'étiquette
+   SELinux d'origine et `qemu`, confiné, ne pourra pas lire les fichiers.
+   Voir `poste/README.md` pour le détail.
+7. Vérifier depuis un autre appareil que le dépôt distant est à jour et complet.
+8. Seulement là, installer la distro suivante — puis `git clone` en premier geste.
+
+Une fois la machine réinstallée et la baseline capturée, **`poste/README.md` se déroule
+de haut en bas** pour retrouver un poste opérationnel. Rien de ce qu'il contient ne doit
+être installé avant la capture de la baseline.

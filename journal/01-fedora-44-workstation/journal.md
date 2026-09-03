@@ -5,6 +5,349 @@ Noter **le problème et le temps perdu**, pas seulement la solution.
 
 ---
 
+## 2026-09-03 — VM Windows d'administration : le poste de travail devient un axe
+
+Premier outil ajouté au titre du **travail réel** et non de l'évaluation. Ça a
+justifié d'ouvrir `poste/`, un troisième type de contenu dans le dépôt.
+
+### Pourquoi un dossier de plus
+
+`baseline/` est une photo figée : elle sert à comparer les distros entre elles, elle ne
+doit jamais bouger. `journal.md` est daté et ne vaut que pour l'itération en cours.
+Aucun des deux ne répond à la question qui va se poser à chaque bascule :
+
+> qu'est-ce que je dois réinstaller et reconfigurer pour **retravailler** ?
+
+D'où `poste/`, inventaire vivant, explicitement hors protocole de baseline. Il se
+déroulera de haut en bas après une réinstallation. Une fiche par outil, toujours la même
+structure : rôle, obtention, portabilité, ce qu'aucun `stow` ne restaurera, ce qu'il faut
+sauvegarder.
+
+### Donnée de comparaison : la virtualisation ne coûte rien sur Fedora Workstation
+
+Avant d'installer quoi que ce soit, j'ai regardé ce qui était déjà là. Toute la pile est
+présente — `qemu-kvm`, `libvirt` en démons modulaires activés par socket, OVMF/UEFI,
+SPICE, `swtpm`, `qemu-guest-agent` — tirée par `gnome-boxes`, livré dans l'image
+Workstation. `virtqemud.socket` était déjà actif.
+
+**Seul `virt-manager` manquait**, 714 Ko. Boxes est bien là mais ne sait faire ni réseau
+ponté ni gestion fine des snapshots, donc il ne suffisait pas.
+
+C'est à noter comme donnée de comparaison à part entière : sur Debian ou openSUSE, cette
+pile sera à installer et le temps est à chronométrer. Même logique que les dépôts tiers
+de Fedora — une facilité qui appartient à la distro, pas au projet.
+
+Recoupé dans `dnf history` : **transaction 11**, `dnf install virt-manager -y`,
+**9 paquets**, horodatée `2026-09-03 07:57:12` — soit **09:57 locales**, le décalage UTC
+habituel de ce fichier.
+
+### Protected Users n'est pas une option de sécurité, c'est une contrainte d'architecture
+
+Le compte utilisé pour l'administration est membre de **Protected Users**. Ça a dicté
+toute la configuration de la VM, pas seulement des précautions :
+
+| Contrainte | Ce que ça impose |
+|---|---|
+| NTLM, RC4, DES refusés → Kerberos seul | **FQDN toujours, IP jamais** : une IP ne permet pas de construire le SPN et fait retomber sur NTLM, bloqué |
+| Pas de cache d'identifiants | Un DC joignable à chaque connexion, aucune session hors ligne |
+| TGT de 4 h non renouvelable | Ré-authentification en journée : normal, pas une dérive |
+| Pas de délégation | Tout « double saut » échouera |
+| Horloge synchrone < 5 min | **Piège propre aux VM** : une VM suspendue dérive au réveil |
+
+Deux conséquences en cascade : la VM **doit** être jointe au domaine (depuis un groupe de
+travail, `mstsc` retombe sur NTLM pour la NLA), et donc le réseau doit être **ponté** et
+non NAT.
+
+Ce que ça apprend au-delà du cas : une contrainte d'annuaire peut décider de la topologie
+réseau d'une machine. Je ne l'aurais pas deviné en partant du réseau.
+
+### Le pont br0 — deux paramètres seulement, et un seul était vraiment utile
+
+Le reste de la configuration est le strict minimum : `ipv4.method auto`, comme le profil
+existant, tout venant du bail DHCP. Deux exceptions.
+
+**`bridge.stp no`.** Un pont Linux avec STP actif *émet des BPDU*. Sur un port protégé par
+BPDU guard, ça met le port en `err-disable` : réseau coupé, et la remise en service se
+fait côté switch, pas côté poste. Mon collègue a préféré désactiver le STP côté pont
+plutôt que toucher au port — c'est la bonne réponse, un pont de poste de travail est un
+équipement terminal, il n'a rien à faire dans le spanning-tree. Bénéfice annexe constaté :
+le port passe directement en `forwarding`, sans les ~30 s de `listening` + `learning`.
+
+**`bridge.mac-address`** — et là je me suis fait avoir dans l'autre sens. Le raisonnement
+était bon : un pont Linux prend la MAC la plus basse de ses ports, donc l'arrivée d'un
+`vnetX` de VM pourrait changer la MAC du pont, donc le `dhcp_client_identifier`, donc le
+bail : l'hôte changerait d'IP tout seul. Vérification au premier démarrage de la VM :
+`vnet2` porte `fe:54:00:f8:62:8b`. **libvirt génère ses MAC de tap en `fe:` exprès**,
+précisément pour rester au-dessus de n'importe quelle carte physique. Le problème est réel
+dans l'absolu, mais l'outil le traite déjà. Le paramètre reste (il rend le comportement
+déterministe quelle que soit l'origine du tap) mais ce n'est pas lui qui a sauvé la mise.
+
+C'est exactement la leçon `SSH_AUTH_SOCK` de la semaine dernière : **avant de se féliciter
+d'un correctif, vérifier si l'outil n'avait pas déjà traité le problème.**
+
+### Un profil listé par nmcli n'est pas un profil enregistré
+
+Premier script écrit : il désactivait « Connexion filaire 2 » pour la garder comme filet
+de secours. Après un reboot, les profils avaient **changé d'UUID et de carte**.
+
+```
+/etc/NetworkManager/system-connections/   -> PROD.nmconnection        (persistant)
+/run/NetworkManager/system-connections/   -> Connexion filaire 1, 2   (volatils)
+```
+
+Ce sont des profils **générés à la volée** par NetworkManager pour toute carte Ethernet
+sans configuration enregistrée. Ils vivent dans `/run`, disparaissent au reboot, et
+portent `autoconnect-priority: -999` — la valeur la plus basse, précisément pour que
+n'importe quel profil réel les supplante.
+
+Deux conséquences : mon filet de secours visait un fantôme, et il n'y avait rien à
+désactiver non plus. Le retour arrière consiste à supprimer `br0` et `br0-port`,
+NetworkManager régénère seul. Le script s'est simplifié.
+
+Même famille que « un dépôt activé n'est pas un paquet installé » et « un paquet installé
+n'est pas un paquet utilisé » : l'outil affiche l'état courant, pas ce qui est persistant.
+**Vérifier d'où vient un objet avant de compter dessus** — ici `/etc` contre `/run`.
+
+### Btrfs : `chattr +C` ne vaut que pour ce qui n'existe pas encore
+
+`/` est en Btrfs avec copy-on-write, et une image de VM en CoW se fragmente
+catastrophiquement. La parade est `chattr +C`, mais elle a une subtilité qui en fait un
+vrai piège : **l'attribut ne s'applique qu'aux fichiers créés ensuite.** Posé sur un
+fichier existant et non vide, il ne fait rien — pas d'erreur, pas d'effet.
+
+Donc : le poser sur le **dossier**, **vide**, avant d'y mettre quoi que ce soit. J'ai
+vérifié que le dossier était bien vide (`total 0`) avant, puis constaté l'héritage sur un
+fichier réel plutôt que de le supposer :
+
+```
+$ lsattr /var/lib/libvirt/images/virtio-win-0.1.302.iso
+---------------C------
+```
+
+Encore une commande qui réussit sans forcément faire quelque chose. Vérifier l'effet.
+
+### SELinux : `mv` conserve l'étiquette, `cp` en hérite une
+
+En déplaçant les deux ISO vers `/var/lib/libvirt/images`, je les ai retrouvées en
+`user_home_t` dans un dossier `virt_image_t`. `qemu` étant confiné, il n'aurait pas pu les
+lire — et le symptôme aurait été un « impossible d'ouvrir le disque » parfaitement opaque,
+sans rapport apparent avec un déplacement de fichier.
+
+```
+$ sudo restorecon -Rv /var/lib/libvirt/images/
+Relabeled ... from unconfined_u:object_r:user_home_t:s0
+                to unconfined_u:object_r:virt_image_t:s0
+```
+
+Deux commandes qui « déplacent un fichier » et qui ne font pas la même chose vis-à-vis de
+SELinux. `cp` aurait hérité du contexte de destination, `mv` non. À retenir pour toute
+distro avec SELinux en `Enforcing` — donc pas pour toutes, ce qui en fait aussi une donnée
+de comparaison.
+
+### virt-manager : trois fois le même piège, le nom affiché ne décrit pas la chose
+
+C'est la même famille que le cadre bleu « Claude Code » du 1er septembre.
+
+**1. Il n'existe aucune option « Secure Boot ».** J'ai cherché une case à cocher, il n'y en
+a pas : la liste des firmwares affiche des **chemins de fichiers**, et c'est le `.secboot.`
+dans le chemin qui distingue. Pire, tant que le chipset est en i440FX, aucun firmware
+`secboot` n'est proposé du tout — ce n'est pas caché, ça n'existe pas, le Secure Boot
+exigeant le SMM que seul Q35 fournit. Ça se lit directement :
+
+```
+$ virsh domcapabilities --machine q35 --virttype kvm | sed -n '/<loader/,/<\/loader>/p'
+```
+
+Q35 propose `OVMF_CODE_4M.secboot.qcow2` et `<enum name='secure'><value>yes</value>`.
+i440FX ne propose que `secure: no`.
+
+**2. Il n'existe aucune catégorie « CD-ROM ».** Pour ajouter le second lecteur (celui des
+pilotes virtio), c'est *Ajouter un matériel → Stockage*, puis *Type de périphérique →
+Périphérique CD-ROM*. Aucun pool de stockage n'étant défini sur cette machine, le bouton
+« Manage… » ouvre une liste vide : il faut passer par « Browse Local ».
+
+**3. Le pilote de disque virtio-blk s'appelle « Red Hat VirtIO SCSI controller ».**
+Vérifié dans les `.inf` de l'ISO plutôt que deviné :
+
+| Fichier | Nom affiché | Périphériques PCI |
+|---|---|---|
+| `viostor` — virtio-**blk**, celui d'un disque `bus='virtio'` | « Red Hat VirtIO SCSI controller » | `DEV_1001`, `DEV_1042` |
+| `vioscsi` — virtio-scsi | « Red Hat VirtIO SCSI **pass-through** controller » | `DEV_1004`, `DEV_1048` |
+
+Il faut prendre celui **sans** « pass-through ». Chemin dans l'ISO : `\amd64\w11`.
+
+### Vérifier le XML, pas l'interface
+
+Une fois la VM créée, contrôle de ce qui a réellement été écrit :
+
+```
+machine='pc-q35-10.2'
+<loader ... secure='yes' ...>/usr/share/edk2/ovmf/OVMF_CODE_4M.secboot.qcow2</loader>
+<nvram template='.../OVMF_VARS_4M.secboot.qcow2'>
+<smm state='on'/>
+<tpm model='tpm-crb'><backend type='emulator' version='2.0'/>
+<vcpu>8</vcpu>   currentMemory 8 Gio
+disque virtio -> /var/lib/libvirt/images/win11.qcow2
+<interface type='bridge'><source bridge='br0'/><model type='virtio'/>
+```
+
+Détail qui m'a fait croire un instant que la VM n'existait pas : **`virsh` sans `-c` vise
+`qemu:///session` pour un utilisateur non-root**, où il n'y a rien, alors que la machine
+tourne dans `qemu:///system`. La liste revient vide sans erreur. Toujours préciser
+l'URI, ou poser `LIBVIRT_DEFAULT_URI`.
+
+Le firmware est le **seul choix irréversible** de la création : il se fige avec la VM. Il
+faut donc cocher « Personnaliser la configuration avant l'installation », sans quoi ni
+firmware, ni TPM, ni bus VirtIO ne sont accessibles.
+
+### Placement dans Sway : on désigne un espace, jamais une sortie
+
+Je voulais la VM sur l'écran de droite. La bonne formulation était « sur le bureau 6 » :
+l'affectation `workspace 6 output DP-1` existe déjà, donc les deux nomment le même
+endroit, et une seule ligne fait foi. Si un câble change de prise, il n'y a que le bloc
+`output` à corriger.
+
+```
+assign     [app_id="^virt-manager$"] workspace number 6
+for_window [app_id="^virt-manager$"] focus
+```
+
+`assign` place la fenêtre dès sa création sans qu'elle apparaisse d'abord ailleurs ;
+`for_window … focus` bascule l'affichage **et** le clavier. `assign` seul déposerait la
+fenêtre sans y aller.
+
+Critère `app_id` et non `class` : virt-manager est un client Wayland natif. Lu dans
+`swaymsg -t get_tree` plutôt que supposé — le `.desktop` ne déclare pas de
+`StartupWMClass`, il n'y avait donc aucun moyen de le deviner.
+
+### Méthode : ne pas laisser déduire l'architecture réseau
+
+Point à garder pour la suite du projet. Une commande locale rapporte un **réglage**,
+jamais un **rôle**. Deux adresses dans `IP4.DNS` disent « voici les résolveurs
+configurés » — ce sont chez nous des serveurs de cache DNS, pas des contrôleurs de
+domaine. De même un `/27` observé ne dit ni s'il y a du DHCP, ni si une adresse est libre.
+
+La fiche `poste/` liste donc les **questions à poser** à l'équipe plutôt que des réponses
+inventées : adressage de la VM, VLAN d'administration éventuel, contrainte de port
+(802.1X, port security), résolveurs à utiliser.
+
+### Une note de piège se re-teste
+
+En vérifiant le push, constat annexe : le piège de `CLAUDE.md` disant que l'agent
+automatisé n'a pas `SSH_AUTH_SOCK` **était devenu faux**. Il l'a
+(`/run/user/1000/gcr/ssh`), l'agent lui sert la clé, `git ls-remote` aboutit. C'est l'effet
+de `gcr-ssh-agent.socket` + `sway-systemd/session.sh`, corrigé le 1er septembre — la note
+avait simplement pris du retard sur le correctif.
+
+Le raisonnement restait juste, la prémisse ne l'était plus. **Une note de piège qu'on ne
+re-teste pas devient elle-même un piège.**
+
+### Mattermost en Flatpak — et une règle du dépôt prise en défaut
+
+Deuxième outil du poste ajouté aujourd'hui : la messagerie interne de l'entreprise.
+Installé en **Flatpak délibérément**, pas faute de mieux — le même paquet s'installera à
+l'identique sur la distro suivante, quelle qu'elle soit. Coût de bascule nul.
+
+**Effet de bord sur la méthode de comparaison :** un outil livré en Flatpak sort de fait
+du périmètre de comparaison des distros, puisqu'il s'y comporte pareil. Ce qui reste
+comparable, c'est ce qui l'entoure : Flatpak est-il présent, Flathub configuré, et
+l'intégration au bureau suit-elle.
+
+#### `dnf history` ne fait plus foi à lui seul
+
+J'ai cherché Mattermost dans `dnf history` : rien. C'est normal, mais ça invalide une
+règle que j'avais écrite dans `CLAUDE.md` comme si elle était absolue. L'historique d'un
+Flatpak est ailleurs :
+
+```console
+$ flatpak history --columns=time,change,application,branch
+sept.  3 12:12:47	deploy install	com.mattermost.Desktop	stable
+```
+
+**Depuis aujourd'hui, aucune source unique ne dit ce qui est installé sur la machine.**
+Il faut interroger les deux. Et pendant que j'y étais, un second écart :
+
+| Historique | Fuseau | Aujourd'hui |
+|---|---|---|
+| `dnf history` | **UTC** | `07:57:12` pour 09:57 locales |
+| `flatpak history` | **heure locale** | `12:12:47` pour 12:12 locales |
+
+Deux historiques de la même machine, pas dans le même fuseau. Le piège UTC du 1er
+septembre était donc à moitié faux lui aussi : il vaut pour `dnf`, pas pour `flatpak`.
+
+`bin/snapshot.sh` couvre déjà les deux — il produit un `flatpaks.txt`. S'il est absent de
+la baseline du 28 août, c'est parce qu'il était **vide** et que le script termine par
+`find "$OUT" -type f -empty -delete`. Rien à corriger dans l'outil, et le prochain
+snapshot en produira un vrai.
+
+#### Le prix d'entrée d'un Flatpak, mesuré
+
+| Composant | Taille |
+|---|---|
+| `com.mattermost.Desktop` | 357,3 Mo |
+| `org.freedesktop.Platform` 25.08 | 659,9 Mo |
+| `GL.default` ×2 (25.08 et 25.08-extra) | 914,1 Mo |
+| `VAAPI.Intel` + `codecs-extra` | 89,7 Mo |
+| **Total** | **≈ 2,0 Go** |
+
+Une application de 357 Mo a coûté 2 Go. C'est le **runtime**, payé une seule fois : les
+Flatpaks suivants qui partagent `org.freedesktop.Platform 25.08` ne coûteront que leur
+propre taille. À citer honnêtement dans les deux sens — c'est cher au premier, gratuit
+ensuite, et ça compte sur un SSD de 233 Go.
+
+#### Point pour l'axe « bureaux » : Wayland natif, et le tray marche
+
+Le manifeste Flatpak demande **les deux** permissions, `wayland` et `x11` : il ne tranche
+rien, et beaucoup d'applications Electron retombent sur XWayland faute de
+`--ozone-platform=wayland`. Seule la fenêtre ouverte répond :
+
+```console
+$ swaymsg -t get_tree | grep -E '"(app_id|class)"'
+app_id : com.mattermost.Desktop
+class  : None
+```
+
+**Wayland natif**, aucune `class` X11 — Xwayland tourne bien sur la session mais
+Mattermost ne passe pas par lui. Aucun défaut d'affichage à l'usage. Une permission
+déclarée dit ce qui est *possible*, pas ce qui est *utilisé* : à revérifier pour chaque
+application ajoutée au poste.
+
+Le repli dans la zone de notification fonctionne aussi, et c'est le mode de travail que
+j'ai choisi. Le service qui le permet, vérifié sur le bus plutôt que supposé :
+
+```console
+$ busctl --user list | grep StatusNotifier
+org.kde.StatusNotifierWatcher   9051   noctalia   jzielona
+```
+
+**C'est Noctalia qui l'expose**, pas Sway. Un WM tuilant nu n'en fournit aucun : sans le
+shell, une application qui se replie dans la barre serait simplement introuvable. Bon
+argument pour la combinaison retenue — le compositeur tuile, le shell fournit les services
+de bureau que les applications attendent.
+
+Le lanceur passe aussi `--enable-features=WebRTCPipeWireCapturer`, donc la capture passe
+par PipeWire et les portails : le partage d'écran est prévu pour Wayland. À confirmer en
+visio réelle, c'est justement une des frictions Wayland à évaluer.
+
+### État en fin de journée
+
+- `virt-manager` installé, groupe `libvirt` effectif après reboot
+- `/var/lib/libvirt/images` en `+C`, héritage vérifié
+- Pont `br0` : STP coupé, MAC figée, même bail DHCP, profils persistants dans `/etc`
+- `br_netfilter` non chargé — le point ouvert se referme, aucun `sysctl` à poser
+- VM `win11` : Q35, Secure Boot, TPM 2.0, 8 vCPU, 8 Gio, disque virtio, pont `br0`
+- Installation de Windows 11 25H2 en cours
+- Mattermost installé en Flatpak (Flathub), **Wayland natif**, tray Noctalia fonctionnel
+- `poste/` ouvert avec deux fiches : VM Windows et Mattermost
+
+Reste à faire : `virtio-win-guest-tools.exe` dès le bureau ouvert (sans lui, aucun pilote
+réseau, donc pas de jointure possible), puis la jointure au domaine et le test Kerberos
+par FQDN.
+
+<!-- TODO : compléter le temps passé sur chaque étape — c'est la donnée qui manque ici. -->
+
+---
+
 ## 2026-09-01 — Sway : un second bureau, le clavier qui saute, et l'accès au NAS
 
 Première sortie du protocole de baseline, assumée. La baseline Fedora était déjà
