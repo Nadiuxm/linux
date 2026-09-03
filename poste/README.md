@@ -670,3 +670,96 @@ alors une configuration qu'il ne comprend plus.
 Rien. Les configurations vivent dans `/etc/snapper/configs/`, hors du périmètre de Stow
 qui ne gère que `$HOME`. Les réglages sont reproduits dans cette fiche — c'est elle qui
 fait foi.
+
+---
+
+## WinBox — administration des routeurs MikroTik
+
+> **Statut : installé le 2026-09-03** (14:21 locales), Flatpak Flathub, version 4.3.
+
+### Rôle
+
+Accès à l'interface d'administration des **routeurs MikroTik** du parc. Outil
+d'administration réseau, au même titre que RustDesk l'est pour les postes.
+
+### Obtention
+
+```bash
+flatpak install flathub com.mikrotik.WinBox
+```
+
+| | |
+|---|---|
+| Référence | `app/com.mikrotik.WinBox/x86_64/stable` |
+| Version | 4.3 |
+| Licence | **propriétaire** (`LicenseRef-proprietary`) — seul outil du poste dans ce cas |
+| Runtime | `org.freedesktop.Platform` 25.08, **déjà présent** |
+| Taille installée | **1,6 Mo** |
+| Portée | **`user`** — voir ci-dessous |
+
+**1,6 Mo pour une application complète** : c'est la démonstration directe de ce qui est
+écrit dans la fiche Mattermost. Le premier Flatpak a coûté ~2 Go de runtime ; celui-ci
+partage le même `org.freedesktop.Platform 25.08` et ne coûte que sa propre taille.
+
+### Attention : portée d'installation différente de Mattermost
+
+```
+com.mattermost.Desktop   system   -> /var/lib/flatpak          (tous les comptes)
+com.mikrotik.WinBox      user     -> ~/.local/share/flatpak    (ce compte seul)
+```
+
+WinBox a été installé en portée **utilisateur**, ce qui a ajouté au passage un dépôt
+`flathub` au niveau utilisateur en plus de celui du système. Ce n'est pas un problème,
+mais **c'est une incohérence à connaître** :
+
+- une installation `user` vit dans `$HOME`, donc elle est **capturée par les instantanés
+  `/home`** ; une installation `system` vit sous `/` ;
+- « réinstaller à l'identique » après une bascule suppose de savoir laquelle des deux.
+
+`bin/snapshot.sh` enregistre désormais cette colonne dans `flatpaks.txt` — elle manquait
+jusqu'au 2026-09-03.
+
+### Portabilité
+
+Même argument que Mattermost : **le même Flatpak s'installe à l'identique sur n'importe
+quelle distro**, coût de bascule nul. L'outil sort donc du périmètre de comparaison des
+distributions, puisqu'il s'y comporte pareil.
+
+### Intégration au bureau — XWayland, contrairement à Mattermost
+
+Le manifeste ne demande **que** le socket X11 et force `QT_QPA_PLATFORM=xcb` :
+
+```
+sockets=x11;
+QT_QPA_PLATFORM=xcb
+```
+
+WinBox passe donc par **XWayland**, là où Mattermost est un client Wayland natif. C'est un
+point à surveiller pour l'axe « bureaux » : mise à l'échelle, presse-papiers et capture
+d'écran suivent des chemins différents sous XWayland. À noter si une friction apparaît —
+et à ne pas imputer à Sway sans avoir vérifié quel chemin l'application emprunte.
+
+### Permissions déclarées
+
+```
+shared=ipc;network;
+sockets=x11;
+devices=dri;
+filesystems=home;/media;/run/media;/mnt;xdg-run/gvfs;
+```
+
+Accès complet au dossier personnel et aux points de montage amovibles. Relevé factuel,
+pour l'inventaire.
+
+### À refaire à la main après une bascule
+
+1. Vérifier que Flathub est configuré.
+2. `flatpak install flathub com.mikrotik.WinBox` — **décider de la portée** (`--user` ou
+   défaut système) plutôt que de la subir.
+3. Reconfigurer les accès aux routeurs (adresses, identifiants) : rien de tout cela n'est
+   dans le dépôt.
+
+### Versionné dans le dépôt
+
+Rien. La configuration vit dans `~/.var/app/com.mikrotik.WinBox/` et contiendrait des
+accès à des équipements réseau.

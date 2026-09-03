@@ -489,6 +489,92 @@ Deux détails à ne pas mal lire plus tard :
   son format, pas à tout annuler. Restaurer `/home` en entier écraserait le travail de la
   journée.
 
+### `snapshot.sh` écrasait la baseline, et j'ai failli le laisser faire
+
+Le point ouvert de `CLAUDE.md` disait « **Snapshot à relancer** après quelques jours
+d'usage de Sway ». Je l'ai relancé. Il a écrit dans `baseline/`.
+
+`bin/snapshot.sh` ligne 25 : `OUT="$ITER/baseline"`, sans le moindre garde-fou. Or
+`baseline/` est la **photo figée de l'installation vierge**, la référence qui sert à
+comparer les distributions entre elles. Le point ouvert du fichier de mémoire invitait
+donc, littéralement, à détruire la référence.
+
+L'en-tête du script portait la contradiction depuis l'origine :
+
+> « À lancer au début d'une itération (**état initial**) et juste avant la bascule
+> (**état final**) »
+
+Deux captures annoncées, une seule destination.
+
+Rien n'a été perdu — `baseline/` est commitée depuis l'init, et la capture du jour a été
+mise de côté **avant** la restauration. Mais le filet, c'était git, pas le script. Si
+j'avais commité par-dessus sans regarder, la référence de l'itération 01 disparaissait.
+
+#### Le correctif
+
+- `baseline/` : écrite **une seule fois**. Le script refuse de l'écraser et explique quoi
+  faire à la place.
+- `etats/<AAAA-MM-JJ>/` : destination automatique dès que la baseline existe.
+- En fin d'exécution, l'écart de paquets avec la baseline est affiché.
+
+Ce dernier point est ce qui rend la relance enfin **utile** — l'information n'existait
+nulle part jusqu'ici. Première capture datée, 19 paquets au-delà du protocole :
+
+```
++ sway swaybg swayidle swaylock waybar xdg-desktop-portal-wlr
++ foot dunst grim slurp xorg-x11-server-Xwayland
++ noctalia
++ rustdeskadmin virt-manager snapper stow
++ chromium tuned-ppd tuned-switcher
+```
+
+Trois lignes restent à expliquer : **chromium**, **tuned-ppd** et **tuned-switcher**
+n'apparaissent dans aucune transaction `dnf` examinée aujourd'hui. Probablement des
+dépendances promues en « installé explicitement » par une mise à jour — à confirmer, ce
+serait une donnée de comparaison intéressante.
+
+> **Un script qui écrit là où il ne faut pas ne le dit jamais.** Il réussit, il affiche
+> « fichiers écrits », et c'est git qui rattrape — s'il y a un git, et si on regarde. La
+> destination d'une commande destructive mérite autant d'attention que son contenu.
+
+### WinBox — et deux Flatpaks qui ne s'installent pas au même endroit
+
+WinBox 4.3 installé en Flatpak pour l'administration des routeurs MikroTik. Troisième
+outil du poste, et **1,6 Mo** : le runtime était déjà là depuis Mattermost. C'est la
+démonstration directe de ce qui était noté ce matin — le premier Flatpak coûte ~2 Go, les
+suivants ne coûtent que leur taille.
+
+Deux constats en le documentant.
+
+**Les deux applications ne sont pas installées au même endroit :**
+
+```
+com.mattermost.Desktop   system   -> /var/lib/flatpak
+com.mikrotik.WinBox      user     -> ~/.local/share/flatpak
+```
+
+Une portée `user` vit dans `$HOME` — donc capturée par les instantanés `/home` — là où une
+portée `system` vit sous `/`. Et « réinstaller à l'identique » après une bascule suppose de
+savoir laquelle. `snapshot.sh` enregistre désormais cette colonne ; elle manquait.
+
+Piste écartée en cours de route : j'ai d'abord cru à un **Flathub filtré** côté Fedora,
+puisqu'un dépôt avait été ajouté juste avant l'installation. Vérification faite, le
+fichier de filtre dit `# Unfiltered`, les deux dépôts exposent 5911 applications et WinBox
+était bien visible du système. Le dépôt ajouté était simplement le flathub **utilisateur**.
+Une explication plausible n'est pas une explication vérifiée.
+
+**WinBox tourne sur XWayland, pas en Wayland natif :**
+
+```
+sockets=x11;
+QT_QPA_PLATFORM=xcb
+```
+
+Contrairement à Mattermost. À garder en tête pour l'axe « bureaux » : mise à l'échelle,
+presse-papiers et capture suivent des chemins différents sous XWayland. Si une friction
+apparaît sur cette application, ne pas l'imputer à Sway avant d'avoir vérifié quel chemin
+elle emprunte — le piège de méthode déjà noté le 1er septembre avec `gio mount`.
+
 ### État en fin de journée
 
 - `virt-manager` installé, groupe `libvirt` effectif après reboot
@@ -499,7 +585,9 @@ Deux détails à ne pas mal lire plus tard :
 - Windows 11 25H2 installé, guest tools posés, premières mises à jour passées
 - Agent invité joignable (`guest-ping` OK), VM en `10.11.65.29/27` sur le LAN
 - Mattermost installé en Flatpak (Flathub), **Wayland natif**, tray Noctalia fonctionnel
-- `poste/` ouvert avec trois fiches : VM Windows, Mattermost, instantanés Btrfs
+- `poste/` ouvert avec quatre fiches : VM Windows, Mattermost, instantanés Btrfs, WinBox
+- `bin/snapshot.sh` corrigé : la baseline ne peut plus être écrasée, captures datées
+  dans `etats/<date>/`. Première capture : `etats/2026-09-03/`
 - `/var/lib/libvirt/images` converti en sous-volume ; snapper configuré sur `/` et `/home`
 - Toujours **aucune sauvegarde hors machine** — décision assumée, à rouvrir quand le
   Windows interne de secours sera formaté

@@ -286,7 +286,13 @@ cocher, pas une invitation à rouvrir le débat.
 - **`waybar` est installée mais inutilisée** (tirée par le groupe `swaywm`). Depuis que
   Noctalia fournit la barre et que le bloc `bar { }` n'est plus hérité, elle n'a plus de
   rôle. À laisser dormir, ou à retirer si la baseline doit rester lisible.
-- **Snapshot à relancer** après quelques jours d'usage de Sway.
+- **`bin/snapshot.sh` écrasait la baseline — corrigé le 2026-09-03.** Il écrivait sans
+  condition dans `baseline/`, alors que ce dossier est la photo figée qui sert de
+  référence. Le point ouvert « snapshot à relancer » invitait donc à détruire la
+  référence. Désormais : `baseline/` est écrite **une seule fois** et le script refuse de
+  l'écraser ; les captures suivantes vont dans `etats/<AAAA-MM-JJ>/`, et le script affiche
+  l'écart de paquets avec la baseline. Première capture datée : `etats/2026-09-03/`,
+  19 paquets au-delà du protocole.
 - **Disque non chiffré — à trancher avant l'itération 02.** Pas de LUKS, pas de
   `/etc/crypttab`. Le trousseau `gnome-keyring` protège les mots de passe contre les
   autres comptes de la machine, pas contre un démarrage sur clé USB ni contre le vol du

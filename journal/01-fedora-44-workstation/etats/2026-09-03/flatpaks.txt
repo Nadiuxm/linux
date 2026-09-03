@@ -1,0 +1,2 @@
+com.mattermost.Desktop	6.3.0	stable	system
+com.mikrotik.WinBox	4.3	stable	user
