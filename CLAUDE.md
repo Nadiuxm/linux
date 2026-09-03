@@ -234,6 +234,18 @@ jour même, tant que le détail est frais.
   lui. La leçon tient, la prémisse ne tenait plus — **une note de piège se re-teste**,
   sinon elle devient un piège à elle seule.
 
+- **Un paquet listé n'est pas un paquet ajouté.** `dnf repoquery --userinstalled`, sur
+  lequel repose `packages-explicit.txt`, **n'est pas une liste stable** : un paquet peut y
+  entrer sans avoir été installé, si sa *raison* passe de `Dependency` à `Group`. C'est ce
+  qu'un `dnf group install` fait sur des paquets **déjà présents**. Cas vérifié le
+  2026-09-03 : `tuned-ppd` est sur la machine depuis la fabrication de l'ISO (22 avril),
+  il est paquet *par défaut* du groupe `swaywm`, et il apparaît donc comme un « ajout »
+  entre la baseline et aujourd'hui alors qu'il n'a jamais été installé dans cet intervalle.
+  Un `diff` de listes explicites dit ce qui a été **voulu**, pas ce qui est **arrivé** —
+  et il faut la liste complète des paquets installés pour la seconde question. Même
+  famille que « un dépôt activé n'est pas un paquet installé ».
+  Vérifier la raison : `dnf repoquery --installed --qf '%{name} %{reason}\n' <paquet>`.
+
 - **La taille d'un fichier n'est pas son occupation disque.** `ls -l` et `du -b` donnent la
   taille *apparente* ; sur un fichier **creux** — image de VM, base de données — l'écart
   atteint un facteur 4. Le 2026-09-03, un garde-fou écrit avec `du -sb` a refusé une copie

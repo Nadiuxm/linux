@@ -575,6 +575,84 @@ presse-papiers et capture suivent des chemins différents sous XWayland. Si une 
 apparaît sur cette application, ne pas l'imputer à Sway avant d'avoir vérifié quel chemin
 elle emprunte — le piège de méthode déjà noté le 1er septembre avec `gio mount`.
 
+### Les trois paquets mystères, et un piège de méthode qu'ils révèlent
+
+La capture datée montrait 19 paquets « ajoutés » depuis la baseline, dont trois
+inexpliqués. Tous élucidés, et le troisième vaut mieux que les deux autres.
+
+- **`chromium`** — transaction 13, 14:07. Moi. Passage à Chromium par habitude, pas pour
+  une contrainte technique. Désinstallation de Firefox envisagée, pas décidée.
+- **`tuned-switcher`** — transaction 8, venu avec le groupe `swaywm`, raison `Group`.
+- **`tuned-ppd`** — installé le **22 avril**, c'est-à-dire à la **fabrication de l'ISO**.
+  Il était donc déjà là le 28 août, au moment de la baseline. Mais il n'y figurait pas.
+
+#### Un paquet listé n'est pas un paquet ajouté
+
+`tuned-ppd` est **paquet par défaut du groupe `swaywm`** — la définition du groupe le dit :
+
+```
+Default packages : dunst foot grim polkit slurp tuned-ppd tuned-switcher
+                   waybar xdg-desktop-portal-wlr xorg-x11-server-Xwayland
+```
+
+En installant le groupe, la transaction 8 a fait passer sa **raison** de `Dependency` à
+`Group`. Le paquet n'a pas bougé d'un octet ; c'est son étiquette qui a bougé.
+
+```console
+$ dnf repoquery --installed --qf '%{name} -> %{reason}\n' tuned tuned-ppd chromium
+tuned      -> Dependency
+tuned-ppd  -> Group
+chromium   -> User
+```
+
+Or `packages-explicit.txt` est construit sur `dnf repoquery --userinstalled`, qui inclut
+`Group` et exclut `Dependency`. **La liste n'est donc pas stable dans le temps** : un
+paquet peut y entrer sans avoir été installé.
+
+Conséquence directe : mon « 19 paquets ajoutés » de tout à l'heure était **faux**. C'est
+19 lignes de différence dans une liste, ce qui n'est pas la même chose — et le même piège
+frappera la comparaison entre distributions, qui est l'objet du lab.
+
+> Même famille que « un dépôt activé n'est pas un paquet installé » et « un paquet installé
+> n'est pas un paquet utilisé ». Le suivant : **un paquet listé n'est pas un paquet
+> ajouté.** Une liste d'installations explicites dit ce qui a été *voulu*, pas ce qui est
+> *arrivé* — pour la seconde question il faut la liste complète des paquets installés.
+
+### Ce que l'installation finale devra vraiment contenir
+
+Question posée en cours de journée : l'itération 01 a suivi GNOME complet → Sway →
+Noctalia ; peut-on aller directement à la cible sans poser tout GNOME ?
+
+Il fallait d'abord lever une confusion — la mienne. Cette machine est un **lab**, où
+l'accumulation est volontaire ; **l'installation finale est un autre moment**, épuré. Ce
+ne sont pas deux protocoles en conflit, ce sont deux étapes.
+
+Mesures faites, la liste est courte :
+
+- **GNOME Shell, Mutter, gnome-session et le reste : inutiles.** Rien n'en dépend une fois
+  Sway et Noctalia en place.
+- **`gnome-keyring`, `gvfs`, `gcr`, les portails : gardés.** Ce n'est pas GNOME le bureau,
+  c'est de la plomberie freedesktop.
+- **GDM est remplaçable.** Le journal du 1er septembre disait que le trousseau était
+  déverrouillé « par PAM au login GDM ». Exact, mais l'important n'est pas GDM — ce sont
+  trois lignes `pam_gnome_keyring.so` dans sa pile PAM, que n'importe quel greeter peut
+  porter. `greetd` est packagé dans Fedora. **L'argument principal pour garder un bout de
+  GNOME tombe.**
+- **Nautilus s'installe seul** — vérifié : 89 exigences, toutes des bibliothèques
+  (`gtk4`, `libadwaita`, `gvfs`, `gnome-autoar`…), **zéro** composant du bureau. Gardé
+  dans la cible, il ne gêne pas.
+
+Un greeter Noctalia existe — l'IPC le nomme (`greeter-sync`) — mais **il n'est pas dans le
+paquet Fedora**. À récupérer en amont et à vérifier avant de compter dessus.
+
+Piste notée sans être vérifiée : Nautilus n'est nécessaire que pour **une seule
+opération**, écrire le mot de passe du NAS dans le trousseau. `secret-tool store` sait le
+faire ; reste à savoir si `gvfsd` retrouve le secret sous le bon schéma. Si oui, la cible
+n'a plus aucune application GNOME.
+
+Et **Hyprland n'est pas dans les dépôts Fedora** — il faudra un COPR. Donnée de
+comparaison en soi : Sway y est, avec un groupe dédié.
+
 ### État en fin de journée
 
 - `virt-manager` installé, groupe `libvirt` effectif après reboot
@@ -585,7 +663,9 @@ elle emprunte — le piège de méthode déjà noté le 1er septembre avec `gio 
 - Windows 11 25H2 installé, guest tools posés, premières mises à jour passées
 - Agent invité joignable (`guest-ping` OK), VM en `10.11.65.29/27` sur le LAN
 - Mattermost installé en Flatpak (Flathub), **Wayland natif**, tray Noctalia fonctionnel
-- `poste/` ouvert avec quatre fiches : VM Windows, Mattermost, instantanés Btrfs, WinBox
+- `poste/` : quatre fiches (VM Windows, Mattermost, instantanés Btrfs, WinBox) plus une
+  note de décision « Cible pour l'installation finale »
+- Chromium installé, passage depuis Firefox envisagé
 - `bin/snapshot.sh` corrigé : la baseline ne peut plus être écrasée, captures datées
   dans `etats/<date>/`. Première capture : `etats/2026-09-03/`
 - `/var/lib/libvirt/images` converti en sous-volume ; snapper configuré sur `/` et `/home`
