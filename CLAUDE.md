@@ -339,6 +339,69 @@ cocher, pas une invitation à rouvrir le débat.
   - Effet sur la note « Cible pour l'installation finale » de `poste/`, qui liste
     aujourd'hui `gnome-keyring` comme **gardé**.
 
+  **Recherche du 2026-09-03 — à lire avant d'en rediscuter.**
+
+  *Comment ça marcherait.* Le greffon **FdoSecrets** enregistre KeePassXC sur D-Bus comme
+  serveur Secret Service (spécification Secret Storage 0.2). On choisit **quelle base et
+  quel groupe** sont exposés, avec notification et confirmation possibles à chaque lecture
+  — plus fin que `gnome-keyring`, qui sert tout, en silence.
+
+  *Trois contraintes dures, confirmées par plusieurs sources.*
+  1. **KeePassXC doit tourner** — pas d'activation D-Bus, contrairement à `gnome-keyring`.
+  2. **La base doit être déverrouillée** : base verrouillée = collection vide.
+  3. **Si KeePassXC n'est pas déjà lancé quand une application demande un secret,
+     `gnome-keyring` démarre et prend la main.** Ce n'est pas théorique, c'est le mode
+     d'échec le plus rapporté.
+
+  *Frictions rapportées.* Masquer `gnome-keyring`
+  (`systemctl --user mask gnome-keyring-daemon.service`) « ne fonctionne pas complètement
+  dans tous les cas ». KeePassXC exige de déverrouiller **toutes** les bases ouvertes avant
+  de servir celle qui est exposée. Chromium stocke une clé « Safe Storage » propre à chaque
+  machine, problématique si la base est synchronisée — **ça nous concerne depuis le passage
+  à Chromium**. Et une demande upstream reste **ouverte** pour que KeePassXC soit utilisable
+  comme fournisseur par défaut d'une distribution : ce n'est pas une configuration supportée.
+
+  **Le déverrouillage automatique — c'est faisable, et la machine a le matériel.**
+
+  Trois voies, très inégales :
+  - **Fichier clé lisible par le système** : marche (`--keyfile`), mais c'est un secret en
+    clair sur disque. **Contraire à une position déjà tenue par Julien** (refus du fichier
+    0600, préférence trousseau ou TPM), et particulièrement mal placé sur un SSD externe
+    non chiffré qui se débranche.
+  - **[`keepassxc-unlock`](https://github.com/sumwale/keepassxc-unlock)** : chiffre le mot
+    de passe avec le schéma d'identifiants de systemd (AES256-GCM + SHA256), **scellé par
+    une clé système locale et une clé TPM2**. Un service systemd **appartenant à root**
+    déverrouille en surveillant les événements de session sur le bus système, **au login et
+    au déverrouillage d'écran**, après avoir vérifié l'**empreinte SHA512 du binaire
+    `keepassxc`**. Binaires statiques, annoncé pour toutes les distributions.
+  - Script + `secret-tool` + `dbus-send` : **circulaire** si KeePassXC est lui-même le
+    fournisseur Secret Service.
+
+  *Matériel vérifié le 2026-09-03 :* **TPM 2.0 présent** (`/dev/tpm0`, version majeure 2),
+  `systemd-analyze has-tpm2` → `yes` avec firmware, pilote, sous-système et bibliothèques ;
+  `tpm2-tools` et `clevis` **déjà installés**. Rien à acheter.
+
+  *Avertissement à ne pas manquer :* avec TPM2 les clés sont **liées à la machine**. Une
+  sauvegarde système complète **ne permettra pas** de retrouver le mot de passe stocké si
+  l'appareil meurt. La base `.kdbx` reste intacte — c'est le secret de déverrouillage qui
+  est scellé au matériel. Sur un boîtier USB, à peser.
+
+  **LE POINT QUI DEVRAIT STRUCTURER LA DISCUSSION.** Dès lors que la base se déverrouille
+  automatiquement à l'ouverture de session, **le modèle de sécurité de KeePassXC devient
+  celui de `gnome-keyring`** : les secrets sont disponibles dès que la session est ouverte,
+  sans rien taper. Le gain n'est alors plus la sécurité, c'est **l'unification** (un seul
+  magasin, qui suit la base déjà sauvegardée) et **la portabilité** (même outil partout, là
+  où `gnome-keyring` suppose la plomberie GNOME). Ce sont de bons arguments — mais ce ne
+  sont pas ceux qu'on croit avancer en parlant de KeePassXC.
+
+  *Reste à tester, pas à déduire :* l'ordonnancement au login. Le service root déverrouille
+  après authentification, l'unité `nas-infoadmin.service` monte le NAS au même moment. Qui
+  gagne ? Même famille que « vérifier que deux composants sont éveillés au même moment ».
+
+  *Lien avec un autre point ouvert :* ce TPM pourrait aussi déverrouiller **LUKS** au
+  démarrage (`clevis` est installé, `systemd-cryptenroll` est disponible). Les deux points
+  ouverts convergent sur le même matériel, et tous deux **se décident à l'installation**.
+
 - **Disque non chiffré — à trancher avant l'itération 02.** Pas de LUKS, pas de
   `/etc/crypttab`. Le trousseau `gnome-keyring` protège les mots de passe contre les
   autres comptes de la machine, pas contre un démarrage sur clé USB ni contre le vol du
