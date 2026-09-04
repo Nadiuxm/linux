@@ -41,22 +41,33 @@ mots de passe personnels. Une distro qui ne le fournit pas facilement n'est pas
 
 ## Machine
 
-Dell Pro Slim QCS1250 — Intel Core i5-14500 (20 threads) — 16 Go RAM — SSD 233 Go.
-**Le système tourne sur un SSD EXTERNE** (boîtier USB 3.2, pont générique — `lsblk`
-donne `TRAN=usb`, modèle « Generic PCIE »). C'est délibéré et ça change la lecture de
-toute la méthode :
+Dell Pro Slim QCS1250 — Intel Core i5-14500 (20 threads) — 16 Go RAM.
 
-- **Le disque interne porte toujours un Windows opérationnel**, intact. En cas d'urgence
-  — quelque chose manque sous Fedora et il faut travailler tout de suite — il suffit de
-  redémarrer dessus. **Il y a donc bien un poste de secours**, contrairement à ce que ce
-  fichier a affirmé jusqu'au 2026-09-03.
-- Une bascule de distro est un formatage du disque **externe** : elle ne touche pas au
-  secours. La méthode bare-metal est nettement moins risquée qu'elle n'en a l'air.
-- À terme, le Windows interne sera formaté pour une installation propre. **Ce jour-là le
-  filet disparaît**, et les conclusions ci-dessus tombent avec lui.
-- Contrepartie à surveiller : un boîtier USB ajoute des modes de panne qu'un disque
-  interne n'a pas (débranchement, câble, puce du pont). Et un disque qui se débranche
-  pèse plus lourd qu'un disque vissé dans le débat sur le chiffrement.
+**Deux disques, et leurs rôles se sont inversés le 2026-09-04.** Ce paragraphe affirmait
+jusque-là que le système vivait sur un SSD externe et que le disque interne portait un
+Windows de secours. **Les deux moitiés sont fausses depuis le 2026-09-04.**
+
+| Disque | Rôle | Contenu |
+|---|---|---|
+| **NVMe interne** — KIOXIA BG6, 238 Go | **le poste de travail réel** | Fedora 44 minimale, **LUKS**, Btrfs. Cadrage dans `installation/` |
+| **SSD USB** — boîtier générique « Generic PCIE », 233 Go (`TRAN=usb`) | **le lab** — formaté à volonté | itération 01 (Fedora 44 Workstation), intacte |
+
+Le Windows interne n'existe plus : le NVMe est entièrement Fedora.
+
+**Conséquence sur la méthode, structurante.** La contrainte fondatrice — « chaque
+réinstallation efface la machine, ce dépôt compris » — **ne tient plus**. Une itération se
+mène sur le disque externe et ne touche ni le poste, ni le dépôt. Ça reste du bare-metal
+sur la vraie machine, donc le ressenti matériel garde sa valeur.
+
+**Le risque qui vient avec, à ne pas laisser filer.** La méthode tirait sa force de
+l'obligation de vivre dans la distro testée. Avec un poste confortable sur le disque
+interne, une distro sur l'externe risque d'être visitée une heure et jamais éprouvée.
+La contrainte disparue doit être remplacée par une discipline explicite : **une itération
+ne compte que si elle a porté du travail réel plusieurs jours**. Sinon l'axe distro meurt
+en silence, sans que personne ne le décide.
+
+Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a pas
+(débranchement, câble, puce du pont). Ça ne concerne plus que le lab.
 
 ## Structure
 
@@ -64,10 +75,32 @@ toute la méthode :
 |---|---|
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
 | `poste/` | Inventaire **vivant** des outils de travail, indépendant de la distro. |
-| `dotfiles/` | Paquets **GNU Stow**. `stow -v -t ~ bash git sway nas desktop` depuis `dotfiles/`. |
+| `installation/` | **Le poste de référence** : cadrage, procédure rejouable, journal de construction. |
+| `dotfiles/` | Paquets **GNU Stow**. `stow -v -t ~ bash git sway nas desktop foot` depuis `dotfiles/`. |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
-Itération en cours : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland).
+Itération 01 : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland) —
+sur le SSD USB, plus le poste de travail.
+
+**Troisième axe, ouvert le 2026-09-04 : le poste de référence** (`installation/`). Ce
+n'est **pas une itération** et il n'entre pas dans la numérotation de `journal/` : c'est
+la pile retenue pour travailler, épurée, montée sur le NVMe interne depuis une image
+Fedora **minimale**. Le protocole de baseline ne s'y applique pas, comme il ne s'applique
+pas à `poste/`. Une baseline comparée à celle de l'itération 01 mesurerait l'image ISO
+(53 paquets explicites contre 357), pas la distribution — et c'est la même distribution.
+
+**Exigence propre à cet axe : la reproductibilité.** Une réinstallation dans trois à six
+mois est envisagée, donc « installation finale » est le mauvais mot. Tout geste posé doit
+atterrir dans **exactement un** de ces trois endroits — `installation/procedure.md`,
+`dotfiles/`, ou `poste/` — sinon il sera perdu. Détail et raisons dans
+`installation/README.md`.
+
+**Compositeur : Hyprland remplace Sway sur le poste de référence** (décision du
+2026-09-04), pour les animations, coins arrondis et flou que wlroots ne fournit pas. La
+chrome de Sway était déjà réduite au minimum, donc le manque n'était pas un défaut de
+configuration. Le point ouvert « ressenti Sway à froid » est **clos sans verdict, sur un
+abandon avant mesure** — l'écrire évite de croire plus tard que Sway avait été jugé.
+`dotfiles/sway/` est gardé : il documente la solution AZERTY, valable pour tout WM tuilant.
 
 **Troisième axe ouvert le 2026-09-03 : les outils du poste de travail** (`poste/`).
 Ni `baseline/` (photo figée, sert à comparer les distros) ni `journal/` (daté, propre à
@@ -275,6 +308,27 @@ jour même, tant que le détail est frais.
   Même famille que « une commande qui réussit n'est pas une commande qui fait ce qu'on croit » :
   lire *qui* exécute quoi, et à quel moment.
 
+- **Un mécanisme plausible n'est pas une contrainte — la documentation de l'outil, si.**
+  Le 2026-09-04 a produit une décision de partitionnement irrattrapable (« `/boot` doit
+  aller dans le sous-volume Btrfs ») à partir d'un raisonnement juste sur le mécanisme :
+  `grub-btrfs` cherche le noyau dans l'instantané, un `/boot` séparé y laisse un dossier
+  vide, donc aucune entrée. Chaque étape était correcte, **et la conclusion était fausse** :
+  le README de `grub-btrfs` annonce « Automatically detect if `/boot` is in a separate
+  partition », et fournit même `GRUB_BTRFS_OVERRIDE_BOOT_PARTITION_DETECTION` pour les cas
+  où la détection échoue. Le mécanisme déduit ignorait simplement que l'outil traite le cas.
+  **Avant de laisser une déduction imposer une décision qu'on ne peut pas reprendre, lire
+  ce que l'outil dit de lui-même.** Coût évité de justesse : une réinstallation complète.
+  Même famille que « un dépôt activé n'est pas un paquet installé » — l'outil rapporte un
+  fait étroit, la contrainte est ajoutée par le lecteur.
+
+- **Une liste tronquée n'est pas l'état du dépôt.** Corollaire du précédent, rencontré le
+  même jour : `dnf list --available 'wlroots*' | tail -8` a fait conclure que Fedora 44
+  n'avait que `wlroots0.18` et `0.19`, donc que le greeter Noctalia (qui exige
+  `wlroots-0.20`) était infaisable. Le `tail` avait coupé les paquets **non versionnés** —
+  `wlroots` 0.20.2 est dans `updates`, et c'est lui qui fournit `pkgconfig(wlroots-0.20)`.
+  Un filtre d'affichage n'est pas un résultat de recherche : interroger la question exacte
+  (`dnf repoquery --whatprovides 'pkgconfig(...)'`) plutôt que lire un extrait de liste.
+
 ## Hors périmètre — ne pas relancer le sujet
 
 **La gestion et la sauvegarde des secrets** (clé SSH du dépôt, base KeePassXC) est
@@ -422,9 +476,15 @@ cocher, pas une invitation à rouvrir le débat.
   démarrage (`clevis` est installé, `systemd-cryptenroll` est disponible). Les deux points
   ouverts convergent sur le même matériel, et tous deux **se décident à l'installation**.
 
-- **Disque non chiffré — à trancher avant l'itération 02.** Pas de LUKS, pas de
-  `/etc/crypttab`. Le trousseau `gnome-keyring` protège les mots de passe contre les
-  autres comptes de la machine, pas contre un démarrage sur clé USB ni contre le vol du
-  SSD. Ce poste porte des accès au NAS de l'employeur. **Le chiffrement se décide à
-  l'installation**, donc c'est une case à cocher à la prochaine bascule, pas un
-  rattrapage. À décider, pas à débattre indéfiniment.
+- **Disque non chiffré — SOLDÉ le 2026-09-04.** Le poste de référence est installé avec
+  **LUKS** sur `nvme0n1p3`. Ce qui reste n'est plus une décision mais une tâche :
+  enrôler le **TPM2** (`systemd-cryptenroll`) pour ne pas saisir la phrase de passe à
+  chaque démarrage — matériel vérifié, `/dev/tpm0` présent et `has-tpm2` → `yes`.
+  Le lab sur SSD USB reste non chiffré ; ça se décide itération par itération.
+
+- **`/boot` séparé : décision inversée le 2026-09-04, sur un démenti.** La note du même
+  jour exigeait `/boot` *dans* le sous-volume Btrfs pour `grub-btrfs`. La disposition
+  Fedora par défaut (`/boot` ext4 séparé) est finalement **conservée sciemment**, parce
+  que `grub-btrfs` gère le cas et qu'un `/boot` chiffré interdirait le déverrouillage
+  TPM — GRUB ne sait pas déchiffrer par TPM. Raisonnement complet dans
+  `installation/README.md`.

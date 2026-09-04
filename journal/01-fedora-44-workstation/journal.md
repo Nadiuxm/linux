@@ -35,6 +35,16 @@ deux choses sont ressorties :
   porte de sortie ne demande rien à installer : au menu GRUB, `e`, puis
   `rootflags=subvol=.snapshots/<N>/snapshot`.
 
+  > **[CORRECTION ajoutée le 2026-09-04 en fin de journée — ce point est FAUX.]**
+  > `grub-btrfs` gère nativement un `/boot` séparé : « Automatically detect if `/boot` is
+  > in a separate partition ». Il prend alors le noyau sur la partition `/boot` vivante et
+  > lui ajoute `rootflags=subvol=<instantané>` — exactement la porte de sortie décrite
+  > ci-dessus, mais automatisée. La déduction sur le `boot/` vide était juste sur le
+  > mécanisme et fausse sur la conclusion, faute d'avoir lu la documentation de l'outil.
+  > L'entrée est laissée telle quelle, la correction s'ajoute : c'est l'erreur qui a de la
+  > valeur ici. Voir `installation/README.md` pour la décision retenue et `CLAUDE.md` pour
+  > la leçon de méthode.
+
 ### Les cinq attributs — et celui qu'on ne voit pas
 
 `gvfsd` ne demande pas « un mot de passe » : il cherche un item **par attributs**. Il a

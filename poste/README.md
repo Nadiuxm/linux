@@ -656,30 +656,45 @@ alors une configuration qu'il ne comprend plus.
 > puis, si une application boude encore, aller copier **son seul dossier** depuis
 > l'instantané `/home`. Le `/home` est un filet, pas un bouton « tout annuler ».
 
-### grub-btrfs — retenu pour la cible, conditionné au partitionnement
+### grub-btrfs — retenu pour la cible, **sans contrainte de partitionnement**
 
-> **Décision du 2026-09-04 : `grub-btrfs` fait partie de la configuration finale voulue.**
-> Il n'est pas installé sur cette itération, où il n'apporterait rien — voir plus bas.
+> **CORRIGÉ le 2026-09-04, quelques heures après avoir été écrit.** Ce qui suit affirmait
+> que `grub-btrfs` ne peut pas fonctionner avec un `/boot` séparé, et en tirait une
+> décision de partitionnement irrattrapable. **C'était faux**, et le poste de référence a
+> été monté avec un `/boot` ext4 séparé en toute connaissance de cause. Raisonnement
+> complet dans `installation/README.md` ; la leçon de méthode est dans `CLAUDE.md`.
 
 C'est lui qui ajoute au menu GRUB une entrée par instantané, donc ce qui manque au scénario
 « la mise à jour casse, je redémarre sur l'instantané d'avant » noté plus haut comme absent.
 
-**Mais il ne peut pas fonctionner sur la disposition actuelle.** `grub-btrfs` construit ses
-entrées en cherchant noyau et initramfs **dans l'instantané**. Or `/boot` est ici une
-partition **ext4 séparée** : le dossier `boot/` d'un instantané de `root` est vide, il n'y a
-rien vers quoi pointer.
+**Il gère nativement un `/boot` séparé.** Son README l'annonce — « Automatically detect if
+`/boot` is in a separate partition » — et fournit
+`GRUB_BTRFS_OVERRIDE_BOOT_PARTITION_DETECTION` pour les cas où la détection échoue. Dans
+cette disposition, il prend le noyau sur la partition `/boot` **vivante** et lui ajoute
+`rootflags=subvol=<instantané>` : c'est la manipulation manuelle décrite plus bas, générée
+automatiquement en entrée de menu.
 
-> **Conséquence pour l'itération 02 : `/boot` doit être placé DANS le sous-volume Btrfs.**
-> L'installateur Fedora crée un `/boot` séparé par défaut, il faudra donc du partitionnement
-> manuel. Ce n'est pas un réglage de `grub-btrfs` mais une décision de partitionnement :
-> irrattrapable après coup.
+**Ce qui était faux, et pourquoi.** Le raisonnement d'origine était : `grub-btrfs` cherche
+le noyau *dans* l'instantané, or un `/boot` séparé y laisse un dossier vide, donc aucune
+entrée n'est générée. Le mécanisme décrit est correct pour un `/boot` intégré ; la faute est
+d'en avoir déduit une impossibilité sans lire ce que l'outil dit de lui-même.
 
-Deux points à instruire **avant** de partitionner — à vérifier, pas à supposer :
+**La seule limitation réelle**, acceptée : le noyau vient du `/boot` vivant, pas de
+l'instantané. Remonter un instantané pris **avant** une mise à jour de noyau donne un
+décalage avec `/lib/modules`. Contournement : choisir aussi l'ancienne entrée de noyau au
+menu GRUB — Fedora en garde trois.
 
-- GRUB lit-il sans friction un `/boot` situé sur Btrfs **compressé en `zstd`** ?
-- Anaconda accepte-t-il cette disposition sans contournement ?
+**Et un `/boot` chiffré serait pire.** Sur le poste de référence, `/` est dans LUKS. Y
+mettre `/boot` obligerait **GRUB** à ouvrir LUKS lui-même, et son `cryptomount` ne connaît
+que la phrase de passe et le fichier clé — **aucun support TPM2**. On perdrait le
+déverrouillage automatique pour gagner une fonctionnalité qu'on a déjà. Le `/boot` séparé
+n'est donc pas un pis-aller : c'est la bonne disposition.
 
-**En attendant, la porte de sortie existe sans rien installer.** `/boot` étant séparé et
+**Attention à l'obtention : `grub-btrfs` n'est pas dans les dépôts Fedora** — vérifié le
+2026-09-04, `dnf` ne connaît aucun paquet de ce nom. C'est un composant hors dépôt de plus,
+à traiter comme tel (origine et version notées dans `installation/procedure.md`).
+
+**La porte de sortie existe sans rien installer.** `/boot` étant séparé et
 partagé, le noyau est trouvé quelle que soit la racine choisie : au menu GRUB, touche `e`,
 puis remplacer `rootflags=subvol=root` par `rootflags=subvol=.snapshots/<N>/snapshot`. Les
 instantanés étant en lecture seule, le système démarre dégradé — assez pour restaurer, pas
@@ -693,8 +708,9 @@ pour travailler. **À répéter à froid une fois, pas le jour où ça casse.**
    fiche VM Windows) — sinon le disque de la VM entre dans les instantanés.
 4. `create-config` pour `root` et `home`, réappliquer les réglages ci-dessus.
 5. Activer `snapper-timeline.timer` et `snapper-cleanup.timer`.
-6. **Installer `grub-btrfs`** — hors dépôt Fedora, et seulement si `/boot` a bien été placé
-   dans le sous-volume Btrfs à l'installation (voir ci-dessus).
+6. **Installer `grub-btrfs`** — hors dépôt Fedora (vérifié le 2026-09-04). Aucune
+   condition de partitionnement : il gère un `/boot` séparé. Vérifier tout de même qu'il
+   **génère bien des entrées** après `grub2-mkconfig`, plutôt que de le supposer.
 
 ### Versionné dans le dépôt
 
@@ -799,6 +815,18 @@ accès à des équipements réseau.
 
 ## Cible pour l'installation finale — réflexion du 2026-09-03
 
+> **CETTE NOTE A ÉTÉ DÉPASSÉE PAR LES FAITS le 2026-09-04.** L'installation a eu lieu, et
+> les décisions qu'elle instruisait sont désormais prises et consignées dans
+> **`installation/README.md`**, qui fait foi. Ce qui suit est conservé pour son travail de
+> mesure (dépendances de Nautilus, lignes PAM de GDM, absence d'Hyprland des dépôts), pas
+> pour ses conclusions.
+>
+> Trois points ont changé : « installation finale » est devenu **poste de référence** (une
+> réinstallation est envisagée, donc la reproductibilité est une exigence) ; la contrainte
+> sur `/boot` était **fausse** ; et le greeter retenu est **le greeter Noctalia**, dont les
+> conditions réelles ont été vérifiées le 2026-09-04 — `greetd` reste obligatoire, le
+> greeter est un projet séparé à compiler, et il embarque son propre compositeur wlroots.
+>
 > **Ce n'est pas une fiche d'outil, c'est une note de décision.** Elle sert à ne pas
 > refaire ce raisonnement dans plusieurs semaines, un installateur ouvert devant soi.
 
@@ -891,10 +919,11 @@ Deux choses ne se rattrapent pas après coup et tombent au même moment :
 
 1. **Le chiffrement du disque** — point ouvert de `CLAUDE.md`, rendu plus pressant par le
    fait que le système vit sur un SSD **externe**, qui se débranche.
-2. **Le partitionnement** — Btrfs conditionne toute la fiche « Instantanés ». Et
-   **l'emplacement de `/boot`** : séparé (défaut Fedora), `grub-btrfs` est inutilisable et
-   le retour arrière au démarrage n'existe pas. Décidé le 2026-09-04 de le vouloir, donc
-   `/boot` doit aller **dans** le sous-volume Btrfs.
+2. **Le partitionnement** — Btrfs conditionne toute la fiche « Instantanés ».
+   **L'emplacement de `/boot`, en revanche, n'est PAS une contrainte** : la version
+   antérieure de ce point l'affirmait sur une prémisse fausse (voir la fiche
+   « Instantanés Btrfs », corrigée le 2026-09-04). `grub-btrfs` gère un `/boot` séparé,
+   et un `/boot` chiffré coûterait le déverrouillage TPM. Le défaut Fedora convient.
 
 Et une troisième, presque aussi difficile à rattraper : **le choix de l'image**
 (Workstation complète, Everything netinstall, spin) détermine ce qu'il faudra désinstaller

@@ -28,6 +28,7 @@ manuelle ni script de synchronisation à maintenir. Et `stow -D` défait tout pr
 | `sway` | `.config/sway/config` | WM tuilant Wayland, **tuilage seul** — le shell est à Noctalia. Config **possédée**, plus héritée : depuis le 2026-09-01 elle n'inclut plus `/etc/sway/config`, seulement `/etc/sway/config.d/*` (la ligne vitale, qui charge `sway-systemd`). Contient aussi la disposition `fr/azerty`, que Sway ne récupère nulle part ailleurs, et les liaisons en `bindcode`. |
 | `nas` | `.config/systemd/user/nas-infoadmin.service` | Montage automatique du partage SMB au login, sous GNOME **et** Sway. Crée aussi le lien `~/nas`. Le mot de passe n'est **pas** dans ce fichier — voir ci-dessous. |
 | `desktop` | `.local/share/applications/*.desktop` | Entrées de lanceur maison, visibles dans le lanceur Noctalia (`Super+d`). Une seule à ce jour : la VM Windows d'administration. |
+| `foot` | `.config/foot/foot.ini` | Terminal Wayland. Corrige le défaut `size=8`, illisible à `scale=1`, que le zoom de foot ne persiste pas. **Ajouté au dépôt le 2026-09-04, après avoir failli être perdu** : il existait depuis le 2026-09-01 sans jamais avoir été commité. Terminal susceptible de changer (kitty envisagé) ; ce qui doit survivre est le raisonnement `dpi-aware` / échelle du fichier, pas la valeur. |
 
 ## Installation sur une machine neuve
 
