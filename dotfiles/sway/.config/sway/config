@@ -415,3 +415,4 @@ bindsym --locked XF86MonBrightnessUp   exec noctalia msg brightness-up
 # sélection interactive de zone.
 bindsym Print       exec noctalia msg screenshot-fullscreen
 bindsym Shift+Print exec noctalia msg screenshot-region
+bindsym Ctrl+Alt+p  exec noctalia msg screenshot-region
