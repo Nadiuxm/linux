@@ -371,6 +371,82 @@ jour même, tant que le détail est frais.
   donc la liste vide décrivait la session d'observation, pas la machine. Vaut pour tout ce
   qui touche au seat : entrées, sorties, DRM. Même famille que « un agent automatisé
   tourne dans un environnement filtré ».
+  **Cause première, trouvée plus tard le même jour :** il y avait **deux** sessions
+  Wayland ouvertes (deux Hyprland, tty2 et tty3, deux sockets, deux signatures dans
+  `/run/user/1000/hypr/`) — effet du lancement manuel depuis un tty. Tant qu'il y a
+  plusieurs sessions, une mesure peut atterrir sur la dormante : commencer par
+  `loginctl list-sessions` avant de conclure quoi que ce soit sur le matériel.
+
+- **Une dépréciation ne frappe pas tout un sous-système d'un coup.** Le 2026-09-04,
+  Hyprland 0.56.2 refusait `dwindle.pseudotile` (`hyprctl getoption` → `no such option`)
+  alors que le pseudo-tuilage fonctionne toujours : la **clé de configuration** est morte,
+  le **dispatcher** a survécu, et l'exemple livré par le paquet le montre
+  (`hl.dsp.window.pseudo()`). Trouver en ligne un exemple qui marche ne dit donc rien de
+  la façon dont la chose se **configure** aujourd'hui. Deux pièges de lecture qui vont
+  avec, vérifiés le même jour : le **numéro de ligne** d'une erreur `hl.config` désigne le
+  **site d'appel** (`hl.config({`), pas la clé fautive — 39 lignes d'écart ici ; et le
+  **chemin** annoncé était tronqué (`~/.config/hyprland.lua` au lieu de
+  `~/.config/hypr/hyprland.lua`), donc introuvable si on le cherche tel quel. Comme la
+  validation s'arrête à la **première** clé inconnue, passer toutes les clés au
+  `hyprctl getoption` avant de redémarrer évite de recommencer.
+
+- **Un paquet peut arriver par une dépendance FAIBLE, et n'apparaître dans aucune liste
+  qu'on lit.** Le 2026-09-04, ce dépôt affirmait qu'`uwsm` n'était pas packagé dans Fedora
+  et désignait « remonter la plomberie systemd à la main » comme le vrai coût du passage à
+  Hyprland. `uwsm` était **déjà installé** : `reason=Weak Dependency` du COPR
+  `dtutila/hyprland`, aucun paquet ne le `Requires`. Ni dans ce qu'on a tapé, ni dans les
+  dépendances dures. Vérifier avec
+  `dnf repoquery --installed --qf '%{name} reason=%{reason} from=%{from_repo}\n' <paquet>`.
+  Corollaire : `graphical-session.target` était bien inactive, mais parce que le
+  compositeur était lancé **à la main depuis un tty** — un symptôme réel imputé à la
+  mauvaise cause. Même famille que « un dépôt activé n'est pas un paquet installé ».
+
+- **Vérifier la présence du MODULE, pas celle de la ligne.** `/etc/pam.d/greetd` livré par
+  Fedora contient déjà `-auth optional pam_gnome_keyring.so` et son pendant `session`.
+  Le préfixe `-` dit à PAM d'ignorer **en silence** un module absent — et
+  `gnome-keyring-pam` n'étant pas installé, le fichier `.so` n'existe pas. Les lignes sont
+  là et ne font rien. C'est le paquet qui manque, pas la configuration. Même famille que
+  « un paquet installé n'est pas un paquet utilisé ».
+
+- **La garde d'un script peut lire un fichier là où il faudrait lire une PILE.**
+  `setup_greetd_pam.sh` du greeter Noctalia n'ajoute `pam_systemd.so` que si
+  `grep -F pam_systemd.so /etc/pam.d/greetd` échoue — or sous Fedora le module arrive par
+  `session include system-auth`, invisible à ce `grep`. Le module finit donc appelé deux
+  fois. **Mais la conclusion à en tirer n'est pas « corriger le script » :** `man
+  pam_systemd` ne documente aucun problème d'appel répété, donc rien n'était mesuré. Règle
+  générale sortie de là : **un écart à la procédure officielle d'un outil ne se justifie
+  que par un fait constaté sur la machine** — un nom de paquet qui n'existe pas, un compte
+  que la distro nomme autrement — jamais par un raisonnement sur le mécanisme, aussi juste
+  soit-il. Appliquer le geste documenté, puis **mesurer son effet**. Même famille que
+  « un mécanisme plausible n'est pas une contrainte ».
+
+- **Un fichier livré peut prescrire sa propre surcharge — le lire avant de l'appliquer.**
+  Le `tmpfiles.d` du greeter Noctalia code en dur `greeter:greeter`, compte inexistant
+  sous Fedora (le paquet `greetd` crée `greetd`), et son propre commentaire donne la
+  réponse : « override under `/etc/tmpfiles.d/` if your greetd user differs ». Le geste
+  correct était écrit dans le fichier.
+
+- **Une unité systemd CHARGÉE n'est pas une unité EXÉCUTÉE.** Le 2026-09-04, un dialogue
+  de création de trousseau au login a été imputé aux unités d'autostart XDG qu'`uwsm`
+  charge — `systemctl --user list-units 'app-*'` les affiche bien. Vérification :
+  `ExecMainStartTimestamp` **vide** et `pid=0` sur les trois
+  `app-gnome-keyring-*@autostart.service` — elles n'ont jamais tourné, filtrées parce que
+  `XDG_CURRENT_DESKTOP=Hyprland`. Le vrai déclencheur était une **activation D-Bus**, que
+  le cgroup du processus donnait (`/proc/<pid>/cgroup` →
+  `dbus-…-org.freedesktop.secrets@0.service`). Piège dans le piège : le nom de bus inscrit
+  dans une telle unité (`:1.2`) est celui du **lanceur** `dbus-broker-launch`, pas du
+  client demandeur — il ne permet pas d'identifier qui a demandé. Même famille que « un
+  paquet installé n'est pas un paquet utilisé », transposée à systemd.
+
+- **Un logiciel installé hors gestionnaire de paquets n'a personne pour l'étiqueter
+  SELinux.** Le 2026-09-04, le greeter Noctalia (compilé, `meson install` dans
+  `/usr/local`) ne pouvait pas écrire son propre `sync.toml` : il tourne confiné en
+  `xdm_t` et son répertoire d'état était en `var_lib_t`, alors que le paquet `greetd`
+  étiquette le sien en `xdm_var_lib_t`. Les **binaires** vont bien — `/usr/local/bin`
+  s'étiquette `bin_t` comme `/usr/bin` — mais un **répertoire d'état créé par un `mkdir`**
+  n'hérite de rien d'utile. Réponse correcte : `semanage fcontext -a -t <type> '<chemin>(/.*)?'`
+  puis `restorecon -R`, ce qui déclare la nature du répertoire au lieu de desserrer
+  SELinux. Vaut sur toute distro avec du MAC, pour tout `make install`.
 
 ## Hors périmètre — ne pas relancer le sujet
 

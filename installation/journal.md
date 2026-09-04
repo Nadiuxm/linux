@@ -334,6 +334,190 @@ compter les processus ne dit rien, il faut regarder **qui possède la surface**.
 correctif durable est le même — ne pas lancer de concurrent plutôt que d'arbitrer entre
 deux.
 
+### Une clé de configuration peut mourir alors que la fonctionnalité survit
+
+Au démarrage, Hyprland refusait la config : `unknown config key 'dwindle.pseudotile'`.
+`hyprctl getoption dwindle:pseudotile` répond `no such option` — l'option **globale**
+n'existe plus en 0.56.2, alors que tous les tutoriels la donnent. Le pseudo-tuilage, lui,
+est intact : il ne reste que comme **action par fenêtre**, et l'exemple de config livré
+par le paquet contient exactement le `hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())`
+qui était déjà dans le fichier. Une ligne à supprimer, aucune fonctionnalité perdue.
+
+**Ce que ça apprend, au-delà du correctif.** Une dépréciation ne frappe pas tout un
+sous-système d'un coup : ici la *clé de configuration* est morte et le *dispatcher* a
+survécu. Chercher « comment fait-on X » et trouver un exemple qui marche ne dit rien de la
+façon dont X se **configure** aujourd'hui.
+
+Deux pièges de lecture du message d'erreur, coûteux tous les deux :
+
+- **Le numéro de ligne désigne l'appel, pas la clé.** Le message disait `:115` — c'est la
+  ligne `hl.config({`. La clé fautive était à **154**. La table est validée au site
+  d'appel ; il faut chercher à la main dans les cinquante lignes qui suivent.
+- **Le chemin annoncé est tronqué.** Le message donnait
+  `/home/jzielona/.config/hyprland.lua`, fichier qui **n'existe pas** : le vrai est
+  `~/.config/hypr/hyprland.lua`. Cherché tel quel, on ne le trouve pas.
+
+Vérification faite ensuite sur les **25 clés** des deux appels `hl.config`, en interrogeant
+le compositeur (`hyprctl getoption`) : 24 valides, celle-là seule absente. Comme la
+validation s'arrête à la première clé inconnue, corriger sans vérifier le reste, c'est
+s'exposer au même arrêt au prochain démarrage.
+
+### « uwsm n'est pas packagé » : une facture annoncée qui n'existait pas
+
+Le `README.md` de cet axe désignait la plomberie systemd comme **le vrai coût** du passage
+à Hyprland, en affirmant que ni Hyprland ni `uwsm` n'avaient d'équivalent packagé dans
+Fedora. Les deux moitiés étaient fausses : `uwsm` 0.26.7 **est installé**, et
+`/usr/share/wayland-sessions/hyprland-uwsm.desktop` appartient au paquet `hyprland`.
+
+Ce qui l'a caché : `uwsm` est arrivé comme **dépendance faible** du COPR
+`dtutila/hyprland` (`reason=Weak Dependency`, aucun paquet ne le `Requires`). Il n'est ni
+dans ce qu'on a tapé, ni dans les dépendances dures — donc dans aucune des listes qu'on
+consulte spontanément. Le seul indice visible était le nom d'un fichier dans
+`/usr/share/wayland-sessions/`, exactement comme l'indice de la config Lua était le nom du
+fichier généré par Hyprland lui-même.
+
+Et `graphical-session.target` était bel et bien **inactive** — mais parce qu'Hyprland
+était lancé **à la main** depuis un tty, pas parce que l'outil manquait. Un symptôme réel,
+attribué à la mauvaise cause.
+
+**Leçon :** le piège maison « vérifier si la distro n'a pas déjà traité le problème »
+s'appliquait ; l'erreur a été de conclure qu'elle ne l'avait pas fait, sans chercher.
+
+### Deux sessions Hyprland ouvertes en même temps — et une note d'hier à compléter
+
+`loginctl` a révélé **quatre sessions**, dont deux Wayland : `Hyprland` sur tty2
+(inactive, un résidu) et `hyprland` sur tty3 (active, celle où l'on travaille). Deux
+sockets `wayland-*`, deux signatures dans `/run/user/1000/hypr/`.
+
+La note écrite plus tôt dans la journée — « `hyprctl devices` listait zéro clavier, logind
+libère les périphériques d'une session inactive » — est **juste mais incomplète** : elle
+explique le mécanisme sans dire *pourquoi* une session inactive était visée. La cause
+première, c'est qu'il y en avait deux, et qu'une mesure peut atterrir sur la dormante.
+
+C'est un effet direct du lancement manuel depuis un tty, et donc un argument concret pour
+le greeter : avec `greetd`, une seule session s'ouvre.
+
+### greetd et le greeter Noctalia : tout est posé, rien n'est branché
+
+Déroulé complet dans `procedure.md` §6, avec les quatre pièges du script d'installation.
+Ce que la journée apprend, en propre :
+
+- **Le README d'un projet peut ne pas s'appliquer à sa propre liste de distributions
+  supportées.** Fedora y figure explicitement, et deux des paquets de la ligne `dnf`
+  n'existent pas dans Fedora 44 (`libEGL-devel`, `mesa-libGLES-devel` → `libglvnd-devel`).
+  Vérifier chaque nom **avant** de lancer la commande coûte une minute ; le `configure`
+  a ensuite confirmé la substitution (`egl found: YES 1.5`, `glesv2 found: YES 3.2`).
+- **Un projet sans release apparente peut en avoir.** La procédure prévoyait de noter le
+  commit de `main` « parce que ce n'est pas reproductible autrement ». Le projet publie en
+  fait des tags jusqu'à `v1.3.1`, et `main` n'en était qu'à deux commits, tous deux de CI.
+  Compiler un tag, pas une branche.
+- **Un outil bien écrit résout les variations de distribution lui-même.** Le script a
+  trouvé le compte `greetd` (celui que Fedora crée) au lieu du `greeter` de son README, en
+  interrogeant la config plutôt qu'en codant le nom en dur. Ce que j'avais annoncé comme
+  un écart à corriger n'en était pas un.
+- **Un fichier livré peut prescrire sa propre surcharge.** Son `tmpfiles.d` code en dur
+  `greeter:greeter`, et son commentaire dit quoi faire : « override under
+  `/etc/tmpfiles.d/` if your greetd user differs ». Lire le fichier, pas seulement
+  l'appliquer.
+
+### Suivre la procédure officielle plutôt que devancer un risque déduit
+
+Le script d'installation ajoute `session required pam_systemd.so` à `/etc/pam.d/greetd`,
+et sa garde ne regarde que ce fichier — or Fedora apporte déjà le module via
+`session include system-auth`. J'ai voulu neutraliser ce geste d'avance : double appel,
+`required` au lieu d'`optional`, donc un module dont l'échec refuse le login.
+
+Julien a répondu : « si y a une doc c'est peut être pas pour rien non ? ». Il avait raison.
+`man pam_systemd` ne documente **aucun** problème d'appel répété, et son point 1 est même
+écrit pour être idempotent (« If it does not exist yet, the user runtime directory … is
+either created or mounted »). Je n'avais rien de mesuré — seulement un mécanisme plausible.
+
+**C'est la troisième fois dans la journée** que la même erreur se présente sous une forme
+différente : `grub-btrfs`, la liste `wlroots` tronquée, et maintenant ce patch PAM. La
+règle qui en sort : **un écart à la doc d'un outil ne se justifie que par un fait constaté
+sur la machine** — un nom de paquet qui n'existe pas, un compte que la distro nomme
+autrement — jamais par un raisonnement sur le mécanisme, aussi juste soit-il. Le geste du
+script a donc été appliqué tel quel, avec sa sauvegarde, et l'effet sera **mesuré** au
+premier login (`loginctl` : une seule session attendue).
+
+### La bascule a eu lieu — et trois de mes prédictions se sont retournées
+
+`systemctl enable greetd` + `set-default graphical.target`, reboot. Le greeter Noctalia
+s'affiche, l'AZERTY fonctionne (mot de passe saisi correctement du premier coup, ce qui est
+la seule preuve qui vaille), la session démarre. Cinq mesures, trois enseignements.
+
+**1. Le double `pam_systemd` était inoffensif.** `loginctl` : **une seule** session
+utilisateur (`Id=2`, `Service=greetd`, `VTNr=1`), contre quatre avant la bascule. Le
+raisonnement qui m'avait fait vouloir annuler ce geste du script était juste sur le
+mécanisme et sans conséquence dans les faits. La règle « appliquer le geste documenté puis
+mesurer » a payé au premier essai.
+
+**2. Le déni SELinux annoncé comme "plausible" s'est produit, et sa signature dit tout :**
+
+```
+AVC denied { write } comm="noctalia-greete" name="sync.toml"
+  scontext=system_u:system_r:xdm_t          ← le greeter est confiné en xdm_t
+  tcontext=unconfined_u:object_r:var_lib_t  ← le fichier est en var_lib_t
+```
+
+Le greeter le signale lui-même : `failed to save sync.toml (check permissions on …)`. Ce
+n'est pas un problème de droits Unix — le propriétaire est bon — mais de **type**. Le
+paquet `greetd` étiquette son propre `/var/lib/greetd` en `xdm_var_lib_t` ; un logiciel
+installé hors `dnf` n'a personne pour le faire. Conséquence fonctionnelle : le greeter ne
+mémorise pas le dernier choix de session. Réponse : `semanage fcontext` vers
+`xdm_var_lib_t`. On ne desserre pas SELinux, on déclare la vraie nature du répertoire.
+
+**Leçon transposable :** un binaire posé par `meson install` hérite des types du chemin
+(`/usr/local/bin` → `bin_t`, donc exécutable sans problème), mais **un répertoire d'état
+qu'il crée lui-même n'hérite de rien d'utile**. Sur toute distro avec du MAC, l'installation
+hors gestionnaire de paquets laisse ce travail au lecteur.
+
+**3. `uwsm` apporte exactement une chose, et elle compte.** Mesuré aux deux sessions :
+
+| | `Hyprland` | `Hyprland (uwsm-managed)` |
+|---|---|---|
+| `WAYLAND_DISPLAY` dans `systemd --user` | oui (2 lignes maison) | oui |
+| `noctalia --daemon` | oui | oui |
+| `graphical-session.target` | **inactive** | **active** |
+
+Tout ce que le dépôt attribuait à `uwsm` était **déjà couvert à la main** par
+`hyprland.lua`, sauf la target — et elle porte `RefuseManualStart=yes`, donc elle n'est pas
+obtenable par un `exec`. C'est ce qui tranche : `nas-infoadmin.service` s'y accroche par
+`PartOf=`, la directive qui **démonte** le partage à la déconnexion. Sans elle, le NAS
+resterait monté après le logout avec le secret qui l'a monté.
+
+### Le trousseau réclamé au premier login — et une hypothèse fausse en trois minutes
+
+Au démarrage de la session uwsm, un dialogue : « An application wants to create a new
+keyring called *Trousseau de clés par défaut* ».
+
+**Ma première explication était fausse.** J'ai annoncé que c'était l'autostart XDG,
+désormais lancé par `uwsm`, qui réveillait `gnome-keyring`. Vérification : les trois unités
+`app-gnome-keyring-*@autostart.service` sont bien **chargées** par `uwsm`, et
+`ExecMainStartTimestamp` est **vide**, `pid=0` — elles ne se sont **jamais exécutées**,
+filtrées parce que `XDG_CURRENT_DESKTOP=Hyprland`. Le cgroup du daemon le disait déjà :
+`dbus-:1.2-org.freedesktop.secrets@0.service`, soit une activation **D-Bus** par un client.
+Et `:1.2` s'est révélé être `dbus-broker-launch` lui-même — le nom porté par l'unité est
+celui du **lanceur**, pas du demandeur. Le client reste non identifié, et il ne sera pas
+inventé.
+
+> **Piège à retenir : une unité *chargée* n'est pas une unité *exécutée*.** `list-units`
+> l'affiche, son horodatage dit si elle a tourné. Même famille que « un paquet installé
+> n'est pas un paquet utilisé » — et j'ai reproduit l'erreur le jour même où je l'écrivais.
+
+**La cause réelle, elle, est simple et mesurable :** `~/.local/share/keyrings/` est **vide**
+— aucun trousseau n'a jamais existé sur ce poste — et le service n'expose que la collection
+`session`, celle qui vit en mémoire et meurt avec la session. Il n'y a pas de GDM pour
+créer le trousseau `login`, et `pam_gnome_keyring.so` n'est pas installé : les deux lignes
+que Fedora avait pourtant écrites dans `/etc/pam.d/greetd` sont inertes. Donc le premier
+client qui réclame la collection par défaut réveille `gcr-prompter`, et ça se reproduira à
+chaque session.
+
+Décision de Julien, conforme au cadrage déjà écrit : **`gnome-keyring` pour l'instant**, le
+passage à KeePassXC reste reporté et non abandonné. D'où `gnome-keyring-pam` et la seule
+ligne `password` manquante — `/etc/pam.d/greetd` est `%config(noreplace)`, l'édition
+survivra aux mises à jour du paquet.
+
 ### Temps passé
 
 <!-- TODO : à compléter. C'est encore la donnée qui manque à chaque entrée. -->

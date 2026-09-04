@@ -98,18 +98,51 @@ Absent des dépôts Fedora ; **un COPR est nécessaire**. Fedora fournit les bib
       **`dnf upgrade` doit toujours voir ce COPR activé**, sinon Fedora tentera de
       redescendre ces paquets. À surveiller à chaque mise à jour.
 
-### La plomberie que Sway fournissait et qu'Hyprland ne fournit pas
+### La plomberie de session : `uwsm` la fournit — MESURÉ le 2026-09-04
 
 Sous Sway, `/etc/sway/config.d/10-systemd-session.conf` lançait
 `/usr/libexec/sway-systemd/session.sh` : propagation de l'environnement vers systemd et
-D-Bus, démarrage de `sway-session.target`, agent SSH, portails. **Aucun équivalent packagé
-pour Hyprland dans Fedora, et `uwsm` n'y est pas non plus.**
+D-Bus, démarrage de `sway-session.target`, agent SSH, portails.
 
-`nas-infoadmin.service` en dépend (`After=`/`PartOf=`/`WantedBy=graphical-session.target`).
+Ce paragraphe affirmait qu'aucun équivalent n'existait pour Hyprland dans Fedora, `uwsm`
+compris. **C'était faux** : `uwsm` 0.26.7 arrive comme *dépendance faible* du COPR
+`dtutila/hyprland`, et le paquet `hyprland` livre `hyprland-uwsm.desktop`. Voir le piège
+« un paquet peut arriver par une dépendance FAIBLE » dans `CLAUDE.md`.
 
-- [ ] Assurer la propagation d'environnement et l'existence de `graphical-session.target`
-- [ ] **Vérifier l'effet, pas la commande** : `systemctl --user status graphical-session.target`,
-      `env | grep WAYLAND`, et le montage NAS de bout en bout
+**Se connecter par la session « Hyprland (uwsm-managed) », pas « Hyprland ».** Les deux
+apparaissent dans le sélecteur du greeter et la différence n'est pas cosmétique :
+
+| | `Hyprland` | `Hyprland (uwsm-managed)` |
+|---|---|---|
+| Environnement propagé vers systemd/D-Bus | oui, par les 2 lignes de `hyprland.lua` | oui, par `wayland-wm-env@.service` |
+| `noctalia --daemon` lancé | oui, par `hl.on("hyprland.start")` | oui, idem |
+| **`graphical-session.target`** | **inactive** | **active** |
+
+- [x] Session lancée via `uwsm` → `graphical-session.target` **active**, avec
+      `wayland-wm@hyprland.desktop.service`, `wayland-session@…target`,
+      `wayland-session-xdg-autostart@…target` et les slices graphiques
+- [x] Propagation vérifiée : `systemctl --user show-environment` contient
+      `WAYLAND_DISPLAY`, `XDG_CURRENT_DESKTOP`, `HYPRLAND_INSTANCE_SIGNATURE`
+- [ ] Retirer les deux lignes devenues redondantes de `hyprland.lua`
+      (`dbus-update-activation-environment`, `systemctl --user import-environment`) —
+      **seulement après** avoir confirmé qu'`uwsm` est la session retenue au quotidien
+- [ ] Montage NAS de bout en bout — `nas-infoadmin.service` n'est pas encore déployé ici
+
+> **Pourquoi `graphical-session.target` n'est pas un luxe.** Elle porte
+> `RefuseManualStart=yes` : impossible de la démarrer avec un `exec` dans `hyprland.lua`.
+> Sans `uwsm`, il faudrait écrire une unité maison qui la tire, ou rebrancher
+> `nas-infoadmin.service` sur `default.target` — et alors son `PartOf=` ne démonterait
+> plus le partage à la déconnexion : le NAS resterait monté après le logout, avec le
+> secret qui a servi à le monter. Ce n'est pas de la robustesse théorique, c'est un
+> comportement différent et moins bon.
+
+**Un effet de bord d'`uwsm` à connaître :** il charge les unités d'autostart XDG
+(`app-*@autostart.service`). Celles de `gnome-keyring` apparaissent dans
+`systemctl --user list-units 'app-*'` mais **ne s'exécutent jamais**
+(`ExecMainStartTimestamp` vide, `pid=0`) — elles sont filtrées, `XDG_CURRENT_DESKTOP`
+valant `Hyprland`. Une unité **chargée** n'est pas une unité **exécutée** : ne pas lui
+imputer un symptôme sans regarder son horodatage. Même famille que « un paquet installé
+n'est pas un paquet utilisé ».
 
 ### Configuration
 
@@ -147,31 +180,88 @@ pour Hyprland dans Fedora, et `uwsm` n'y est pas non plus.**
 - `hl.on("hyprland.start", …)` **ne rejoue pas** sur un `hyprctl reload` : après un
   rechargement, l'autostart est à relancer à la main. Ça fait croire qu'il est cassé.
 
-## 6. Greeter — greetd + greeter Noctalia
+## 6. Greeter — greetd + greeter Noctalia — FAIT le 2026-09-04, **non activé**
 
 `greetd` 0.10.3 est packagé. Le greeter Noctalia est un **projet séparé à compiler**, et
 `greetd` reste obligatoire : c'est lui qui démarre le compositeur wlroots embarqué du
 greeter.
 
+**La ligne du README upstream ne s'applique pas telle quelle à Fedora 44.** Deux de ses
+paquets n'y existent pas — `libEGL-devel` et `mesa-libGLES-devel` : c'est `libglvnd-devel`
+qui fournit `pkgconfig(egl)`, `pkgconfig(glesv2)` et `pkgconfig(gl)`. Et `greetd-selinux`
+est à ajouter, SELinux étant en `Enforcing`.
+
 ```bash
-sudo dnf install meson gcc-c++ just greetd dbus \
+sudo dnf install meson gcc-c++ just \
+  greetd greetd-selinux dbus \
   wayland-devel wayland-protocols-devel wlroots-devel \
-  libEGL-devel mesa-libGLES-devel freetype-devel fontconfig-devel \
-  cairo-devel pango-devel harfbuzz-devel libxkbcommon-devel glib2-devel \
-  tomlplusplus-devel json-devel stb_image_resize2-devel libwebp-devel librsvg2-devel
+  libglvnd-devel \
+  freetype-devel fontconfig-devel \
+  cairo-devel pango-devel harfbuzz-devel \
+  libxkbcommon-devel glib2-devel \
+  tomlplusplus-devel json-devel stb_image_resize2-devel \
+  libwebp-devel librsvg2-devel
 ```
 
-`wlroots-devel` 0.20.2 (dépôt `updates`) fournit bien `pkgconfig(wlroots-0.20)`.
+100 paquets, 443 Mo. `wlroots-devel` 0.20.2 (`updates`) fournit bien
+`pkgconfig(wlroots-0.20)`. Le scriptlet `sysusers` de `greetd` crée le compte **`greetd`**
+(UID 986) — **pas** `greeter`, comme l'écrit le README upstream.
 
-- [ ] Cloner `noctalia-dev/noctalia-greeter` et **noter le commit exact** — « depuis
-      `main` » n'est pas reproductible
-- [ ] **Lire `scripts/setup_greeter_system.sh` en entier avant de l'exécuter** : il tourne
-      en root et modifie l'état système
-- [ ] `just configure-release && just build-release && sudo meson install -C build-release`
-- [ ] `sudo ./scripts/setup_greeter_system.sh`
-- [ ] Configurer `/var/lib/noctalia-greeter/greeter.toml` (curseur, **disposition clavier**,
-      échelle des sorties, extinction par inactivité)
-- [ ] Noter le préfixe d'installation retenu — `/usr/local` par défaut, **hors de `dnf`**
+- [x] Cloner `noctalia-dev/noctalia-greeter` — **compiler un tag, pas `main`** :
+      `v1.3.1` = commit `6379fe287bb02b0bb538ad155fe18b1bf8615daf`. Le projet publie des
+      tags (v1.0.0 → v1.3.1) et `main` n'en était qu'à 2 commits, tous deux de CI : rien
+      n'obligeait à suivre une branche mouvante. Cloné dans `~/src/`, **hors de ce dépôt**.
+- [x] `scripts/setup_greeter_system.sh` lu en entier avant exécution — ainsi que ses deux
+      dépendances, `greetd_setup_lib.sh` et `setup_greetd_pam.sh`, où se trouve le vrai
+      travail
+- [x] `just configure-release && just build-release && sudo meson install -C build-release`
+      → trois binaires en `/usr/local/bin` : `noctalia-greeter`, `-apply-appearance`,
+      `-compositor`, plus une politique polkit et un `tmpfiles.d`
+- [x] `sudo ./scripts/setup_greeter_system.sh`
+- [x] `/var/lib/noctalia-greeter/greeter.toml` configuré : session par défaut,
+      **`fr`/`azerty`**, les trois écrans, veille 300 s
+- [x] Préfixe d'installation : **`/usr/local`** (défaut), donc **hors de `dnf`**
+- [ ] `systemctl enable greetd` + `systemctl set-default graphical.target` — **reste à
+      faire**, après vérification qu'un tty de secours répond
+
+**Quatre choses apprises, à ne pas redécouvrir.**
+
+1. **Le script résout le compte tout seul.** `resolve_greeter_user` interroge
+   `apply-appearance --print-greeter-user`, qui lit `/etc/greetd/config.toml` ; il a
+   annoncé `greetd`. Le `user = "greeter"` du README n'est qu'un exemple, le projet gère
+   la variation entre distributions.
+2. **Il patche `/etc/pam.d/greetd`** en y ajoutant `session required pam_systemd.so`
+   (sauvegarde `.bak.noctalia.<horodatage>`). Sa garde `grep -F pam_systemd.so` ne lit que
+   *ce fichier*, alors que Fedora apporte déjà le module via `session include system-auth`.
+   Il y a donc deux appels, dont un en `required`. **`man pam_systemd` ne documente aucun
+   problème d'appel répété** : à **mesurer** au premier login (`loginctl`, une seule
+   session attendue), pas à préjuger — et le `.bak` est là si besoin.
+3. **Le bloc `config.toml` qu'il imprime finit par `systemctl enable --now greetd`.** Le
+   `--now` basculerait l'écran de connexion séance tenante. Reprendre le bloc sans lui.
+4. **Son `tmpfiles.d` code en dur `greeter:greeter`**, un compte inexistant ici — et son
+   propre commentaire prescrit la réponse : « override under `/etc/tmpfiles.d/` if your
+   greetd user differs ». D'où `/etc/tmpfiles.d/noctalia-greeter.conf` en `greetd greetd`.
+
+**Le clavier n'est pas un détail de confort.** Le compositeur du greeter est wlroots : il
+ne lit ni `gsettings`, ni `/etc/X11/xorg.conf.d/00-keyboard.conf`, et retomberait sur
+**US QWERTY** — pour saisir un mot de passe. `[keyboard] layout = "fr"` /
+`variant = "azerty"` est obligatoire, et `azerty` est bien une variante XKB de `fr`
+(`fr: French (AZERTY)`). Même piège que Sway à l'itération 01, sur un autre compositeur.
+
+**La bascule tient en deux commandes, sans rien écrire.** `greetd.service` déclare
+`Alias=display-manager.service` et `graphical.target` porte `Wants=display-manager.service` :
+`enable greetd` + `set-default graphical.target` suffisent.
+
+**Le filet est structurel.** `greetd` ne prend que le **VT 1** (`Conflicts=getty@tty1.service`,
+`vt = 1`), et `autovt@.service → getty@.service` avec `NAutoVTs = 6` : les VT 2 à 6 restent
+servis à la demande. Repli depuis un tty : `systemctl disable --now greetd` puis
+`systemctl set-default multi-user.target`.
+
+**SELinux, à mesurer après la bascule — pas à traiter d'avance.** `/usr/local/bin/*`
+s'étiquette `bin_t`, exactement comme `/usr/bin` : aucun problème d'exécution. Mais
+`/var/lib/noctalia-greeter` est en `var_lib_t` alors que `/var/lib/greetd` est en
+`xdm_var_lib_t`. Un déni est plausible, pas certain : le **constater**
+(`ausearch -m AVC -ts recent`) avant d'étiqueter quoi que ce soit.
 
 ## 7. Trousseau — gnome-keyring
 
@@ -182,17 +272,37 @@ sudo dnf install gnome-keyring gnome-keyring-pam
 `gnome-keyring-pam` ne dépend que de `gnome-keyring`, `pam` et `libselinux` : **il ne tire
 pas GDM**.
 
-GDM n'existant plus, ses trois lignes PAM sont à porter dans `/etc/pam.d/greetd` — sans
-elles, le trousseau n'est pas déverrouillé au login et le montage NAS échoue :
+**Fedora en a déjà écrit deux sur trois — et elles sont inertes.** Vérifié le 2026-09-04 :
+le `/etc/pam.d/greetd` livré par le paquet `greetd` contient déjà
 
 ```
-auth      optional  pam_gnome_keyring.so
-password  optional  pam_gnome_keyring.so use_authtok
-session   optional  pam_gnome_keyring.so auto_start
+-auth       optional    pam_gnome_keyring.so
+-session    optional    pam_gnome_keyring.so auto_start
 ```
 
-- [ ] Paquets installés
-- [ ] Trois lignes ajoutées à `/etc/pam.d/greetd`
+Il ne manque que la ligne `password … use_authtok`, absente aussi de `system-auth`. Mais
+`gnome-keyring-pam` n'est pas installé, donc `/usr/lib64/security/pam_gnome_keyring.so`
+**n'existe pas** — et le préfixe `-` dit précisément à PAM d'ignorer un module manquant
+**en silence**. Les lignes sont là et ne font rien.
+
+> **Piège de méthode :** vérifier la présence du **module**, pas celle de la ligne. Même
+> famille que « un dépôt activé n'est pas un paquet installé ». C'est le paquet qui
+> manque, pas la configuration.
+
+État constaté sur ce poste : `org.freedesktop.secrets` est bien détenu par
+`gnome-keyring-daemon`, mais **activé par D-Bus** à la demande sous `user@1000.service` —
+il n'y a pas de DM, donc aucun déverrouillage PAM. Le trousseau tourne sans être
+déverrouillé.
+
+**Ne pas traiter avant d'avoir tranché le point ouvert KeePassXC** (faisabilité prouvée le
+2026-09-04) : installer `gnome-keyring-pam` ici, c'est choisir `gnome-keyring` comme
+fournisseur Secret Service du poste de référence. Sans conséquence immédiate tant que
+`nas-infoadmin.service` n'est pas déployé — cette unité n'existe pas encore sur ce poste,
+donc le symptôme « le montage NAS échoue » n'est pas encore mesurable.
+
+- [ ] Décider entre `gnome-keyring` et KeePassXC **avant** d'installer quoi que ce soit
+- [ ] Si `gnome-keyring` : `sudo dnf install gnome-keyring-pam`, puis ajouter la seule
+      ligne manquante (`password optional pam_gnome_keyring.so use_authtok`)
 - [ ] **Vérifié après un vrai login** : `org.freedesktop.secrets` détenu, montage NAS actif
 
 ## 8. Plomberie freedesktop et applications

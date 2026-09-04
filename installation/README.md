@@ -150,14 +150,24 @@ on ne saura plus si Sway avait été jugé ou seulement traversé.
   la **leçon** se transpose, le fichier non. Les ~15 liaisons `noctalia msg …` se
   transposent presque telles quelles. `dotfiles/sway/` est **gardé** : il ne coûte rien et
   documente la solution AZERTY, valable pour tout WM tuilant.
-- **La plomberie systemd est à remonter à la main.** C'est le vrai coût. Sous Fedora,
-  `/etc/sway/config.d/10-systemd-session.conf` lançait `sway-systemd/session.sh`, qui
-  propageait l'environnement vers systemd et D-Bus (`WAYLAND_DISPLAY`,
-  `XDG_CURRENT_DESKTOP`), démarrait `sway-session.target`, l'agent SSH et les portails.
-  **Hyprland n'a pas d'équivalent packagé dans Fedora, et `uwsm` non plus.**
-  Or `nas-infoadmin.service` est en `After=`/`PartOf=`/`WantedBy=graphical-session.target`.
-  C'est l'inversion exacte du piège maison « vérifier si la distro n'a pas déjà traité le
-  problème » : ici, **elle ne l'a pas fait**.
+- **La plomberie systemd : `uwsm` la fournit déjà. La facture annoncée ici n'existe pas.**
+  Cette ligne disait le contraire jusqu'au 2026-09-04 — « à remonter à la main, c'est le
+  vrai coût, Hyprland n'a pas d'équivalent packagé dans Fedora et `uwsm` non plus ».
+  **C'était faux sur les deux moitiés.** `uwsm` 0.26.7 est sur la machine depuis
+  l'installation d'Hyprland : c'est une *dépendance faible* du COPR `dtutila/hyprland`,
+  donc tirée sans qu'on l'ait demandée ni vue passer. Il livre `wayland-wm@.service`,
+  `wayland-session@.target`, `wayland-wm-env@.service`, les trois slices graphiques et
+  `wayland-session-xdg-autostart@.target`. Et le paquet `hyprland` livre lui-même
+  `/usr/share/wayland-sessions/hyprland-uwsm.desktop`, dont l'`Exec=uwsm start -e -D
+  Hyprland hyprland.desktop` suit à la lettre la recommandation du README d'uwsm —
+  référencer une autre entrée plutôt qu'un exécutable.
+  Ce qui restait vrai : `sway-systemd` n'a pas d'équivalent **Hyprland** packagé, et
+  `graphical-session.target` était bien **inactive**. Mais parce qu'Hyprland était lancé
+  **à la main depuis un tty**, pas parce que l'outil manquait.
+  **Deux leçons.** Le piège maison « vérifier si la distro n'a pas déjà traité le
+  problème » s'appliquait bel et bien — l'erreur a été de conclure l'inverse sans
+  chercher. Et un paquet arrivé par une dépendance *faible* n'apparaît dans aucune des
+  listes qu'on lit spontanément : ni dans ce qu'on a tapé, ni dans les `Requires`.
 
 ### Le greeter — trois choses vérifiées le 2026-09-04
 

@@ -151,7 +151,12 @@ hl.config({
 
     dwindle = {
         preserve_split = true,
-        pseudotile     = true,
+
+        -- Pas de « pseudotile » ici : l'option globale dwindle:pseudotile
+        -- N'EXISTE PLUS en 0.56 (hyprctl getoption → « no such option »), alors
+        -- que tous les tutoriels la donnent. Le pseudo-tuilage n'est plus qu'une
+        -- action par fenêtre — liée plus bas sur $mod+P, comme dans l'exemple
+        -- livré par le paquet.
     },
 
     misc = {
