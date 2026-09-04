@@ -76,13 +76,13 @@ Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
 | `poste/` | Inventaire **vivant** des outils de travail, indépendant de la distro. |
 | `installation/` | **Le poste de référence** : cadrage, procédure rejouable, journal de construction. |
-| `dotfiles/` | Paquets **GNU Stow**. `stow -v -t ~ bash git sway nas desktop foot` depuis `dotfiles/`. |
+| `dotfiles/` | Paquets **GNU Stow**. Poste de référence : `stow -v -t ~ bash git hypr foot nas desktop`. Le paquet `sway` ne sert plus qu'au lab. |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
 Itération 01 : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland) —
 sur le SSD USB, plus le poste de travail.
 
-**Troisième axe, ouvert le 2026-09-04 : le poste de référence** (`installation/`). Ce
+**Quatrième axe, ouvert le 2026-09-04 : le poste de référence** (`installation/`). Ce
 n'est **pas une itération** et il n'entre pas dans la numérotation de `journal/` : c'est
 la pile retenue pour travailler, épurée, montée sur le NVMe interne depuis une image
 Fedora **minimale**. Le protocole de baseline ne s'y applique pas, comme il ne s'applique
@@ -328,6 +328,41 @@ jour même, tant que le détail est frais.
   `wlroots` 0.20.2 est dans `updates`, et c'est lui qui fournit `pkgconfig(wlroots-0.20)`.
   Un filtre d'affichage n'est pas un résultat de recherche : interroger la question exacte
   (`dnf repoquery --whatprovides 'pkgconfig(...)'`) plutôt que lire un extrait de liste.
+
+- **Un format de configuration se vérifie sur la machine, pas dans sa mémoire ni dans les
+  tutoriels.** Le 2026-09-04, 425 lignes de configuration Hyprland ont été écrites en
+  **hyprlang** (`key = value`, la syntaxe de tous les tutoriels en ligne) alors
+  qu'Hyprland l'a **déprécié depuis la version 0.55** au profit d'une API **Lua**. Le
+  paquet ne livre plus qu'un `hyprland.lua`, et le compositeur avait lui-même généré un
+  `~/.config/hypr/hyprland.lua` — l'indice était sous les yeux, dans le nom du fichier.
+  La référence était sur le disque : `/usr/share/hypr/stubs/hl.meta.lua`, 1777 lignes
+  d'API générée. **Avant d'écrire une configuration, regarder le fichier que le programme
+  génère pour lui-même** et chercher ses stubs dans `/usr/share`. Vaut pour tout logiciel
+  qui a changé de format récemment — et un logiciel en développement rapide, tiré d'un
+  COPR, est précisément ce cas.
+
+- **Un échec de configuration peut être totalement silencieux — vérifier la FORME de la
+  sortie, pas seulement son existence.** La documentation d'Hyprland donne `code:X` pour
+  lier une touche physique. Dans la config **Lua**, ça ne fonctionne pas : aucune erreur,
+  aucun avertissement dans le log, la liaison est simplement inerte. Ce qui l'a révélé est
+  la forme de `hyprctl binds` : une liaison correctement analysée montre une clé **courte**
+  (`key: L`) avec le bon `modmask`, une liaison ratée conserve **la chaîne entière**
+  (`key: SUPER + SHIFT + code:49`) avec `keycode: 0`. Compter 71 liaisons enregistrées
+  n'aurait rien dit — c'est leur forme qui parlait. Même famille que « une commande qui
+  réussit n'est pas une commande qui fait ce qu'on croit ».
+  *Réponse retenue, transposable :* puisque `input:resolve_binds_by_sym` vaut **`true`** par
+  défaut, lier les **symboles réels** que produisent les touches. Sur AZERTY, la rangée du
+  haut donne au niveau 1 `& é " ' ( - è _ ç à` (`ampersand`, `eacute`, `quotedbl`,
+  `apostrophe`, `parenleft`, `minus`, `egrave`, `underscore`, `ccedilla`, `agrave`) et au
+  niveau 2 le chiffre. « Aller à l'espace N » se lie donc sur le symbole, « y envoyer la
+  fenêtre » sur `SHIFT + chiffre` : **la même touche physique, lue à ses deux niveaux.**
+
+- **Une commande d'inventaire ne doit jamais pouvoir interrompre un script.** `rpm -q`
+  renvoie un code d'erreur pour tout paquet **absent**. Sous `set -euo pipefail`, un
+  `rpm -q` de contrôle listant un paquet non installé a tué un script d'installation à sa
+  dernière étape — donc avant son `chown`, laissant un fichier **root** dans un dépôt git
+  utilisateur, et avant l'affichage des instructions de la suite. Les commandes de
+  vérification se terminent par `|| true`.
 
 ## Hors périmètre — ne pas relancer le sujet
 

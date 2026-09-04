@@ -208,6 +208,108 @@ Le `git clone` a échoué deux fois de suite, pour deux raisons différentes :
 `ssh -T git@github.com` a confirmé au passage que c'est une **deploy key** du dépôt et non
 une clé de compte : la réponse est `Hi Nadiuxm/linux!`, pas un nom d'utilisateur.
 
+### Bureau posé — et Hyprland ne se configure plus comme tous les tutoriels le disent
+
+Paquets posés par `installation/scripts/01-bureau-hyprland.sh` : `mesa-dri-drivers`
+(**absent d'une image minimale — sans lui Hyprland ne démarre pas du tout**), Hyprland
+0.56.2 depuis le COPR, les deux portails, Noctalia, `foot`, `stow`, KeePassXC.
+
+**Le décalage de versions annoncé a eu lieu immédiatement.** Le COPR a remplacé *toutes*
+les bibliothèques `hypr*` de Fedora, avec des écarts majeurs : `hyprgraphics` 0.5.1 contre
+0.1.5, `hyprutils` 0.14.1 contre 0.7.1 (et encore, la version Fedora est une `fc43`),
+`hyprlang` 0.6.8 contre 0.6.4, plus `hyprwire` qui n'existe pas chez Fedora. Conséquence
+durable : `dnf upgrade` devra **toujours** voir ce COPR activé, sinon Fedora tentera de
+redescendre ces paquets. Relevé complet dans `scripts/versions-01.txt`.
+
+#### Mon script est mort sur `rpm -q`
+
+`rpm -q` **renvoie un code d'erreur pour tout paquet absent**. J'avais listé `quickshell`
+dans le relevé final ; sous `set -euo pipefail`, ce code non nul a tué le script à cette
+ligne — donc sans faire le `chown` ni afficher la suite. Résultat : un relevé à moitié
+écrit et **appartenant à root** dans un dépôt git utilisateur, et des instructions jamais
+affichées. Une commande d'inventaire ne doit jamais pouvoir interrompre un script.
+
+Et `quickshell` n'avait rien à faire dans cette liste : **Noctalia 5 est livré en binaire
+natif** (`/usr/bin/noctalia`), ce n'est plus une configuration Quickshell comme en
+version 3. La note du 2026-09-01 a pris du retard sur l'amont.
+
+#### Les messages d'erreur au premier lancement étaient tous bénins
+
+Vérifiés un par un dans `$XDG_RUNTIME_DIR/hypr/<instance>/hyprland.log` :
+`[libseat] Backend 'seatd' failed to open seat, skipping` (il cède la place à logind),
+`Wayland backend cannot start: wl_display_connect failed` (il tente le Wayland imbriqué
+avant de basculer sur DRM), du bruit `drm: Cannot commit when a page-flip is awaiting`, et
+`failed to commit hdr metadata` (dalle sans HDR). **Aucun n'est un problème.**
+
+Les mentions de `kitty` ne venaient pas d'une dépendance manquante mais du **fichier de
+config autogénéré**, qui déclare `terminal = "kitty"`. Et Noctalia était absent parce que
+ce fichier ne le lance pas. Le vrai sujet était ailleurs.
+
+#### HYPRLANG EST DÉPRÉCIÉ — la config est en Lua
+
+Hyprland avait généré `~/.config/hypr/hyprland.**lua**`, pas `hyprland.conf`. Depuis la
+version 0.55, **hyprlang est déprécié au profit d'une API Lua**, et le paquet ne livre plus
+qu'un exemple `.lua`. J'avais écrit 425 lignes de `.conf` de mémoire : format que Hyprland
+ne lit plus. Réécrites en Lua.
+
+La bonne référence est **sur le disque** : `/usr/share/hypr/stubs/hl.meta.lua`, 1777 lignes
+d'API générée, plus l'exemple commenté. Les tutoriels en ligne sont presque tous encore en
+hyprlang — c'est-à-dire faux pour cette version.
+
+#### `code:NN` marche en hyprlang, PAS dans le Lua — et l'échec est SILENCIEUX
+
+Le piège AZERTY de Sway se repose entier : la documentation confirme que
+`input:resolve_binds_by_sym` vaut **`true`** par défaut, donc les liaisons se résolvent par
+symbole. Changer de compositeur ne règle rien.
+
+La doc donne `code:X` pour lier une touche physique. **Dans la config Lua, ça ne fonctionne
+pas** — et rien ne le signale : aucune erreur, aucun avertissement dans le log. Quatre
+variantes testées en direct (`"ALT + code:10"`, `"ALT+code:11"`, `"ALT, code:12"`,
+`"ALT + 13"`) : deux enregistrent une liaison inerte, deux ne s'enregistrent pas du tout.
+
+**Le diagnostic qui le révèle**, et c'est lui qu'il faut retenir : dans `hyprctl binds`,
+une liaison correctement analysée montre une clé COURTE (`key: L`) avec le bon `modmask`.
+Une liaison ratée conserve **la chaîne entière** (`key: SUPER + SHIFT + code:49`) et
+`keycode: 0`. Comparer la forme de la sortie, pas seulement son existence.
+
+#### La réponse : lier les symboles réels de la rangée AZERTY
+
+Puisque la résolution se fait par symbole, autant nommer les symboles que les touches
+produisent vraiment. La rangée du haut donne au **niveau 1** — sans Maj :
+
+    &  é  "  '  (  -  è  _  ç  à
+    ampersand eacute quotedbl apostrophe parenleft minus egrave underscore ccedilla agrave
+
+Et au **niveau 2**, le chiffre lui-même. Donc « aller sur l'espace N » se lie sur le
+symbole de niveau 1, et « y envoyer la fenêtre » sur `SHIFT + le chiffre` : **c'est la même
+touche physique, lue à ses deux niveaux.** Aucun Maj superflu, aucune collision.
+
+Vérifié après rechargement : **71 liaisons, 0 non analysée**, `ampersand` … `agrave` à
+`modmask=64`, les chiffres à `modmask=65`. Même traitement pour `SHIFT + ISO_Left_Tab`
+(Maj+Tab ne produit pas « Tab ») et pour le scratchpad sur `twosuperior` (le `²`).
+
+#### Deux autres changements de la 0.56, trouvés en s'en servant
+
+- **`hyprctl dispatch exec foo` ne marche plus.** Il faut passer du Lua :
+  `hyprctl dispatch 'hl.dsp.exec_cmd("foo")'`. Le message d'erreur le dit, à condition de
+  le lire — il parle de syntaxe Lua, pas de commande inconnue.
+- **`hl.on("hyprland.start", …)` ne rejoue pas sur un `hyprctl reload`.** Après un
+  rechargement, ce qui devait démarrer au lancement doit être lancé à la main. Ce n'est pas
+  un bug, mais ça fait croire que l'autostart est cassé.
+
+#### Résultat vérifié
+
+`hyprctl monitors` : les trois écrans aux positions voulues — `HDMI-A-2` à `0x180`,
+`DP-3` à `1920x0`, `DP-1` à `4480x180`. Les taux réels apparaissent enfin (60, 59.951 Hz),
+ce que `preferred` avait évité d'inventer.
+
+`hyprctl layers` : Noctalia peint barre, fond d'écran et OSD **sur les trois écrans**.
+
+Un point observé et pas encore expliqué : `hyprctl devices` liste **zéro clavier et zéro
+souris**. L'explication probable est que le TTY de la session n'était pas le TTY actif au
+moment de la mesure — logind libère alors les périphériques. À revérifier depuis la session
+active avant d'en conclure quoi que ce soit.
+
 ### Temps passé
 
 <!-- TODO : à compléter. C'est encore la donnée qui manque à chaque entrée. -->

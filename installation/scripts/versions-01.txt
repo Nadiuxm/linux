@@ -1,0 +1,33 @@
+# Relevé du 2026-09-04 — bureau Hyprland sur Fedora 44 minimale
+# COPR : dtutila/hyprland
+
+## Paquets installés
+hyprland-0.56.2-3.fc44.x86_64
+xdg-desktop-portal-hyprland-1.4.1-1.fc44.x86_64
+xdg-desktop-portal-gtk-1.15.3-3.fc44.x86_64
+noctalia-5.0.0~beta.10-1.fc44.x86_64
+foot-1.27.0-1.fc44.x86_64
+stow-2.4.1-4.fc44.noarch
+keepassxc-2.7.12-1.fc44.x86_64
+mesa-dri-drivers-26.1.8-1.fc44.x86_64
+
+## Bibliothèques hypr* — provenance réelle (le décalage annoncé a bien eu lieu)
+PAQUET                   VERSION          VENDOR                       VERSION FEDORA D'ORIGINE
+hyprcursor               0.1.13-2.fc44    Fedora Copr - user dtutila   0.1.11-4.fc44
+hyprgraphics             0.5.1-2.fc44     Fedora Copr - user dtutila   0.1.5-3.fc44
+hyprland                 0.56.2-3.fc44    Fedora Copr - user dtutila   absent de Fedora
+hyprlang                 0.6.8-1.fc44     Fedora Copr - user dtutila   0.6.4-4.fc44
+hyprutils                0.14.1-2.fc44    Fedora Copr - user dtutila   0.7.1-4.fc43
+hyprwire                 0.3.1-2.fc44     Fedora Copr - user dtutila   absent de Fedora
+
+## Binaires en place
+  Hyprland                         /usr/bin/Hyprland
+  hyprctl                          /usr/bin/hyprctl
+  noctalia                         /usr/bin/noctalia
+  foot                             /usr/bin/foot
+  keepassxc                        /usr/bin/keepassxc
+  xdg-desktop-portal-hyprland      /usr/libexec/xdg-desktop-portal-hyprland
+
+## quickshell : PAS une dépendance
+Noctalia 5.0.0~beta.10 est livré en binaire natif (/usr/bin/noctalia), plus
+comme une configuration Quickshell. quickshell n'est donc ni installé ni requis.

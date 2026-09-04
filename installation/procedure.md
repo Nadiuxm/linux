@@ -89,8 +89,14 @@ Absent des dépôts Fedora ; **un COPR est nécessaire**. Fedora fournit les bib
 (`hyprutils`, `hyprlang` 0.6.4, `hyprgraphics` 0.1.5, `hyprcursor` 0.1.11,
 `hyprland-protocols` 0.4.0) mais pas le compositeur.
 
-- [ ] Choisir le COPR et **le noter ici avec la version installée**
-- [ ] Surveiller le décalage de versions avec les bibliothèques Fedora à chaque mise à jour
+- [x] COPR retenu : **`dtutila/hyprland`**, `hyprland` 0.56.2-3.fc44 (2026-09-04).
+      `solopasha/hyprland`, le COPR de référence, n'a **aucun chroot fedora-44**.
+- [x] Relevé des versions : `scripts/versions-01.txt`
+- [ ] **Décalage de versions : il a déjà eu lieu.** Le COPR a remplacé toutes les
+      bibliothèques `hypr*` de Fedora (`hyprgraphics` 0.5.1 vs 0.1.5, `hyprutils` 0.14.1
+      vs 0.7.1, `hyprlang` 0.6.8 vs 0.6.4, plus `hyprwire` inexistant chez Fedora).
+      **`dnf upgrade` doit toujours voir ce COPR activé**, sinon Fedora tentera de
+      redescendre ces paquets. À surveiller à chaque mise à jour.
 
 ### La plomberie que Sway fournissait et qu'Hyprland ne fournit pas
 
@@ -107,15 +113,34 @@ pour Hyprland dans Fedora, et `uwsm` n'y est pas non plus.**
 
 ### Configuration
 
-- [ ] Réécrire la config : **AZERTY en codes physiques** (pas en symboles — voir le piège
-      `bindsym`/`bindcode` dans `CLAUDE.md`), disposition des trois écrans, espaces de
-      travail, liaisons `noctalia msg …` reprises de `dotfiles/sway/`
-- [ ] Créer le paquet `dotfiles/hypr/`
+- [x] **La config est en LUA, pas en `.conf`** : hyprlang est déprécié depuis Hyprland
+      0.55. Référence à lire : `/usr/share/hypr/stubs/hl.meta.lua` (API générée) et
+      l'exemple `/usr/share/hypr/hyprland.lua`. Les tutoriels en ligne sont encore en
+      hyprlang, donc faux pour cette version.
+- [x] Paquet `dotfiles/hypr/.config/hypr/hyprland.lua` créé, posé par `stow`.
+      Le fichier autogénéré par Hyprland a été écarté dans `~/.dotfiles-backup/` —
+      `stow` refuse de remplacer un vrai fichier, et c'est une sécurité.
+- [x] **AZERTY : par SYMBOLES de niveau 1, pas par `code:NN`.** `code:NN` est la syntaxe
+      hyprlang et **échoue silencieusement** dans la config Lua. Voir le journal du
+      2026-09-04. Diagnostic : dans `hyprctl binds`, une liaison analysée montre une clé
+      courte (`key: L`) ; une liaison ratée garde la chaîne entière et `keycode: 0`.
+- [x] Vérifié : **71 liaisons, 0 non analysée**. Trois écrans aux bonnes positions.
 
 ## 5. Shell — Noctalia
 
-- [ ] `sudo dnf install noctalia` (5.0.0~beta.10 dans `updates`)
-- [ ] Vérifier l'intégration Hyprland native (espaces, fenêtres, sorties, actions de session)
+- [x] `noctalia` 5.0.0~beta.10 installé. **Livré en binaire natif** — ce n'est plus une
+      configuration Quickshell comme en version 3, `quickshell` n'est ni installé ni requis.
+- [x] Vérifié par `hyprctl layers` : barre, fond d'écran et OSD sur les **trois** écrans.
+- [ ] Vérifier l'intégration des espaces et des actions de session à l'usage
+- [ ] `hyprctl devices` listait **zéro clavier et zéro souris** — probablement parce que
+      le TTY de la session n'était pas actif à la mesure (logind libère les périphériques).
+      À revérifier depuis la session active.
+
+**Deux pièges de la 0.56 à connaître :**
+- `hyprctl dispatch exec foo` ne marche plus — il faut
+  `hyprctl dispatch 'hl.dsp.exec_cmd("foo")'`.
+- `hl.on("hyprland.start", …)` **ne rejoue pas** sur un `hyprctl reload` : après un
+  rechargement, l'autostart est à relancer à la main. Ça fait croire qu'il est cassé.
 
 ## 6. Greeter — greetd + greeter Noctalia
 
@@ -182,10 +207,12 @@ sudo dnf install stow
 cd ~/linux/dotfiles
 # écarter d'abord les fichiers par défaut de la distro : stow ne remplace jamais
 # un vrai fichier — c'est une sécurité, pas un bug
-stow -v -t ~ bash git nas desktop foot        # + hypr quand il existera
+stow -v -t ~ hypr foot          # fait le 2026-09-04
+stow -v -t ~ bash git nas desktop
 ```
 
-- [ ] Liens posés et vérifiés
+- [x] `hypr` et `foot` posés
+- [ ] `bash`, `git`, `nas`, `desktop` — à poser
 
 ## 10. Instantanés
 
