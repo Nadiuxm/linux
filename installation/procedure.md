@@ -221,8 +221,8 @@ sudo dnf install meson gcc-c++ just \
 - [x] `/var/lib/noctalia-greeter/greeter.toml` configuré : session par défaut,
       **`fr`/`azerty`**, les trois écrans, veille 300 s
 - [x] Préfixe d'installation : **`/usr/local`** (défaut), donc **hors de `dnf`**
-- [ ] `systemctl enable greetd` + `systemctl set-default graphical.target` — **reste à
-      faire**, après vérification qu'un tty de secours répond
+- [x] `systemctl enable greetd` + `systemctl set-default graphical.target` — **fait le
+      2026-09-04**, tty de secours vérifié avant
 
 **Quatre choses apprises, à ne pas redécouvrir.**
 
@@ -260,8 +260,26 @@ servis à la demande. Repli depuis un tty : `systemctl disable --now greetd` pui
 **SELinux, à mesurer après la bascule — pas à traiter d'avance.** `/usr/local/bin/*`
 s'étiquette `bin_t`, exactement comme `/usr/bin` : aucun problème d'exécution. Mais
 `/var/lib/noctalia-greeter` est en `var_lib_t` alors que `/var/lib/greetd` est en
-`xdm_var_lib_t`. Un déni est plausible, pas certain : le **constater**
-(`ausearch -m AVC -ts recent`) avant d'étiqueter quoi que ce soit.
+`xdm_var_lib_t`. **Le déni s'est produit** — `denied { write }` sur `sync.toml`,
+`scontext=xdm_t`, `tcontext=var_lib_t` — et le greeter le signalait lui-même dans le
+journal (`failed to save sync.toml`). Effet : il ne mémorise pas le dernier choix de
+session. Correctif appliqué :
+
+```bash
+sudo semanage fcontext -a -t xdm_var_lib_t '/var/lib/noctalia-greeter(/.*)?'
+sudo restorecon -Rv /var/lib/noctalia-greeter
+```
+
+Résultat vérifié : `xdm_var_lib_t`, plus aucun déni. **Les deux commandes sont
+nécessaires** — `restorecon` seul corrige l'état présent, `semanage fcontext` enregistre
+la règle pour qu'un relabel complet ultérieur ne la défasse pas. Règle persistante
+confirmée le 2026-09-04 :
+
+```
+/var/lib/noctalia-greeter(/.*)?   all files   system_u:object_r:xdm_var_lib_t:s0
+```
+
+Contrôle après une réinstallation : `sudo semanage fcontext -l | grep noctalia`.
 
 ## 7. Trousseau — gnome-keyring
 
@@ -300,10 +318,31 @@ fournisseur Secret Service du poste de référence. Sans conséquence immédiate
 `nas-infoadmin.service` n'est pas déployé — cette unité n'existe pas encore sur ce poste,
 donc le symptôme « le montage NAS échoue » n'est pas encore mesurable.
 
-- [ ] Décider entre `gnome-keyring` et KeePassXC **avant** d'installer quoi que ce soit
-- [ ] Si `gnome-keyring` : `sudo dnf install gnome-keyring-pam`, puis ajouter la seule
-      ligne manquante (`password optional pam_gnome_keyring.so use_authtok`)
-- [ ] **Vérifié après un vrai login** : `org.freedesktop.secrets` détenu, montage NAS actif
+- [x] **Décision du 2026-09-04 : `gnome-keyring`**, KeePassXC reste reporté
+- [x] `sudo dnf install gnome-keyring-pam`, puis ajout de la seule ligne manquante
+      (`-password optional pam_gnome_keyring.so use_authtok`, après
+      `password include system-auth`). Préfixe `-` comme les autres lignes du fichier :
+      si le paquet est retiré un jour, PAM ignore le module au lieu de casser le login.
+- [x] **Vérifié après un vrai login** — et une simple déconnexion/reconnexion suffit,
+      PAM s'exécutant au *login* et non au boot :
+
+  | Mesure | Résultat |
+  |---|---|
+  | `~/.local/share/keyrings/` | `login.keyring` + `user.keystore` créés |
+  | Collections exposées | **deux** : `session` *et* `login` (contre `session` seule avant) |
+  | **`login` déverrouillé** | **`Locked = false`** |
+  | `gcr-prompter` après le correctif | **aucun** |
+
+  > **La mesure qui compte est `Locked`, pas l'existence du fichier.** Un
+  > `login.keyring` présent mais verrouillé redemanderait le mot de passe à chaque
+  > client. Vérifier :
+  > `busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/login org.freedesktop.Secret.Collection Locked`
+
+  **Deux processus `gnome-keyring-daemon` coexistent**, comme à l'itération 01 :
+  `--daemonize --login` (lancé par PAM, c'est lui qui détient le nom) et
+  `--start --components=secrets`. Ce n'est pas un doublon anormal.
+
+- [ ] Montage NAS de bout en bout — `nas-infoadmin.service` n'est pas encore déployé ici
 
 ## 8. Plomberie freedesktop et applications
 

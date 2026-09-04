@@ -518,6 +518,53 @@ passage à KeePassXC reste reporté et non abandonné. D'où `gnome-keyring-pam`
 ligne `password` manquante — `/etc/pam.d/greetd` est `%config(noreplace)`, l'édition
 survivra aux mises à jour du paquet.
 
+### Le NAS et les instantanés — et une échéance qui est arrivée sans qu'on la voie
+
+Montage NAS déployé (`stow nas`, unité `--user` active) et instantanés Btrfs en place.
+Compte rendu dans `poste/README.md`. Deux résultats en propre.
+
+**La piste laissée ouverte à l'itération 01 est tranchée.** Le journal notait :
+« Nautilus n'est nécessaire que pour **une seule opération**, écrire le mot de passe du NAS
+dans le trousseau. `secret-tool store` sait le faire ; reste à savoir si `gvfsd` retrouve le
+secret sous le bon schéma. Si oui, la cible n'a plus aucune application GNOME. » Réponse :
+**oui.** `secret-tool store` avec les cinq attributs, puis `gio mount` monte sans rien
+demander, stdin fermé. Nautilus n'a plus d'usage sur ce poste.
+
+**Un piège de Stow évité de justesse, cousin de celui de `~/.bashrc.d`.** `stow nas` allait
+poser `LINK: .config/systemd => ../linux/dotfiles/nas/.config/systemd` — un tree folding
+**deux niveaux au-dessus** du seul fichier du paquet. Tout `~/.config/systemd/` serait
+devenu le dépôt, et `systemctl --user enable` y aurait écrit ses liens `.wants`, sans
+parler des drop-ins futurs. Remède minimal : faire exister `~/.config/systemd/user` avant,
+pour que Stow n'ait plus rien à folder. Vérifié après coup : le lien d'activation est bien
+dans le home, et `git status` est resté propre.
+
+> **Leçon : `stow -n -v` avant tout `stow`.** La simulation dit à quel niveau le folding
+> va se produire — c'est la seule façon de le voir venir, et ça ne coûte rien.
+
+**Et l'échéance de la fiche snapper est arrivée aujourd'hui, sans que personne ne la
+déclenche.** Elle disait : « le disque interne porte un Windows opérationnel qui sert de
+secours ; **le jour où ce Windows sera formaté**, la question de la sauvegarde hors machine
+se reposera entièrement. » Ce Windows a disparu ce matin. Il n'y a donc plus aucun secours
+hors du disque de travail : les instantanés vivent sur le disque qu'ils protègent, et
+`grub-btrfs` n'étant pas installé, ils ne sont même pas amorçables. Consigné comme point
+ouvert dans `poste/README.md`, non tranché.
+
+> **Ce qui est intéressant, c'est que la note s'était condamnée elle-même à l'avance** et
+> que personne ne l'a rouverte au moment où sa condition s'est réalisée. Une note qui
+> dépend d'un état de la machine devrait être relue quand cet état change — c'est le
+> corollaire de « une note de piège se re-teste ».
+
+### Ce qui reste, et quand
+
+- **VM Windows d'administration : prévu le lundi 7 septembre 2026.** Étapes 3 à 7 de la
+  fiche `poste/` — `libvirt`, groupe `libvirt` (effectif à la session suivante), copie de
+  l'image depuis `sda3` en `cp --sparse=always`, `restorecon`, pont `br0`, domaine. Le
+  prérequis Btrfs est **déjà fait** : sous-volume créé, `+C` posé à vide, exclusion prouvée.
+- `grub-btrfs`, hors dépôt Fedora — sans lui les instantanés ne sont pas amorçables.
+- Retirer les deux lignes redondantes de `hyprland.lua`, après quelques jours d'usage réel
+  d'`uwsm`.
+- Enrôlement TPM2 pour LUKS.
+
 ### Temps passé
 
 <!-- TODO : à compléter. C'est encore la donnée qui manque à chaque entrée. -->

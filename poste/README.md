@@ -552,7 +552,9 @@ des jetons de session.
 
 ## Instantanés Btrfs — snapper
 
-> **Statut : en place le 2026-09-03.**
+> **Statut : en place le 2026-09-03** sur l'itération 01, et **remis en place le
+> 2026-09-04 sur le poste de référence** (NVMe interne, LUKS, sous-volumes `root` et
+> `home`). Détails de cette seconde mise en place à la fin de la fiche.
 
 ### Rôle
 
@@ -561,10 +563,19 @@ ratée, récupérer un fichier écrasé. Et, pour ce lab spécifiquement, **voir
 à jour a changé** (`snapper diff`), ce qui est une donnée d'évaluation en soi.
 
 > **Ce n'est PAS une sauvegarde.** Les instantanés vivent sur le disque qu'ils protègent.
-> Ils ne survivent ni à une panne du support, ni au wipe de l'itération suivante. Le
-> choix est assumé : le disque interne porte un Windows opérationnel qui sert de secours
-> (voir `CLAUDE.md`, section Machine). **Le jour où ce Windows sera formaté, la question
-> de la sauvegarde hors machine se reposera entièrement.**
+> Ils ne survivent ni à une panne du support, ni au wipe de l'itération suivante.
+>
+> **Et l'échéance annoncée ici est arrivée — le 2026-09-04.** Ce paragraphe disait : « le
+> choix est assumé, le disque interne porte un Windows opérationnel qui sert de secours ;
+> le jour où ce Windows sera formaté, la question de la sauvegarde hors machine se
+> reposera entièrement ». Ce Windows **n'existe plus**, le NVMe est entièrement Fedora.
+> Il n'y a donc, à ce jour, **aucun secours hors du disque de travail** : ni second
+> système amorçable, ni copie hors machine. Le NAS est monté depuis le 2026-09-04 et
+> serait une destination possible, mais rien n'est configuré.
+>
+> Ce n'est pas une décision à prendre dans cette fiche — c'est un **point ouvert** à
+> assumer explicitement, comme la contrainte fondatrice disparue l'a été dans `CLAUDE.md`.
+> Le noter évite de croire plus tard que les instantanés tenaient ce rôle.
 
 ### Obtention
 
@@ -711,6 +722,52 @@ pour travailler. **À répéter à froid une fois, pas le jour où ça casse.**
 6. **Installer `grub-btrfs`** — hors dépôt Fedora (vérifié le 2026-09-04). Aucune
    condition de partitionnement : il gère un `/boot` séparé. Vérifier tout de même qu'il
    **génère bien des entrées** après `grub2-mkconfig`, plutôt que de le supposer.
+
+### Mise en place sur le poste de référence — 2026-09-04
+
+Ordre respecté à la lettre : **sous-volume `images` d'abord, snapper ensuite.** État
+obtenu, tout vérifié plutôt que supposé :
+
+| Mesure | Résultat |
+|---|---|
+| `var/lib/libvirt/images` | sous-volume ID 259, `+C` posé **à vide** (`lsattr` → `---------------C------`) |
+| Contexte SELinux | `virt_image_t` |
+| Configs | `root` (`/`) et `home` (`/home`), les 13 réglages relus un par un |
+| Minuteurs | les deux `enabled` + `active` |
+| `ALLOW_USERS=jzielona` | **effectif** — `snapper -c root list` répond sans `sudo` |
+
+**Trois choses apprises ici et pas à l'itération 01.**
+
+1. **Un sous-volume Btrfs fraîchement créé est `unlabeled_t`** — pas `var_lib_t`, pas le
+   contexte de son parent : *rien*. Le `restorecon` a rapporté
+   `Relabeled … from system_u:object_r:unlabeled_t:s0 to system_u:object_r:virt_image_t:s0`.
+   Sans lui, `qemu` confiné n'aurait pas pu lire l'image, avec un « impossible d'ouvrir le
+   disque » opaque — le même symptôme que le piège `mv`/`cp` noté dans la fiche VM, par une
+   autre cause. Ici la politique connaît déjà le chemin, donc `restorecon` suffit et
+   `semanage fcontext` est inutile (contrairement au greeter Noctalia le même jour).
+2. **`systemctl enable` n'a annoncé qu'un lien sur deux.** Sa sortie ne mentionnait que
+   `snapper-cleanup.timer`, alors que `/etc/systemd/system/timers.target.wants/` contient
+   bien **les deux** liens, créés à la même seconde. Le message n'est pas l'inventaire de
+   ce que la commande a fait : vérifier les liens, ou `is-enabled`.
+3. **`snapper-timeline.timer` a `UnitFilePreset=disabled`** : il n'est pas activé par le
+   preset Fedora. Il faut l'activer explicitement — installer `snapper` ne suffit pas à
+   avoir des instantanés automatiques.
+
+**Ce qui reste à faire sur ce poste :**
+
+- [x] **Test d'exclusion de la VM — PROUVÉ le 2026-09-04.** Instantané `root` n°1 créé,
+      puis `ls -a /.snapshots/1/snapshot/var/lib/libvirt/images/` → `.` et `..`
+      seulement. Le dossier existe dans l'instantané et ne contient **rien** : c'est cette
+      mesure qui prouve l'exclusion, le sous-volume seul ne la prouve pas.
+      *Détail de notation :* `N` est le numéro rendu par `snapper list` — ne pas recopier
+      un placeholder `<n>` dans une commande, le shell le prend pour une **redirection**
+      et cherche un fichier nommé `n`.
+      *Bénéfice constaté au passage :* la lecture a réussi **sans `sudo`**, ce qui prouve
+      `SYNC_ACL=yes` — le `+` de `drwxr-x---+` sur `/.snapshots` est l'ACL posée pour
+      `ALLOW_USERS`.
+- [ ] `grub-btrfs` — toujours pas installé, donc **pas d'entrée GRUB pour démarrer sur un
+      instantané**. Le scénario « la mise à jour casse, je reboote sur l'avant » reste
+      indisponible.
 
 ### Versionné dans le dépôt
 

@@ -1,7 +1,13 @@
 [Unit]
 Description=Montage GVFS du partage NAS infoadmin
-# gvfs a besoin du bus de session, et le trousseau doit etre deverrouille
-# (fait par PAM au login GDM, y compris en session Sway).
+# Trois conditions, toutes vérifiées le 2026-09-04 sur le poste de référence :
+#   1. gvfs a besoin du bus de session   -> unité --user, jamais fstab
+#      (un montage système ne peut pas interroger un trousseau de session)
+#   2. le trousseau doit être DÉVERROUILLÉ -> greetd + pam_gnome_keyring
+#      (plus de GDM sur ce poste ; les 3 lignes sont dans /etc/pam.d/greetd)
+#   3. graphical-session.target doit exister -> session lancée par UWSM
+#      « Hyprland (uwsm-managed) ». Avec « Hyprland » tout court la target
+#      reste inactive et cette unité ne démarre jamais.
 After=graphical-session.target
 PartOf=graphical-session.target
 
