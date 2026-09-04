@@ -305,10 +305,34 @@ ce que `preferred` avait évité d'inventer.
 
 `hyprctl layers` : Noctalia peint barre, fond d'écran et OSD **sur les trois écrans**.
 
-Un point observé et pas encore expliqué : `hyprctl devices` liste **zéro clavier et zéro
-souris**. L'explication probable est que le TTY de la session n'était pas le TTY actif au
-moment de la mesure — logind libère alors les périphériques. À revérifier depuis la session
-active avant d'en conclure quoi que ce soit.
+#### Le clavier « absent » — mesure refaite depuis la session active
+
+`hyprctl devices` listait **zéro clavier et zéro souris**, ce qui avait été noté comme
+inexpliqué plutôt que conclu. Mesure refaite une fois la session au premier plan : les
+claviers sont bien là, tous en `l "fr", v "azerty"` avec
+`active keymap: French (AZERTY)`. La disposition est donc confirmée active, et
+l'hypothèse tenait — **le TTY n'était pas actif au moment de la première mesure**, et
+logind libère les périphériques d'une session inactive.
+
+Piège de méthode général, indépendant d'Hyprland : **certaines mesures n'ont de sens que
+depuis la session active.** Une liste vide peut décrire l'état de la session
+d'observation, pas celui de la machine. Même famille que « un agent automatisé tourne dans
+un environnement filtré, ses échecs ne sont pas des symptômes système ».
+
+#### Deux daemons Noctalia — et c'est le second qui peint
+
+Après le rechargement, `pgrep` montrait **deux** processus `noctalia` : celui lancé à la
+main pour compenser le fait que `hyprland.start` ne rejoue pas sur un `reload`, et celui
+démarré par `hyprland.start` à la relance suivante.
+
+`hyprctl layers` a tranché sans ambiguïté : **le plus récent possédait les trois surfaces
+de chaque namespace** (barre, fond d'écran, OSD — une par écran), et l'ancien n'en peignait
+aucune. Il n'y avait donc pas de peinture en double, juste un processus inerte. Tué.
+
+C'est la même leçon que le `swaybg` résiduel de l'itération 01, vue par l'autre bout :
+compter les processus ne dit rien, il faut regarder **qui possède la surface**. Et le
+correctif durable est le même — ne pas lancer de concurrent plutôt que d'arbitrer entre
+deux.
 
 ### Temps passé
 

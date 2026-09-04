@@ -132,9 +132,14 @@ pour Hyprland dans Fedora, et `uwsm` n'y est pas non plus.**
       configuration Quickshell comme en version 3, `quickshell` n'est ni installé ni requis.
 - [x] Vérifié par `hyprctl layers` : barre, fond d'écran et OSD sur les **trois** écrans.
 - [ ] Vérifier l'intégration des espaces et des actions de session à l'usage
-- [ ] `hyprctl devices` listait **zéro clavier et zéro souris** — probablement parce que
-      le TTY de la session n'était pas actif à la mesure (logind libère les périphériques).
-      À revérifier depuis la session active.
+- [x] `hyprctl devices` depuis la session **active** : claviers présents, tous en
+      `l "fr", v "azerty"`, `active keymap: French (AZERTY)`. La liste vide observée
+      auparavant décrivait une session inactive, pas la machine — logind libère les
+      périphériques d'une session en arrière-plan. **Certaines mesures n'ont de sens que
+      depuis la session active.**
+- [x] Un seul daemon Noctalia doit tourner. Vérifier avec `hyprctl layers` **qui possède
+      les surfaces** (3 par namespace = une par écran), pas avec `pgrep` : un daemon
+      surnuméraire peut être totalement inerte. Même leçon que le `swaybg` résiduel.
 
 **Deux pièges de la 0.56 à connaître :**
 - `hyprctl dispatch exec foo` ne marche plus — il faut

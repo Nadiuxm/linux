@@ -364,6 +364,14 @@ jour même, tant que le détail est frais.
   utilisateur, et avant l'affichage des instructions de la suite. Les commandes de
   vérification se terminent par `|| true`.
 
+- **Certaines mesures n'ont de sens que depuis la session ACTIVE.** Le 2026-09-04,
+  `hyprctl devices` listait zéro clavier et zéro souris, ce qui laissait croire à un
+  problème d'entrées. Mesure refaite avec la session au premier plan : tous les claviers
+  étaient là, en `fr/azerty`. **logind libère les périphériques d'une session inactive**,
+  donc la liste vide décrivait la session d'observation, pas la machine. Vaut pour tout ce
+  qui touche au seat : entrées, sorties, DRM. Même famille que « un agent automatisé
+  tourne dans un environnement filtré ».
+
 ## Hors périmètre — ne pas relancer le sujet
 
 **La gestion et la sauvegarde des secrets** (clé SSH du dépôt, base KeePassXC) est
