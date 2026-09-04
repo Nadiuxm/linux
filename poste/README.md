@@ -656,6 +656,35 @@ alors une configuration qu'il ne comprend plus.
 > puis, si une application boude encore, aller copier **son seul dossier** depuis
 > l'instantané `/home`. Le `/home` est un filet, pas un bouton « tout annuler ».
 
+### grub-btrfs — retenu pour la cible, conditionné au partitionnement
+
+> **Décision du 2026-09-04 : `grub-btrfs` fait partie de la configuration finale voulue.**
+> Il n'est pas installé sur cette itération, où il n'apporterait rien — voir plus bas.
+
+C'est lui qui ajoute au menu GRUB une entrée par instantané, donc ce qui manque au scénario
+« la mise à jour casse, je redémarre sur l'instantané d'avant » noté plus haut comme absent.
+
+**Mais il ne peut pas fonctionner sur la disposition actuelle.** `grub-btrfs` construit ses
+entrées en cherchant noyau et initramfs **dans l'instantané**. Or `/boot` est ici une
+partition **ext4 séparée** : le dossier `boot/` d'un instantané de `root` est vide, il n'y a
+rien vers quoi pointer.
+
+> **Conséquence pour l'itération 02 : `/boot` doit être placé DANS le sous-volume Btrfs.**
+> L'installateur Fedora crée un `/boot` séparé par défaut, il faudra donc du partitionnement
+> manuel. Ce n'est pas un réglage de `grub-btrfs` mais une décision de partitionnement :
+> irrattrapable après coup.
+
+Deux points à instruire **avant** de partitionner — à vérifier, pas à supposer :
+
+- GRUB lit-il sans friction un `/boot` situé sur Btrfs **compressé en `zstd`** ?
+- Anaconda accepte-t-il cette disposition sans contournement ?
+
+**En attendant, la porte de sortie existe sans rien installer.** `/boot` étant séparé et
+partagé, le noyau est trouvé quelle que soit la racine choisie : au menu GRUB, touche `e`,
+puis remplacer `rootflags=subvol=root` par `rootflags=subvol=.snapshots/<N>/snapshot`. Les
+instantanés étant en lecture seule, le système démarre dégradé — assez pour restaurer, pas
+pour travailler. **À répéter à froid une fois, pas le jour où ça casse.**
+
 ### À refaire à la main après une bascule
 
 1. Vérifier que la nouvelle distro est bien en **Btrfs** — sinon toute cette fiche tombe.
@@ -664,6 +693,8 @@ alors une configuration qu'il ne comprend plus.
    fiche VM Windows) — sinon le disque de la VM entre dans les instantanés.
 4. `create-config` pour `root` et `home`, réappliquer les réglages ci-dessus.
 5. Activer `snapper-timeline.timer` et `snapper-cleanup.timer`.
+6. **Installer `grub-btrfs`** — hors dépôt Fedora, et seulement si `/boot` a bien été placé
+   dans le sous-volume Btrfs à l'installation (voir ci-dessus).
 
 ### Versionné dans le dépôt
 
@@ -860,7 +891,10 @@ Deux choses ne se rattrapent pas après coup et tombent au même moment :
 
 1. **Le chiffrement du disque** — point ouvert de `CLAUDE.md`, rendu plus pressant par le
    fait que le système vit sur un SSD **externe**, qui se débranche.
-2. **Le partitionnement** — Btrfs conditionne toute la fiche « Instantanés ».
+2. **Le partitionnement** — Btrfs conditionne toute la fiche « Instantanés ». Et
+   **l'emplacement de `/boot`** : séparé (défaut Fedora), `grub-btrfs` est inutilisable et
+   le retour arrière au démarrage n'existe pas. Décidé le 2026-09-04 de le vouloir, donc
+   `/boot` doit aller **dans** le sous-volume Btrfs.
 
 Et une troisième, presque aussi difficile à rattraper : **le choix de l'image**
 (Workstation complète, Everything netinstall, spin) détermine ce qu'il faudra désinstaller

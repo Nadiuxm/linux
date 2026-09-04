@@ -5,6 +5,166 @@ Noter **le problème et le temps perdu**, pas seulement la solution.
 
 ---
 
+## 2026-09-04 — KeePassXC fournisseur Secret Service : la chaîne NAS fonctionne sans gnome-keyring
+
+Test du point ouvert ouvert la veille. **Résultat : la chaîne complète fonctionne** —
+entrée KeePassXC → greffon FdoSecrets → `libsecret` → `gvfsd` → partage SMB monté, avec
+**aucun processus `gnome-keyring` sur la machine**.
+
+> **Ce que ça vaut, et ce que ça ne vaut pas.** C'est une preuve de faisabilité obtenue
+> dans une session bricolée à la main. Rien n'a été désinstallé, rien n'est persistant :
+> au prochain login PAM relance `gnome-keyring`, qui reprend le nom D-Bus avant même que
+> KeePassXC ne soit lancé. **L'ordonnancement au login n'est pas testé** — c'est tout le
+> chantier qui reste.
+
+### Le filet, et une découverte sur les instantanés
+
+Instantané manuel `snapper` n° 4 sur `root` et `home` avant de commencer. En le préparant,
+deux choses sont ressorties :
+
+- **Les instantanés automatiques n'encadrent pas une opération risquée.** Il n'existe pas
+  de greffon snapper pour dnf5 : ce qui tourne est `snapper-timeline.timer`, **horaire**.
+  Le dernier instantané peut donc avoir presque une heure et ne sait rien de ce qu'on
+  s'apprête à faire. L'instantané manuel n'est pas un supplément de prudence, c'est le
+  seul qui encadre quoi que ce soit. Il est en plus protégé de la rotation quotidienne
+  (`NUMBER_LIMIT` et `TIMELINE_LIMIT_DAILY` sont deux politiques distinctes).
+- **`grub-btrfs` est retenu pour la configuration finale, et il impose un partitionnement.**
+  Il cherche noyau et initramfs *dans* l'instantané ; or `/boot` est ici une partition ext4
+  séparée, donc le `boot/` d'un instantané est vide. **`/boot` devra être placé dans le
+  sous-volume Btrfs à l'itération 02.** Détail dans `poste/README.md`. En attendant, la
+  porte de sortie ne demande rien à installer : au menu GRUB, `e`, puis
+  `rootflags=subvol=.snapshots/<N>/snapshot`.
+
+### Les cinq attributs — et celui qu'on ne voit pas
+
+`gvfsd` ne demande pas « un mot de passe » : il cherche un item **par attributs**. Il a
+donc fallu reproduire à l'identique, sur une entrée KeePassXC, ceux de l'entrée
+`gnome-keyring` existante :
+
+| Attribut | Valeur |
+|---|---|
+| `protocol` | `smb` |
+| `domain` | `/` |
+| `server` | `pdc-nas-info.te-mgmt.io` |
+| `user` | `jzielona` |
+| `xdg:schema` | `org.gnome.keyring.NetworkPassword` |
+
+**Le cinquième a coûté deux échecs de montage, parce qu'il est invisible selon la façon
+dont on regarde.** Un `secret-tool search --all` sur l'entrée **déverrouillée** n'affiche
+que les quatre premiers. `xdg:schema` n'est apparu que par accident, dans la liste
+**hachée** (`attribute.gkr:compat:hashed:…`) affichée quand la même entrée était
+**verrouillée**.
+
+> **Leçon : la façon dont on lit un objet change ce qu'on voit de lui.** Une liste
+> d'attributs obtenue dans un état n'est pas la liste des attributs. Même famille que
+> « un paquet installé n'est pas un paquet utilisé ».
+
+Symptôme correspondant, à reconnaître : `gio mount` retombe sur la saisie interactive
+(« Saisissez l'utilisateur et le mot de passe »), l'unité sort en `status=2`. Ce n'est pas
+une erreur d'authentification — c'est une **recherche sans résultat**.
+
+### KeePassXC publie ses champs natifs sous ses propres noms
+
+Question posée en cours de route : le champ « Nom d'utilisateur » intégré ne suffirait-il
+pas, plutôt qu'un attribut personnalisé `user` ? Réponse mesurée, pas déduite — le dépôt
+d'attributs réellement publié contient :
+
+```
+attribute.UserName = jzielona      <- champ intégré, nommé par KeePassXC
+attribute.user     = jzielona      <- attribut personnalisé
+attribute.Title / URL / Uuid / Path / Notes
+```
+
+KeePassXC expose ses champs natifs en **CamelCase**, avec sa propre nomenclature. `gvfsd`
+cherche `user` en minuscules, et les noms d'attributs Secret Service sont sensibles à la
+casse. **Le champ intégré ne peut pas remplacer l'attribut personnalisé.**
+
+Corollaire de méthode : s'appuyer sur le champ intégré aurait rendu un échec **ambigu** —
+« KeePassXC n'expose pas les attributs personnalisés » ou « il les renomme » ? Une seule
+variable à la fois, sinon la mesure ne dit rien.
+
+### Deux réglages distincts, sur deux écrans qui se ressemblent — 20 minutes perdues
+
+Le plus gros du temps perdu de la séance. Il y a **deux** réglages sans rapport :
+
+1. **Application** — *Outils → Paramètres → Intégration Secret Service* : autorise
+   KeePassXC à **devenir** fournisseur.
+2. **Base de données** — *Paramètres de la base de données → Intégration Secret Service* :
+   désigne le **groupe exposé**.
+
+Avec seulement le premier, KeePassXC **détient bien le nom D-Bus** — tout a l'air correct
+côté système — mais ne sert aucune collection. Le symptôme est trompeur : une fenêtre
+« Déverrouiller la base de données KeePassXC » **qui ne dit pas de quelle base il s'agit**,
+alors qu'une base est déjà ouverte.
+
+### La confirmation d'accès est rédhibitoire pour un service
+
+FdoSecrets peut demander confirmation à chaque lecture d'entrée. Tant que l'option est
+active, `secret-tool` renvoie `Retour d'erreur avec un corps vide` si la fenêtre n'est pas
+validée — et **un montage déclenché par une unité systemd ne peut par construction pas
+cliquer**. À désactiver, ce qui revient à accepter que tout programme de la session lise
+les entrées exposées, comme le faisait `gnome-keyring`.
+
+### KeePassXC lâche le nom D-Bus, et gnome-keyring reprend la main
+
+**Le mode d'échec principal, observé deux fois.** Dès qu'aucune base exposée n'est
+déverrouillée — un clic sur « Fermer » suffit — KeePassXC **libère**
+`org.freedesktop.secrets`. Le client suivant déclenche alors l'activation D-Bus de
+`gnome-keyring`, qui reprend le nom.
+
+Piège de lecture associé : la sortie de `secret-tool` ressemblait à un succès partiel alors
+qu'elle venait de l'**ancien** fournisseur. Les indices qui ne trompent pas sont dans les
+noms — préfixe `gkr:` et `schema = org.gnome.keyring.NetworkPassword`. **Vérifier qui
+répond avant d'interpréter ce qui est répondu** (`busctl --user status org.freedesktop.secrets`).
+
+### `gnome-keyring`, ce sont DEUX processus
+
+```
+5164  gnome-keyring-daemon --daemonize --login                       <- lancé par PAM
+6137  gnome-keyring-daemon --start --foreground --components=secrets <- activé par D-Bus
+```
+
+Le second correspond mot pour mot à la ligne `Exec=` de
+`/usr/share/dbus-1/services/org.freedesktop.secrets.service`. C'est le premier, celui de
+PAM, qui **détient le nom**. Deux conséquences :
+
+- la formule « `gnome-keyring` est activable par D-Bus à la demande », écrite dans le point
+  ouvert du 03/09, est **incomplète** : les deux mécanismes coexistent, et c'est PAM qui
+  gagne parce qu'il démarre avant l'ouverture de session ;
+- **le tuer ne suffit pas à le faire rester mort.** Le fichier d'activation est toujours là ;
+  au premier client qui demande le nom, D-Bus le relance. D'où la nécessité d'enchaîner
+  vite et de vérifier le propriétaire à chaque étape.
+
+Vérifier sans déclencher d'activation : `busctl --user list | grep secrets` interroge le bus
+lui-même. `busctl --user status <nom>` sur un nom libre, en revanche, peut le réveiller.
+
+### Friction confirmée : toutes les bases ouvertes doivent être déverrouillées
+
+La recherche du 03/09 l'annonçait comme *rapportée*, c'est maintenant **vérifié** : une
+seconde base simplement ouverte et verrouillée fait apparaître une demande de
+déverrouillage à chaque recherche, parce que `SearchItems` balaie toutes les collections.
+**Contrainte pour la configuration cible** : une seule base, ou ne pas rouvrir les autres
+au démarrage — sinon le déverrouillage automatique au login ne suffira pas.
+
+### Ce qui reste à faire
+
+- **L'ordonnancement au login**, seul vrai sujet restant. Piste : `keepassxc.service` en
+  `Type=dbus` + `BusName=org.freedesktop.secrets`, ce qui fait de « KeePassXC détient le
+  nom » un contrat systemd, et `nas-infoadmin.service` en `After=`. Ne couvre pas
+  « la base est déverrouillée » — systemd ne sait pas l'exprimer.
+- **Retirer `gnome-keyring`**, ce qui emporte GDM (`gdm` → `gnome-keyring-pam` →
+  `gnome-keyring`), donc installer `greetd` + `tuigreet`. Le greeter Noctalia est écarté :
+  absent du paquet Fedora, à construire depuis les sources.
+- **`keepassxc-unlock`** et son empreinte SHA512 du binaire, invalidée à chaque mise à jour
+  du paquet.
+- Rappel : le modèle de sécurité ne s'améliore pas tant que le disque n'est pas chiffré.
+  Ce chantier se monte **à l'itération 02**, avec LUKS.
+
+Un piège de shell rencontré au passage et consigné dans `CLAUDE.md` : un glob est développé
+par le shell **appelant**, avant que `sudo` n'élève quoi que ce soit.
+
+---
+
 ## 2026-09-03 — VM Windows d'administration : le poste de travail devient un axe
 
 Premier outil ajouté au titre du **travail réel** et non de l'évaluation. Ça a

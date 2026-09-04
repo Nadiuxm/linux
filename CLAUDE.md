@@ -265,6 +265,16 @@ jour même, tant que le détail est frais.
   paquet utilisé » : l'outil rapporte un fait étroit, l'interprétation est ajoutée par le
   lecteur.
 
+- **Un glob est développé par le shell APPELANT, avant que `sudo` n'élève quoi que ce soit.**
+  Le 2026-09-04, `sudo grep … /boot/loader/entries/*.conf` a répondu « Aucun fichier ou
+  dossier de ce nom » alors que les fichiers existaient : le dossier est en `drwx------ root`,
+  le shell utilisateur n'a donc pas pu développer `*.conf`, et `grep` a reçu la chaîne
+  littérale. **Le message décrivait ce que `grep` avait reçu, pas l'état du disque.** Réponse
+  correcte : `sudo sh -c "… /chemin/*.conf …"`, pour que l'expansion se fasse côté root.
+  Vaut pour toute redirection aussi (`sudo … > /fichier/root` échoue pour la même raison).
+  Même famille que « une commande qui réussit n'est pas une commande qui fait ce qu'on croit » :
+  lire *qui* exécute quoi, et à quel moment.
+
 ## Hors périmètre — ne pas relancer le sujet
 
 **La gestion et la sauvegarde des secrets** (clé SSH du dépôt, base KeePassXC) est
@@ -305,9 +315,14 @@ cocher, pas une invitation à rouvrir le débat.
   l'écraser ; les captures suivantes vont dans `etats/<AAAA-MM-JJ>/`, et le script affiche
   l'écart de paquets avec la baseline. Première capture datée : `etats/2026-09-03/`,
   19 paquets au-delà du protocole.
-- **KeePassXC à la place de `gnome-keyring` comme fournisseur Secret Service — SUJET À
-  DISCUTER, rien n'est tranché.** Demandé par Julien le 2026-09-03 pour une prochaine
-  session. Ne pas arriver avec une recommandation toute faite : le but est d'en parler.
+- **KeePassXC à la place de `gnome-keyring` comme fournisseur Secret Service.**
+  Demandé par Julien le 2026-09-03, **instruit et testé le 2026-09-04**.
+
+  > **FAISABILITÉ PROUVÉE le 2026-09-04** — la chaîne entrée KeePassXC → FdoSecrets →
+  > `libsecret` → `gvfsd` → montage SMB fonctionne, `gnome-keyring` absent de la machine.
+  > **Compte rendu détaillé, attributs exacts et pièges : entrée de journal du 2026-09-04.**
+  > Ce qui reste : l'ordonnancement au login, non testé. La discussion ci-dessous garde sa
+  > valeur de cadrage, mais elle n'est plus l'état de l'art — le journal l'est.
 
   **Ce dont il s'agit, et ce dont il ne s'agit PAS.** Il s'agit de savoir *quel composant
   implémente l'API D-Bus `org.freedesktop.secrets`* pour le bureau. Ce n'est **pas** une
@@ -316,9 +331,14 @@ cocher, pas une invitation à rouvrir le débat.
   stratégie de sauvegarde de la base `.kdbx`.
 
   **L'état actuel, vérifié le 2026-09-03 :**
-  - `org.freedesktop.secrets` est détenu par `gnome-keyring-daemon` (composant `secrets`),
-    déclaré dans `/usr/share/dbus-1/services/org.freedesktop.secrets.service`, donc
-    **activable par D-Bus à la demande** et déverrouillé par **PAM au login**.
+  - `org.freedesktop.secrets` est détenu par `gnome-keyring-daemon` (composant `secrets`).
+    **Correction du 2026-09-04 : les deux mécanismes de démarrage coexistent**, il y a deux
+    processus. Le fichier `/usr/share/dbus-1/services/org.freedesktop.secrets.service` le
+    rend activable à la demande, mais c'est **PAM** qui lance `--daemonize --login` avant
+    l'ouverture de session, et **c'est ce processus-là qui détient le nom**. Dire
+    « activable par D-Bus à la demande » tout court est faux en pratique : il n'y a pas de
+    course à gagner, le nom est pris d'avance. Conséquence : le tuer ne suffit pas non plus
+    à le faire rester mort, D-Bus le relance au premier client.
   - Ses clients connus ici : `gvfsd` pour le montage NAS, et le trousseau en général.
   - **KeePassXC sait le faire** : la construction Fedora de `keepassxc-2.7.12` contient
     bien l'implémentation `FdoSecrets` (symboles `FdoSecrets::Service`, `::Collection`,
