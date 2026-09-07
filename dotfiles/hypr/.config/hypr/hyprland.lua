@@ -1,50 +1,24 @@
--- Hyprland — configuration personnelle
+-- This is an example Hyprland Lua config file.
+-- Refer to the wiki for more information.
+-- https://wiki.hypr.land/Configuring/Start/
+
+-- Please note not all available settings / options are set here.
+-- For a full list, see the wiki
+
+-- You can (and should!!) split this configuration into multiple files
+-- Create your files separately and then require them like this:
+-- require("myColors")
+
+
+------------------
+---- MONITORS ----
+------------------
+
+-- See https://wiki.hypr.land/Configuring/Basics/Monitors/
 --
--- PRINCIPE, inchangé depuis Sway : le compositeur ne fait que du TUILAGE. Tout
--- ce qui relève du shell — barre, lanceur, fond d'écran, notifications,
--- verrouillage, OSD, capture d'écran, menu de session — appartient à Noctalia.
---
--- POURQUOI CE FICHIER EST EN LUA ET NON EN .conf
--- Hyprland a DÉPRÉCIÉ hyprlang (le format « key = value » de tous les tutoriels)
--- à partir de la version 0.55, au profit d'une API Lua. Le paquet ne livre plus
--- qu'un exemple .lua, et /usr/share/hypr/stubs/hl.meta.lua documente l'API
--- complète — c'est la référence à lire, pas les tutoriels en ligne, qui sont
--- presque tous encore en hyprlang.
---
--- Porté depuis dotfiles/sway/.config/sway/config le 2026-09-04. L'inventaire de
--- ce qui n'a pas d'équivalent est en bas de fichier.
-
-
--- ─── Variables ──────────────────────────────────────────────────────────────
-
-local mod  = "SUPER"
-local term = "foot"
-
--- hjkl pour le focus, comme sous Sway. Écart assumé au défaut : les flèches
--- nues déplacent la FENÊTRE, pas le focus — déplacer une fenêtre est plus
--- fréquent que déplacer le focus.
-local left, down, up, right = "H", "J", "K", "L"
-
-
--- ─── Clavier ────────────────────────────────────────────────────────────────
---
--- Même piège que sous Sway, et il vaut pour tout compositeur Wayland :
--- /etc/X11/xorg.conf.d/00-keyboard.conf n'est lu que par Xorg, et gsettings
--- que par GNOME. Sans ce bloc, retour au défaut US QWERTY.
---
--- Vérifier ce que voit Hyprland :  hyprctl devices
-
-hl.config({
-    input = {
-        kb_layout    = "fr",
-        kb_variant   = "azerty",
-        follow_mouse = 1,
-        sensitivity  = 0,
-    },
-})
-
-
--- ─── Écrans ─────────────────────────────────────────────────────────────────
+-- Wayland ne connaît ni « écran 1/2/3 » ni « écran principal » : uniquement des
+-- sorties placées par coordonnées dans un plan commun. La position décide de
+-- tout, à commencer par le bord par lequel la souris passe.
 --
 --   HDMI-A-2            DP-3              DP-1
 --   P2425H              P2725DE           P2414H
@@ -54,377 +28,548 @@ hl.config({
 --   └────────┘      └──────────────┘      └────────┘
 --   x=0             x=1920                x=4480
 --
--- Le y=180 des deux latéraux n'est pas arbitraire : ils font 1080 de haut
--- contre 1440 pour le central. (1440-1080)/2 = 180 les centre verticalement au
--- lieu de les aligner par le haut — la souris traverse alors sans décrochage.
+-- Le y=180 des deux latéraux n'est pas arbitraire : ils font 1080 de haut contre
+-- 1440 pour le central. (1440-1080)/2 = 180 les centre verticalement au lieu de
+-- les aligner par le haut — la souris traverse alors sans décrochage.
 --
--- « preferred » plutôt qu'un mode écrit en dur : le taux de rafraîchissement
--- réel des dalles n'a pas été relevé, et une valeur inventée ferait échouer la
--- sortie en silence. À figer après « hyprctl monitors » si besoin.
---
--- Nommage par PORT, choix assumé : le branchement ne bouge pas.
+-- Nommage par PORT, choix assumé : le branchement ne bouge pas. Si un câble
+-- change de prise, c'est ce bloc qu'il faut corriger. L'identifiant durable
+-- serait la description, p.ex. "Dell Inc. DELL P2725DE FVTKM84".
+-- Pour relire les noms, modes et positions réels :  hyprctl monitors all
 
-hl.monitor({ output = "HDMI-A-2", mode = "preferred", position = "0x180",   scale = 1 })
-hl.monitor({ output = "DP-3",     mode = "preferred", position = "1920x0",  scale = 1 })
+hl.monitor({ output = "HDMI-A-2", mode = "preferred", position = "0x180",    scale = 1 })
+hl.monitor({ output = "DP-3",     mode = "preferred", position = "1920x0",   scale = 1 })
 hl.monitor({ output = "DP-1",     mode = "preferred", position = "4480x180", scale = 1 })
 
 -- Toute sortie non listée est activée à sa position préférée plutôt qu'ignorée.
 hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" })
 
 
--- ─── Répartition des espaces de travail ─────────────────────────────────────
---
---     gauche      centre      droite
---     1 4 7 10    2 5 8       3 6 9
---
--- La rangée du clavier reproduit la disposition physique du bureau : première
--- touche à gauche, deuxième au centre, troisième à droite, puis on recommence.
--- Rien à mémoriser, la main sait où elle va.
---
--- L'espace 2 est « default », donc la session démarre au CENTRE et non à
--- gauche. C'est ce qui tient lieu d'« écran principal », notion qui n'existe
--- pas sous Wayland.
+---------------------
+---- MY PROGRAMS ----
+---------------------
 
-local ecran_de_lespace = {
-    "HDMI-A-2", "DP-3", "DP-1",
-    "HDMI-A-2", "DP-3", "DP-1",
-    "HDMI-A-2", "DP-3", "DP-1",
-    "HDMI-A-2",
-}
+-- Set programs that you use
+local terminal    = "kitty"
 
-for i, sortie in ipairs(ecran_de_lespace) do
-    hl.workspace_rule({
-        workspace = tostring(i),
-        monitor   = sortie,
-        default   = (i == 2) or nil,
-    })
-end
+-- « dolphin » (le défaut de l'exemple) n'est pas installé ; nautilus l'est, et
+-- il est déjà la brique qui sait écrire dans le trousseau pour les montages SMB.
+local fileManager = "nautilus"
+
+-- « hyprlauncher » (le défaut) n'est pas installé. Le lanceur est un panneau
+-- Noctalia, appelé en IPC — d'où une commande et non un binaire.
+local menu        = "noctalia msg panel-toggle launcher"
 
 
--- ─── Apparence ──────────────────────────────────────────────────────────────
---
--- C'EST LA RAISON DU CHANGEMENT DE COMPOSITEUR. Animations, coins arrondis,
--- flou et ombres n'ont aucun équivalent sous Sway : wlroots ne les fournit pas,
--- par choix amont. La chrome de Sway était déjà réduite au minimum (bordure de
--- 2 px, aucune barre de titre), donc le manque n'était pas un défaut de
--- configuration.
---
--- Bordure conservée à 2 px : en tuilage sur trois écrans, la couleur du focus
--- reste nécessaire pour savoir où va le clavier.
+-------------------
+---- AUTOSTART ----
+-------------------
 
-hl.config({
-    general = {
-        border_size = 2,
-        gaps_in     = 4,
-        gaps_out    = 8,
-        layout      = "dwindle",
+-- See https://wiki.hypr.land/Configuring/Basics/Autostart/
 
-        resize_on_border = true,
+-- Cette session est lancée par greetd, qui passe par uwsm : l'unité du
+-- compositeur est wayland-wm@hyprland.desktop.service, en Type=notify.
+-- Vérifier comment on est lancé :  pstree -ps $(pgrep -x Hyprland)
 
-        col = {
-            active_border   = "rgba(88c0d0ee)",
-            inactive_border = "rgba(3b4252aa)",
-        },
-    },
+hl.on("hyprland.start", function()
+    -- « uwsm finalize » fait DEUX choses, et la seconde est la moins visible :
+    --
+    --   1. il exporte vers systemd --user les variables WAYLAND_DISPLAY et
+    --      DISPLAY, plus celles listées dans UWSM_FINALIZE_VARNAMES — ici
+    --      HYPRLAND_INSTANCE_SIGNATURE, HYPRLAND_CMD, HYPRCURSOR_THEME,
+    --      HYPRCURSOR_SIZE, XCURSOR_SIZE, XCURSOR_THEME ;
+    --   2. il envoie la NOTIFICATION DE DÉMARRAGE de l'unité du compositeur.
+    --
+    -- C'est le point 2 qui compte le plus : l'unité étant en Type=notify, tant
+    -- que la notification n'arrive pas, uwsm attend les variables jusqu'au
+    -- timeout, l'unité reste en « activating » et graphical-session.target ne
+    -- s'active jamais. Or nas-infoadmin.service en dépend
+    -- (After=/PartOf=/WantedBy=) : sans cette ligne, le NAS ne monte pas.
+    --
+    -- Écrire à la main un « dbus-update-activation-environment » suivi d'un
+    -- « systemctl --user import-environment » ferait une partie du point 1
+    -- (trois variables sur six), rien du point 2, et serait un écart à la
+    -- procédure de l'outil sans qu'aucun fait sur la machine ne le justifie.
+    hl.exec_cmd("uwsm finalize")
 
-    decoration = {
-        rounding       = 8,
-        rounding_power = 2,
+    -- Shell Wayland complet : barre, lanceur, notifications, fond d'écran, OSD,
+    -- verrouillage, menu de session. Vérifié le 2026-09-07 : AUCUN autre
+    -- mécanisme ne le lance — ni unité systemd (le paquet ne livre qu'un
+    -- .desktop), ni autostart XDG. Sans cette ligne, pas de shell du tout.
+    hl.exec_cmd("noctalia --daemon")
+end)
 
-        -- Le flou ne s'applique qu'aux surfaces TRANSPARENTES : sans opacité
-        -- < 1 quelque part, il ne se verra nulle part. Ce n'est pas un réglage
-        -- cassé, c'est ainsi qu'il fonctionne.
-        blur = {
-            enabled = true,
-            size    = 6,
-            passes  = 2,
-        },
 
-        shadow = {
-            enabled      = true,
-            range        = 12,
-            render_power = 3,
-        },
-    },
+-------------------------------
+---- ENVIRONMENT VARIABLES ----
+-------------------------------
 
-    animations = { enabled = true },
+-- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Environment-variables/
 
-    dwindle = {
-        preserve_split = true,
-
-        -- Pas de « pseudotile » ici : l'option globale dwindle:pseudotile
-        -- N'EXISTE PLUS en 0.56 (hyprctl getoption → « no such option »), alors
-        -- que tous les tutoriels la donnent. Le pseudo-tuilage n'est plus qu'une
-        -- action par fenêtre — liée plus bas sur $mod+P, comme dans l'exemple
-        -- livré par le paquet.
-    },
-
-    misc = {
-        -- Pas de fond d'écran Hyprland : le fond appartient à Noctalia.
-        -- Même raisonnement que la directive « bg » abandonnée sous Sway —
-        -- deux composants sur la même couche, c'est l'ordre de CRÉATION qui
-        -- décide, donc on supprime le concurrent plutôt que de gagner la course.
-        force_default_wallpaper  = 0,
-        disable_hyprland_logo    = true,
-        disable_splash_rendering = true,
-    },
-})
-
-hl.curve("doux", { type = "bezier", points = { { 0.05, 0.9 }, { 0.1, 1.0 } } })
-
-hl.animation({ leaf = "windows",    enabled = true, speed = 4.5, bezier = "doux", style = "popin 85%" })
-hl.animation({ leaf = "windowsOut", enabled = true, speed = 3.0, bezier = "doux", style = "popin 85%" })
-hl.animation({ leaf = "border",     enabled = true, speed = 6.0, bezier = "doux" })
-hl.animation({ leaf = "fade",       enabled = true, speed = 3.5, bezier = "doux" })
-hl.animation({ leaf = "workspaces", enabled = true, speed = 4.0, bezier = "doux", style = "slide" })
-
-hl.env("XCURSOR_SIZE",   "24")
+hl.env("XCURSOR_SIZE", "24")
 hl.env("HYPRCURSOR_SIZE", "24")
 
 
--- ─── Placement des applications ─────────────────────────────────────────────
---
--- On désigne un ESPACE, jamais une sortie. L'espace 6 vit déjà sur DP-1, donc
--- l'écran de droite : « bureau 6 » et « écran de droite » nomment le même
--- endroit, et une seule affectation fait foi. Si un écran change de prise, il
--- n'y a que le bloc « monitor » à corriger.
---
--- Espace 6 et non 3 : 3 est le premier espace généraliste de DP-1, la VM le
--- partagerait. 6 lui est dédié, et reste atteignable au clavier.
---
--- Sous Sway il fallait DEUX directives — « assign » pour placer, « for_window
--- focus » pour y aller.
---
--- Le critère « class » correspond à l'app_id d'un client Wayland natif, ce
--- qu'est virt-manager. Ne pas deviner : le lire sur une fenêtre réellement
--- ouverte, avec « hyprctl clients ».
+-----------------------
+----- PERMISSIONS -----
+-----------------------
 
-hl.window_rule({
-    name      = "vm-admin-sur-espace-6",
-    match     = { class = "^(virt-manager)$" },
-    workspace = "6",
+-- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Permissions/
+-- Please note permission changes here require a Hyprland restart and are not applied on-the-fly
+-- for security reasons
+
+-- hl.config({
+--   ecosystem = {
+--     enforce_permissions = true,
+--   },
+-- })
+
+-- hl.permission("/usr/(bin|local/bin)/grim", "screencopy", "allow")
+-- hl.permission("/usr/(lib|libexec|lib64)/xdg-desktop-portal-hyprland", "screencopy", "allow")
+-- hl.permission("/usr/(bin|local/bin)/hyprpm", "plugin", "allow")
+
+
+-----------------------
+---- LOOK AND FEEL ----
+-----------------------
+
+-- Refer to https://wiki.hypr.land/Configuring/Basics/Variables/
+hl.config({
+    general = {
+        gaps_in  = 5,
+        gaps_out = 20,
+
+        border_size = 2,
+
+        col = {
+            active_border   = { colors = {"rgba(33ccffee)", "rgba(00ff99ee)"}, angle = 45 },
+            inactive_border = "rgba(595959aa)",
+        },
+
+        -- Set to true to enable resizing windows by clicking and dragging on borders and gaps
+        resize_on_border = false,
+
+        -- Please see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Tearing/ before you turn this on
+        allow_tearing = false,
+
+        layout = "dwindle",
+    },
+
+    decoration = {
+        rounding       = 10,
+        rounding_power = 2,
+
+        -- Change transparency of focused and unfocused windows
+        active_opacity   = 1.0,
+        inactive_opacity = 1.0,
+
+        shadow = {
+            enabled      = true,
+            range        = 4,
+            render_power = 3,
+            color        = 0xee1a1a1a,
+        },
+
+        blur = {
+            enabled   = true,
+            size      = 3,
+            passes    = 1,
+            vibrancy  = 0.1696,
+        },
+    },
+
+    animations = {
+        enabled = true,
+    },
+})
+
+-- Default curves and animations, see https://wiki.hypr.land/Configuring/Advanced-and-Cool/Animations/
+hl.curve("easeOutQuint",   { type = "bezier", points = { {0.23, 1},    {0.32, 1}    } })
+hl.curve("easeInOutCubic", { type = "bezier", points = { {0.65, 0.05}, {0.36, 1}    } })
+hl.curve("linear",         { type = "bezier", points = { {0, 0},       {1, 1}       } })
+hl.curve("almostLinear",   { type = "bezier", points = { {0.5, 0.5},   {0.75, 1}    } })
+hl.curve("quick",          { type = "bezier", points = { {0.15, 0},    {0.1, 1}     } })
+
+-- Default springs
+hl.curve("easy",           { type = "spring", mass = 1, stiffness = 238.1191, dampening = 24.21279333 })
+
+hl.animation({ leaf = "global",        enabled = true,  speed = 10,   bezier = "default" })
+hl.animation({ leaf = "border",        enabled = true,  speed = 5.39, bezier = "easeOutQuint" })
+hl.animation({ leaf = "windows",       enabled = true,  speed = 4.79, spring = "easy" })
+hl.animation({ leaf = "windowsIn",     enabled = true,  speed = 4.1,  spring = "easy",         style = "popin 87%" })
+hl.animation({ leaf = "windowsOut",    enabled = true,  speed = 1.49, bezier = "linear",       style = "popin 87%" })
+hl.animation({ leaf = "fadeIn",        enabled = true,  speed = 1.73, bezier = "almostLinear" })
+hl.animation({ leaf = "fadeOut",       enabled = true,  speed = 1.46, bezier = "almostLinear" })
+hl.animation({ leaf = "fade",          enabled = true,  speed = 3.03, bezier = "quick" })
+hl.animation({ leaf = "layers",        enabled = true,  speed = 3.81, bezier = "easeOutQuint" })
+hl.animation({ leaf = "layersIn",      enabled = true,  speed = 4,    bezier = "easeOutQuint", style = "fade" })
+hl.animation({ leaf = "layersOut",     enabled = true,  speed = 1.5,  bezier = "linear",       style = "fade" })
+hl.animation({ leaf = "fadeLayersIn",  enabled = true,  speed = 1.79, bezier = "almostLinear" })
+hl.animation({ leaf = "fadeLayersOut", enabled = true,  speed = 1.39, bezier = "almostLinear" })
+hl.animation({ leaf = "workspaces",    enabled = true,  speed = 1.94, bezier = "almostLinear", style = "fade" })
+hl.animation({ leaf = "workspacesIn",  enabled = true,  speed = 1.21, bezier = "almostLinear", style = "fade" })
+hl.animation({ leaf = "workspacesOut", enabled = true,  speed = 1.94, bezier = "almostLinear", style = "fade" })
+hl.animation({ leaf = "zoomFactor",    enabled = true,  speed = 7,    bezier = "quick" })
+
+-- Ancrage des espaces sur les sorties, par NOM et non par ordre de détection.
+-- Sans ces règles, Hyprland distribue les espaces dans l'ordre des monitorID,
+-- qui est l'ordre de détection au démarrage et change d'un boot à l'autre :
+-- le 2026-09-07, DP-1 (écran de droite) avait l'ID 0 et récupérait l'espace 1.
+-- `default` désigne l'espace que la sortie affiche à l'ouverture de session.
+-- Attention : une règle de workspace ne s'applique qu'à la CRÉATION de l'espace,
+-- un `hyprctl reload` ne déplace donc pas ceux qui sont déjà ouverts.
+local sorties = {
+    "HDMI-A-2", -- écran de gauche  → espaces 1, 4, 7
+    "DP-3",     -- écran central    → espaces 2, 5, 8
+    "DP-1",     -- écran de droite  → espaces 3, 6, 9
+}
+
+for rang, sortie in ipairs(sorties) do
+    for _, n in ipairs({ rang, rang + 3, rang + 6 }) do
+        hl.workspace_rule({
+            workspace = tostring(n),
+            monitor   = sortie,
+            default   = (n == rang),
+        })
+    end
+end
+
+-- Ref https://wiki.hypr.land/Configuring/Basics/Workspace-Rules/
+-- "Smart gaps" / "No gaps when only"
+-- uncomment all if you wish to use that.
+-- hl.workspace_rule({ workspace = "w[tv1]", gaps_out = 0, gaps_in = 0 })
+-- hl.workspace_rule({ workspace = "f[1]",   gaps_out = 0, gaps_in = 0 })
+-- hl.window_rule({
+--     name  = "no-gaps-wtv1",
+--     match = { float = false, workspace = "w[tv1]" },
+--     border_size = 0,
+--     rounding    = 0,
+-- })
+-- hl.window_rule({
+--     name  = "no-gaps-f1",
+--     match = { float = false, workspace = "f[1]" },
+--     border_size = 0,
+--     rounding    = 0,
+-- })
+
+-- See https://wiki.hypr.land/Configuring/Layouts/Dwindle-Layout/ for more
+hl.config({
+    dwindle = {
+        preserve_split = true, -- You probably want this
+    },
+})
+
+-- See https://wiki.hypr.land/Configuring/Layouts/Master-Layout/ for more
+hl.config({
+    master = {
+        new_status = "master",
+    },
+})
+
+-- See https://wiki.hypr.land/Configuring/Layouts/Scrolling-Layout/ for more
+hl.config({
+    scrolling = {
+        fullscreen_on_one_column = true,
+    },
+})
+
+----------------
+----  MISC  ----
+----------------
+
+hl.config({
+    misc = {
+        force_default_wallpaper = -1,    -- Set to 0 or 1 to disable the anime mascot wallpapers
+        disable_hyprland_logo   = false, -- If true disables the random hyprland logo / anime girl background. :(
+    },
 })
 
 
--- ═══ TUILAGE ════════════════════════════════════════════════════════════════
+---------------
+---- INPUT ----
+---------------
 
--- --- Lancer, fermer, recharger ---
+hl.config({
+    input = {
+        -- /etc/X11/xorg.conf.d/00-keyboard.conf n'est lu que par Xorg, et
+        -- gsettings que par GNOME. Sans ces deux lignes, Hyprland retombe sur
+        -- son défaut, US QWERTY.  Vérifier :  hyprctl devices
+        kb_layout  = "fr",
+        kb_variant = "azerty",
+        kb_model   = "",
+        kb_options = "",
+        kb_rules   = "",
 
-hl.bind(mod .. " + Return",    hl.dsp.exec_cmd(term))
-hl.bind(mod .. " + SHIFT + Q", hl.dsp.window.close())
-hl.bind(mod .. " + SHIFT + C", hl.dsp.exec_cmd("hyprctl reload"))
+        follow_mouse = 1,
 
--- Souris + Super : glisser une fenêtre, clic droit pour redimensionner.
-hl.bind(mod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
-hl.bind(mod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
+        sensitivity = 0, -- -1.0 - 1.0, 0 means no modification.
 
+        touchpad = {
+            natural_scroll = false,
+        },
+    },
+})
 
--- --- Déplacer le focus et les fenêtres ---
+hl.gesture({
+    fingers = 3,
+    direction = "horizontal",
+    action = "workspace"
+})
 
-hl.bind(mod .. " + " .. left,  hl.dsp.focus({ direction = "left" }))
-hl.bind(mod .. " + " .. down,  hl.dsp.focus({ direction = "down" }))
-hl.bind(mod .. " + " .. up,    hl.dsp.focus({ direction = "up" }))
-hl.bind(mod .. " + " .. right, hl.dsp.focus({ direction = "right" }))
-
-hl.bind(mod .. " + left",  hl.dsp.window.move({ direction = "left" }))
-hl.bind(mod .. " + down",  hl.dsp.window.move({ direction = "down" }))
-hl.bind(mod .. " + up",    hl.dsp.window.move({ direction = "up" }))
-hl.bind(mod .. " + right", hl.dsp.window.move({ direction = "right" }))
-
-hl.bind(mod .. " + SHIFT + " .. left,  hl.dsp.window.move({ direction = "left" }))
-hl.bind(mod .. " + SHIFT + " .. down,  hl.dsp.window.move({ direction = "down" }))
-hl.bind(mod .. " + SHIFT + " .. up,    hl.dsp.window.move({ direction = "up" }))
-hl.bind(mod .. " + SHIFT + " .. right, hl.dsp.window.move({ direction = "right" }))
+-- Example per-device config
+-- See https://wiki.hypr.land/Configuring/Advanced-and-Cool/Devices/ for more
+hl.device({
+    name        = "epic-mouse-v1",
+    sensitivity = -0.5,
+})
 
 
--- --- Cycler entre les fenêtres d'un même espace ---
+---------------------
+---- KEYBINDINGS ----
+---------------------
+
+local mainMod = "SUPER" -- Sets "Windows" key as main modifier
+
+-- BASE : les raccourcis par défaut d'Hyprland (/usr/share/hypr/hyprland.lua).
+-- Chaque écart au défaut est marqué ÉCART ou AJOUT, avec sa raison.
 --
--- PIÈGE REPRIS DE SWAY, et il vaut à l'identique ici. Maj+Tab ne produit pas le
--- symbole « Tab » mais « ISO_Left_Tab » : une liaison écrite « SUPER + SHIFT +
--- Tab » ne se déclencherait jamais. D'où le code physique — Tab = 23.
+-- Voir la forme réellement enregistrée :  hyprctl binds
+--
+-- ATTENTION — « hyprctl keyword » ne fonctionne PLUS avec le parseur Lua : il
+-- répond « keyword can't work with non-legacy parsers. Use eval. » Pour essayer
+-- une liaison à chaud, sans toucher au fichier :
+--     hyprctl eval 'hl.bind("SUPER + X", hl.dsp.exec_cmd("true"))'
+-- Et pour un dispatcher, la forme des arguments n'est PAS documentée dans
+-- /usr/share/hypr/stubs/hl.meta.lua (tout y est typé « fun(...) ») : c'est le
+-- message d'erreur qui la donne, en la demandant mal exprès.
+--     hyprctl dispatch 'hl.dsp.window.resize("x")'
 
-hl.bind(mod .. " + Tab",                    hl.dsp.window.cycle_next())
-hl.bind(mod .. " + SHIFT + ISO_Left_Tab",   hl.dsp.window.cycle_next({ prev = true }))
+
+-- --- Lancer, fermer, quitter ---
+
+hl.bind(mainMod .. " + Q", hl.dsp.exec_cmd(terminal))
+hl.bind(mainMod .. " + C", hl.dsp.window.close())
+hl.bind(mainMod .. " + E", hl.dsp.exec_cmd(fileManager))
+hl.bind(mainMod .. " + R", hl.dsp.exec_cmd(menu))
+
+-- ÉCART — le défaut met la sortie de session sur SUPER + M, qui quitte SANS
+-- confirmation : une frappe malheureuse ferme la session et tout ce qui est
+-- ouvert. Deux changements : un modificateur de plus, et le panneau de session
+-- Noctalia à la place, qui présente lock / suspend / logout / reboot / shutdown
+-- au lieu d'agir tout de suite.
+-- Pour un logout sec à la place :  noctalia msg session logout
+hl.bind(mainMod .. " + SHIFT + M", hl.dsp.exec_cmd("noctalia msg panel-toggle session"))
 
 
--- --- Espaces de travail : par CODE, et surtout pas par symbole ---
---
--- LE PIÈGE AZERTY LE PLUS COÛTEUX DE L'ANCIENNE CONFIG, et il n'a rien de
--- spécifique à Sway : il vient du CLAVIER, donc il se repose ici entier.
---
--- Sur AZERTY, le symbole « 1 » est au NIVEAU 2 de la touche : elle donne « & »
--- seule et « 1 » avec Maj. Une liaison « SUPER + 1 » exige donc déjà un Maj, et
--- « SUPER + SHIFT + 1 » en demanderait un second — inatteignable.
---
--- VÉRIFIÉ le 2026-09-04 sur la documentation Hyprland : « input:resolve_binds_
--- by_sym » vaut TRUE par défaut, donc les liaisons se résolvent bien par
--- SYMBOLE et le piège s'applique. Il ne suffit pas de changer de compositeur.
---
--- Seule réponse correcte : « code:N », le code de la touche PHYSIQUE, sans
--- passer par un symbole ni par un niveau. Codes lus dans
--- /usr/share/X11/xkb/keycodes/evdev — rangée du haut de gauche à droite :
--- AE01=10, AE02=11 … AE10=19. Sur ce clavier ce sont & é " ' ( - è _ ç à.
---
--- Un symbole, un code de touche et un niveau sont trois choses distinctes.
+-- --- Disposition des fenêtres ---
 
--- Niveau 1 de la rangée du haut, de gauche à droite : ce que la touche produit
--- SANS Maj. C'est par ces symboles qu'on atteint la touche sans exiger de Maj.
--- Niveau 2 = le chiffre lui-même, donc « SHIFT + le chiffre » désigne la MÊME
--- touche physique. Les deux colonnes ci-dessous sont donc la même touche, lue
--- à ses deux niveaux — et c'est exactement ce qu'on veut.
+hl.bind(mainMod .. " + V", hl.dsp.window.float({ action = "toggle" }))
+hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
+hl.bind(mainMod .. " + J", hl.dsp.layout("togglesplit"))
+
+-- AJOUT — les défauts d'Hyprland n'ont AUCUN raccourci de plein écran.
+hl.bind(mainMod .. " + F", hl.dsp.window.fullscreen())
+
+
+-- --- Focus, déplacement, redimensionnement ---
+--
+-- Les flèches nues déplacent le FOCUS : c'est le défaut d'Hyprland, gardé.
+--
+-- AJOUT — les défauts ne savent ni DÉPLACER une fenêtre au clavier, ni la
+-- REDIMENSIONNER (uniquement à la souris, SUPER + clic droit). Trois
+-- modificateurs sur la même rangée de flèches, ce qui évite d'avoir à retenir
+-- trois zones du clavier.
+--
+-- PIÈGE VÉRIFIÉ le 2026-09-07 — « relative = true » n'est pas optionnel.
+-- La signature est { x, y, relative?, window? }, et SANS « relative » les deux
+-- nombres sont une taille ABSOLUE : { x = 20, y = 0 } demande une hauteur de
+-- zéro et échoue sur « Invalid size ». Le message d'erreur est la seule
+-- documentation de cette signature.
+
+hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
+hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
+hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
+hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
+
+hl.bind(mainMod .. " + SHIFT + left",  hl.dsp.window.move({ direction = "left" }))
+hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.move({ direction = "right" }))
+hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.move({ direction = "up" }))
+hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.move({ direction = "down" }))
+
+local pas = 40
+hl.bind(mainMod .. " + CTRL + left",  hl.dsp.window.resize({ x = -pas, y = 0, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + CTRL + right", hl.dsp.window.resize({ x =  pas, y = 0, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + CTRL + up",    hl.dsp.window.resize({ x = 0, y = -pas, relative = true }), { repeating = true })
+hl.bind(mainMod .. " + CTRL + down",  hl.dsp.window.resize({ x = 0, y =  pas, relative = true }), { repeating = true })
+
+
+-- --- Espaces de travail ---
+--
+-- ÉCART OBLIGÉ, ce n'est pas une préférence. Le défaut d'Hyprland lie
+-- « SUPER + 1 » … « SUPER + 0 », et « input:resolve_binds_by_sym » valant TRUE
+-- par défaut, ce sont bien des SYMBOLES qui sont liés. Or sur AZERTY le symbole
+-- « 1 » est au NIVEAU 2 de la touche : elle donne « & » seule et « 1 » avec Maj.
+-- « SUPER + 1 » exigerait donc déjà un Maj, et « SUPER + SHIFT + 1 » un second.
+-- Le défaut est inutilisable tel quel sur ce clavier.
+--
+-- « code:N » N'EST PAS la solution — re-vérifié le 2026-09-07 sur Hyprland
+-- 0.56.2. Dans la configuration Lua la liaison est acceptée sans erreur, sans
+-- avertissement, et reste INERTE. Ce qui le révèle est la FORME de
+-- « hyprctl binds » : une liaison analysée montre une clé courte
+-- (« key: ampersand »), une liaison ratée garde la chaîne entière
+-- (« key: SUPER + ALT + code:49 »). Compter les liaisons n'aurait rien dit.
+--
+-- Réponse retenue : lier le SYMBOLE DE NIVEAU 1 dans les DEUX cas, et ne
+-- changer que le modificateur. Une seule colonne de symboles, deux modmasks.
+--
+-- PIÈGE MESURÉ le 2026-09-07, et c'est le plus sournois du fichier.
+-- La première version écrivait « SUPER + SHIFT + <chiffre> » pour envoyer la
+-- fenêtre, en raisonnant que « SHIFT + le chiffre » désigne la même touche lue
+-- à son niveau 2. Ce raisonnement est faux EN PRATIQUE : la liaison ne se
+-- déclenche jamais.
+--
+-- Et « hyprctl binds » ne le dit PAS. Les deux formes y sont analysées
+-- proprement, avec une clé courte et le bon modmask :
+--     key: 1           modmask: 65   (SUPER + SHIFT)
+--     key: ampersand   modmask: 65   (SUPER + SHIFT)
+-- Le critère « clé courte = liaison bonne », qui démasque « code:N », ne
+-- démasque pas celle-ci. Seule la frappe réelle l'a révélée.
+--
+-- Explication la plus probable, non vérifiée dans le code d'Hyprland : à la
+-- frappe, le keysym comparé est celui du NIVEAU 1 de la touche (« ampersand »),
+-- le Maj étant déjà consommé comme modificateur. Aucune touche AZERTY ne
+-- produisant « 1 » au niveau 1, la liaison n'a aucune touche à laquelle
+-- s'accrocher. Ce qui compte est le constat, pas le mécanisme supposé.
+
 local rangee = {
-    { niveau1 = "ampersand",  niveau2 = "1"  },  -- &  AE01
-    { niveau1 = "eacute",     niveau2 = "2"  },  -- é  AE02
-    { niveau1 = "quotedbl",   niveau2 = "3"  },  -- "  AE03
-    { niveau1 = "apostrophe", niveau2 = "4"  },  -- '  AE04
-    { niveau1 = "parenleft",  niveau2 = "5"  },  -- (  AE05
-    { niveau1 = "minus",      niveau2 = "6"  },  -- -  AE06
-    { niveau1 = "egrave",     niveau2 = "7"  },  -- è  AE07
-    { niveau1 = "underscore", niveau2 = "8"  },  -- _  AE08
-    { niveau1 = "ccedilla",   niveau2 = "9"  },  -- ç  AE09
-    { niveau1 = "agrave",     niveau2 = "0"  },  -- à  AE10
+    "ampersand",   -- & → espace 1
+    "eacute",      -- é → espace 2
+    "quotedbl",    -- " → espace 3
+    "apostrophe",  -- ' → espace 4
+    "parenleft",   -- ( → espace 5
+    "minus",       -- - → espace 6
+    "egrave",      -- è → espace 7
+    "underscore",  -- _ → espace 8
+    "ccedilla",    -- ç → espace 9
+    "agrave",      -- à → espace 10
 }
 
-for i, touche in ipairs(rangee) do
-    hl.bind(mod .. " + " .. touche.niveau1,
+for i, symbole in ipairs(rangee) do
+    hl.bind(mainMod .. " + " .. symbole,
             hl.dsp.focus({ workspace = i }),
             { desc = "Aller sur l'espace " .. i })
-    hl.bind(mod .. " + SHIFT + " .. touche.niveau2,
+    hl.bind(mainMod .. " + SHIFT + " .. symbole,
             hl.dsp.window.move({ workspace = i }),
             { desc = "Envoyer la fenêtre sur l'espace " .. i })
 end
 
+-- Espace spécial (scratchpad) et molette : défauts d'Hyprland, gardés tels quels.
+hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))
+hl.bind(mainMod .. " + SHIFT + S", hl.dsp.window.move({ workspace = "special:magic" }))
 
--- --- Dispositions ---
---
--- « dwindle » n'a pas de splith/splitv séparés : une seule bascule
--- d'orientation, contre deux directives sous Sway. SUPER+V reste donc libre.
+hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
+hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
 
-hl.bind(mod .. " + B",             hl.dsp.layout("togglesplit"))
-hl.bind(mod .. " + F",             hl.dsp.window.fullscreen())
-hl.bind(mod .. " + P",             hl.dsp.window.pseudo())
-hl.bind(mod .. " + SHIFT + SPACE", hl.dsp.window.float({ action = "toggle" }))
-
--- Groupes : l'équivalent le plus proche de la disposition « onglets » de Sway.
-hl.bind(mod .. " + W",         hl.dsp.group.toggle())
-hl.bind(mod .. " + S",         hl.dsp.group.next())
-hl.bind(mod .. " + SHIFT + S", hl.dsp.group.prev())
+hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
+hl.bind(mainMod .. " + mouse:273", hl.dsp.window.resize(), { mouse = true })
 
 
--- --- Espace spécial (l'ancien scratchpad) ---
---
--- Le défaut de Sway liait le scratchpad à $mod+minus. Sur AZERTY « minus » est
--- le niveau 1 de AE06 — la touche du 6 : deux liaisons se disputaient la même
--- touche physique et l'espace 6 ne répondait plus.
---
--- Réattribué sur « ² » (TLDE, code 49), touche libre et isolée en haut à
--- gauche, hors de la rangée des chiffres. Aucune collision possible.
-
-hl.bind(mod .. " + twosuperior",       hl.dsp.workspace.toggle_special("magic"))
-hl.bind(mod .. " + ALT + twosuperior", hl.dsp.window.move({ workspace = "special:magic" }))
-
-
--- --- Mode redimensionnement ---
---
--- Sway avait un « mode », Hyprland a des « submaps » : les touches changent de
--- sens jusqu'à Entrée ou Échap. « repeating » pour que le maintien répète.
-
-hl.define_submap("resize", function()
-    local pas = 20
-    local sens = {
-        [left] = { -pas, 0 }, [down] = { 0, pas },
-        [up]   = { 0, -pas }, [right] = { pas, 0 },
-        ["left"] = { -pas, 0 }, ["down"] = { 0, pas },
-        ["up"]   = { 0, -pas }, ["right"] = { pas, 0 },
-    }
-    for touche, delta in pairs(sens) do
-        hl.bind(touche, hl.dsp.window.resize({ x = delta[1], y = delta[2] }), { repeating = true })
-    end
-    hl.bind("Return", hl.dsp.submap("reset"))
-    hl.bind("Escape", hl.dsp.submap("reset"))
-end)
-
-hl.bind(mod .. " + R", hl.dsp.submap("resize"))
-
-
--- ═══ NOCTALIA — tout le reste ═══════════════════════════════════════════════
+-- --- Shell : tout passe par Noctalia ---
 --
 -- POURQUOI LES RACCOURCIS SONT ICI ET NON DANS NOCTALIA.
 -- Noctalia n'a aucun système de raccourcis, et ne peut pas en avoir : sous
--- Wayland, seul le compositeur voit le clavier. Le partage est donc inchangé —
--- le compositeur capte la FRAPPE, Noctalia fournit le COMPORTEMENT et
--- l'AFFICHAGE (l'OSD notamment). Les lignes ci-dessous sont des appels IPC.
+-- Wayland, seul le compositeur voit le clavier. Le partage est donc : le
+-- compositeur capte la FRAPPE, Noctalia fournit le COMPORTEMENT et l'AFFICHAGE.
+-- Les lignes ci-dessous sont des appels IPC, pas des implémentations.
 --
--- Les commandes :        noctalia msg --help
--- Aide d'une commande :  noctalia msg session --help
---
--- À NOTER : Noctalia 5 est livré en BINAIRE NATIF (/usr/bin/noctalia). Ce
--- n'est plus une configuration Quickshell comme en version 3 — quickshell n'est
--- ni installé ni requis.
+-- Commandes vérifiées le 2026-09-07 sur le binaire natif (Noctalia est en
+-- binaire depuis la v5, ce n'est plus une configuration Quickshell) :
+--     noctalia msg --help
+-- Panneaux : clipboard, control-center, launcher, polkit, session,
+--            setup-wizard, test, tray-drawer, wallpaper
+-- Actions de session : lock, suspend, lock-and-suspend, logout, reboot, shutdown
 
-hl.on("hyprland.start", function()
-    hl.exec_cmd("noctalia --daemon")
+-- AJOUT — verrouillage. SUPER + L est LIBRE dans les défauts d'Hyprland (ce
+-- sont les flèches qui déplacent le focus, pas hjkl), donc le réflexe Windows
+-- est disponible sans rien sacrifier.
+hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("noctalia msg session lock"))
 
-    -- Ce que sway-systemd faisait tout seul sous Fedora. Sans ces deux lignes,
-    -- les portails xdg-desktop-portal ne savent pas dans quelle session ils
-    -- tournent : capture d'écran et sélecteur de fichiers échouent.
-    hl.exec_cmd("dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE")
-    hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP HYPRLAND_INSTANCE_SIGNATURE")
-end)
-
--- Lanceur d'applications.
-hl.bind(mod .. " + D", hl.dsp.exec_cmd("noctalia msg panel-toggle launcher"))
-
--- Menu de session : lock, suspend, logout, reboot, shutdown.
-hl.bind(mod .. " + SHIFT + E", hl.dsp.exec_cmd("noctalia msg panel-toggle session"))
-
--- Verrouillage direct.
---
--- PAS Super+L, le réflexe Windows : « L » est le focus droite ici. Ctrl+Alt+L
--- est l'autre convention répandue — GNOME, Xfce et Cinnamon la lient toutes —
--- donc la mémoire musculaire reste valable ailleurs, y compris sur les postes
--- administrés.
-hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("noctalia msg session lock"))
-
--- Son et luminosité. Le gain n'est pas la commande mais l'OSD : Noctalia
--- affiche le niveau, ce que pactl ne faisait pas. « locked » : actif écran
--- verrouillé.
+-- ÉCART — les défauts appellent wpctl et brightnessctl directement. Le gain de
+-- Noctalia n'est pas la commande mais l'OSD : le niveau s'affiche à l'écran, ce
+-- que les outils bruts ne font pas. « locked » les garde actifs écran verrouillé.
 local osd = { locked = true, repeating = true }
-hl.bind("XF86AudioMute",         hl.dsp.exec_cmd("noctalia msg volume-mute"),     { locked = true })
-hl.bind("XF86AudioLowerVolume",  hl.dsp.exec_cmd("noctalia msg volume-down"),     osd)
 hl.bind("XF86AudioRaiseVolume",  hl.dsp.exec_cmd("noctalia msg volume-up"),       osd)
+hl.bind("XF86AudioLowerVolume",  hl.dsp.exec_cmd("noctalia msg volume-down"),     osd)
+hl.bind("XF86AudioMute",         hl.dsp.exec_cmd("noctalia msg volume-mute"),     { locked = true })
 hl.bind("XF86AudioMicMute",      hl.dsp.exec_cmd("noctalia msg mic-mute"),        { locked = true })
-hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("noctalia msg brightness-down"), osd)
 hl.bind("XF86MonBrightnessUp",   hl.dsp.exec_cmd("noctalia msg brightness-up"),   osd)
+hl.bind("XF86MonBrightnessDown", hl.dsp.exec_cmd("noctalia msg brightness-down"), osd)
 
--- Capture d'écran.
-hl.bind("Print",            hl.dsp.exec_cmd("noctalia msg screenshot-fullscreen"))
-hl.bind("SHIFT + Print",    hl.dsp.exec_cmd("noctalia msg screenshot-region"))
-hl.bind("CTRL + ALT + P",   hl.dsp.exec_cmd("noctalia msg screenshot-region"))
+-- ÉCART — playerctl est installé, mais passer par Noctalia évite un second
+-- chemin de contrôle et donne l'OSD. Actions : next, previous, toggle, play,
+-- pause, stop, next-player, previous-player.
+hl.bind("XF86AudioNext",  hl.dsp.exec_cmd("noctalia msg media next"),     { locked = true })
+hl.bind("XF86AudioPrev",  hl.dsp.exec_cmd("noctalia msg media previous"), { locked = true })
+hl.bind("XF86AudioPlay",  hl.dsp.exec_cmd("noctalia msg media toggle"),   { locked = true })
+hl.bind("XF86AudioPause", hl.dsp.exec_cmd("noctalia msg media toggle"),   { locked = true })
+
+-- AJOUT — aucune capture d'écran dans les défauts d'Hyprland.
+-- « screenshot-fullscreen » prend l'écran focalisé ; il accepte aussi « pick »
+-- (choix interactif de l'écran) et « all » (toutes les sorties).
+hl.bind("Print",         hl.dsp.exec_cmd("noctalia msg screenshot-fullscreen"))
+hl.bind("SHIFT + Print", hl.dsp.exec_cmd("noctalia msg screenshot-region"))
+
+-- AJOUT — presse-papiers : Noctalia garde un historique, sans quoi il n'y en a
+-- aucun sous Hyprland.
+hl.bind(mainMod .. " + SHIFT + V", hl.dsp.exec_cmd("noctalia msg panel-toggle clipboard"))
 
 
--- ═══ CE QUI N'A PAS D'ÉQUIVALENT — inventaire honnête ═══════════════════════
---
--- Reprendre une config de tuilage d'un compositeur à l'autre n'est pas une
--- traduction ligne à ligne. Ce qui a été perdu, pour ne pas le chercher en vain :
---
---   Sway                          Hyprland
---   ────────────────────────────  ─────────────────────────────────────────────
---   splith / splitv (deux sens)   togglesplit — une seule bascule
---   layout tabbed                 groupes, approchant mais pas identique
---   layout stacking               AUCUN équivalent
---   focus mode_toggle             AUCUN équivalent
---   focus parent                  AUCUN équivalent en dwindle
---   include /etc/sway/config.d/*  AUCUN équivalent — d'où le bloc hyprland.start
---
--- CE QUI MANQUE ENCORE, volontairement laissé de côté : il n'y a pas de
--- « hyprland-session.target » lié à graphical-session.target. Or
--- nas-infoadmin.service est en After=/PartOf=/WantedBy=graphical-session.target :
--- le montage NAS ne partira donc PAS tout seul au login. À traiter avec le
--- greeter. Ne pas « démarrer graphical-session.target » à la main : c'est une
--- cible passive, ce n'est pas ainsi qu'elle s'utilise.
---
--- À TESTER, PAS À SUPPOSER :
---   hyprctl devices   -> la disposition fr/azerty est bien active
---   hyprctl monitors  -> les trois écrans sont aux bonnes positions
---   hyprctl binds     -> les liaisons sont enregistrées, y compris les code:NN
+--------------------------------
+---- WINDOWS AND WORKSPACES ----
+--------------------------------
+
+-- See https://wiki.hypr.land/Configuring/Basics/Window-Rules/
+-- and https://wiki.hypr.land/Configuring/Basics/Workspace-Rules/
+
+-- Example window rules that are useful
+
+local suppressMaximizeRule = hl.window_rule({
+    -- Ignore maximize requests from all apps. You'll probably like this.
+    name  = "suppress-maximize-events",
+    match = { class = ".*" },
+
+    suppress_event = "maximize",
+})
+-- suppressMaximizeRule:set_enabled(false)
+
+hl.window_rule({
+    -- Fix some dragging issues with XWayland
+    name  = "fix-xwayland-drags",
+    match = {
+        class      = "^$",
+        title      = "^$",
+        xwayland   = true,
+        float      = true,
+        fullscreen = false,
+        pin        = false,
+    },
+
+    no_focus = true,
+})
+
+-- Layer rules also return a handle.
+-- local overlayLayerRule = hl.layer_rule({
+--     name  = "no-anim-overlay",
+--     match = { namespace = "^my-overlay$" },
+--     no_anim = true,
+-- })
+-- overlayLayerRule:set_enabled(false)
+
+-- Hyprland-run windowrule
+hl.window_rule({
+    name  = "move-hyprland-run",
+    match = { class = "hyprland-run" },
+
+    move  = "20 monitor_h-120",
+    float = true,
+})
