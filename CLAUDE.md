@@ -528,6 +528,30 @@ jour même, tant que le détail est frais.
   **`stow -n -v` d'abord** (la simulation nomme le niveau exact du lien), et faire exister
   le dossier parent avant si le lien remonte trop haut.
 
+- **Une dépréciation de format touche aussi la LIGNE DE COMMANDE, pas seulement les
+  fichiers.** Le 2026-09-07, `hyprctl dispatch moveworkspacetomonitor 1 HDMI-A-2` — la
+  forme donnée par tous les tutoriels — a échoué : depuis la mort d'hyprlang, `hyprctl
+  dispatch` **évalue son argument comme du Lua** (`return hl.dispatch(<argument>)`), donc
+  un nom de dispatcher suivi d'arguments nus est une erreur de syntaxe. Forme correcte :
+  `hyprctl dispatch 'hl.dsp.workspace.move({ workspace = "1", monitor = "HDMI-A-2" })'`,
+  les noms venant de `/usr/share/hypr/stubs/hl.meta.lua` (`hl.dsp.*`). Le message d'erreur
+  le disait lui-même. Corollaire de méthode : **une commande donnée à Julien se teste
+  avant d'être donnée** — celle-ci avait été écrite de mémoire dans une réponse, sur un
+  logiciel dont on savait déjà qu'il avait changé de format.
+
+- **Les espaces de travail ne sont pas attachés aux écrans par défaut, et l'ordre des
+  `monitorID` est celui de la DÉTECTION.** Le 2026-09-07, après un reboot, les espaces
+  étaient « décalés d'un cran » : 2 à gauche, 3 au centre, 1 à droite. Il n'y avait aucune
+  règle de workspace dans la configuration — Hyprland distribue alors 1..N dans l'ordre
+  des `monitorID`, qui varie d'un démarrage à l'autre (DP-1, l'écran de droite, avait pris
+  l'ID 0). Le réglage n'était pas faux, **il n'existait pas** et retombait juste par
+  hasard. Réponse : `hl.workspace_rule({ workspace = …, monitor = "<nom>", default = … })`
+  pour chaque espace. Deux conséquences à connaître : une règle de workspace ne vaut qu'à
+  la **création** de l'espace, donc `hyprctl reload` ne déplace pas ceux qui sont déjà
+  ouverts (même famille que « recharger une config ≠ repartir d'un état neuf ») ; et
+  l'ancrage se fait par **nom de sortie**, donc il suit le port et non l'écran — ancrable
+  par `description` (numéro de série) si les branchements bougent.
+
 ## Hors périmètre — ne pas relancer le sujet
 
 **La gestion et la sauvegarde des secrets** (clé SSH du dépôt, base KeePassXC) est
