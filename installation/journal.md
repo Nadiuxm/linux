@@ -8,6 +8,173 @@ Ce journal est celui de la **construction du poste de travail**, distinct de
 
 ---
 
+## 2026-09-07 (fin de journée) — audit complet : le dépôt avait trois jours de retard
+
+Le poste a été inventorié de bout en bout, puis le dépôt réécrit **en prenant la machine
+pour source de vérité** plutôt que l'inverse. C'est la première fois que le mouvement se
+fait dans ce sens, et le résultat justifie de le refaire périodiquement.
+
+### Le chiffre, d'abord
+
+**Neuf cases faites sans avoir été notées. Cinq affirmations devenues fausses. Trois
+configurations réelles n'appartenant à aucune des trois destinations.**
+
+Aucune de ces vingt-et-une erreurs ne vient d'un raisonnement fautif. Toutes viennent d'un
+**écrit qui n'a pas suivi un geste posé**. C'est important pour la suite : la parade
+n'est pas « être plus rigoureux au moment du geste » — c'était déjà la règle de tenue
+inscrite en tête de `procedure.md`, et elle n'a pas tenu trois jours. La seule parade qui
+marche est celle qui a été employée aujourd'hui : **confronter le dépôt à la machine**, à
+intervalles réguliers, avec des commandes plutôt qu'avec de la mémoire.
+
+### Ce que « neuf cases faites non notées » veut dire concrètement
+
+La liste « Reste à faire avant de considérer le poste monté » du cadrage comptait douze
+entrées. Étaient en réalité faits : `grub-btrfs`, Hyprland depuis le COPR, la plomberie
+`uwsm`, la config du compositeur, le greeter compilé et **en service**, les lignes PAM du
+trousseau, le montage NAS de bout en bout, snapper, la reprise de la VM Windows, et le
+relevé LUKS. Restait vraiment : **l'enrôlement du TPM2**.
+
+**Une liste de restes qui décrit un travail déjà accompli est pire qu'une liste absente.**
+Elle ne se contente pas d'être inexacte : elle oriente le travail vers ce qui est déjà
+fait, et masque la seule chose qui manque. C'est un piège de tenue, pas de technique.
+
+Corollaire découvert dans la foulée : **c'est le titre de section qu'on lit, pas les cases
+en dessous.** §6 de la procédure s'intitulait « FAIT le 2026-09-04, **non activé** » alors
+que la ligne `systemctl enable greetd` était cochée quinze lignes plus bas et que le
+greeter ouvrait la session depuis trois jours. Quand on coche une case, il faut relire le
+titre.
+
+### Les trois configurations orphelines — et pourquoi la règle des trois destinations ne suffit pas
+
+La règle du dépôt dit : tout geste atterrit dans `procedure.md`, `dotfiles/` ou `poste/`,
+sinon il sera perdu. Trois fichiers vivaient hors de tout ça :
+
+| Fichier | Pourquoi il échappait à la règle |
+|---|---|
+| `/var/lib/noctalia-greeter/greeter.toml` | root, hors du home → hors de portée de `stow` ; livré par aucun paquet → hors de `dnf` |
+| `/etc/tmpfiles.d/noctalia-greeter.conf` | idem |
+| `~/.config/git/ignore` | dans le home, mais dans aucun paquet `stow` existant |
+
+Le `greeter.toml` est le cas grave : il porte la session par défaut, la disposition
+`fr/azerty` de l'écran de connexion et les positions des trois écrans. **Sans lui, on tape
+son mot de passe en QWERTY sur un clavier AZERTY** — et il aurait disparu à la première
+réinstallation, silencieusement.
+
+**Ce que ça apprend : `stow` couvre le home, pas le poste.** Un geste posé dans `/etc` ou
+`/var` n'a qu'une destination possible — la procédure — et rien, au moment où on le pose,
+ne le rappelle. Le contrôle ne peut donc pas être « y ai-je pensé ». Les trois fichiers
+sont maintenant recopiés intégralement (les deux premiers dans `procedure.md`, le troisième
+rapatrié dans `dotfiles/git/`).
+
+**Décision prise en même temps, et écrite pour rester un choix :** les réglages Noctalia
+(`~/.local/state/noctalia/settings.toml`) ne seront **pas** versionnés. Noctalia écrit dans
+`XDG_STATE_HOME`, au milieu de son historique de notifications, de son presse-papiers
+chiffré et de ses compteurs d'usage — versionner ce dossier serait versionner un flux. La
+perte est assumée : les réglages se refont à la main. Ce qui distingue le `greeter.toml`,
+c'est qu'il est **déclaratif** et que le greeter ne le réécrit jamais, pas qu'il soit plus
+important.
+
+### Une note de piège fausse depuis le jour où elle a été écrite
+
+`CLAUDE.md` justifiait la solution AZERTY d'Hyprland ainsi : « puisque
+`input:resolve_binds_by_sym` vaut **`true`** par défaut, lier les symboles réels ».
+
+Mesuré : `hyprctl getoption input:resolve_binds_by_sym` → **`bool: false set: false`**.
+
+Le geste est bon — 61 liaisons, aucune inerte. Mais il marche **pour la raison inverse**
+de celle écrite : avec `false`, Hyprland traduit le keysym de la config en **code de
+touche** via le keymap courant, donc `eacute` désigne la touche physique `AE02` quel que
+soit son niveau. C'est ce qui permet à `$mod+eacute` et `$mod+SHIFT+2` de cohabiter.
+Avec `true`, la comparaison se ferait sur le symbole reçu et le problème de niveau
+reviendrait.
+
+**Ce qui est instructif, c'est que la note a « marché » trois jours.** Un geste qui
+fonctionne ne valide pas l'explication qu'on en donne — et une explication fausse coûte
+le jour où on veut transposer le raisonnement ailleurs. La règle du dépôt « une note de
+piège se re-teste » s'applique aussi aux notes qui n'ont jamais échoué.
+
+### Deux découvertes qui n'étaient pas dans le dépôt du tout
+
+**Le `%post` du RPM RustDesk crée des fichiers hors de la base rpm.** Il copie l'unité dans
+`/etc/systemd/system/`, deux `.desktop` dans `/usr/share/applications/`, crée le lien
+`/usr/bin/rustdeskadmin`, puis lance `systemctl enable` **et** `start` de lui-même.
+Résultat : `rpm -qf /usr/bin/rustdeskadmin` répond « n'appartient à aucun paquet » alors
+que c'est ce paquet qui l'a créé. Un inventaire fondé sur `rpm -ql` rate le binaire, le
+lanceur et le service. Et le `systemctl enable --now` que j'avais écrit dans la procédure
+était inutile — le paquet l'avait déjà fait.
+
+C'est le deuxième RPM hors distribution à surprendre par son `%post` sur cette machine,
+après `grub-btrfs` qui réécrit `grub.cfg`. Le piège du dépôt disait « lire les scriptlets
+avant d'installer » ; il faut y ajouter : **ils ne modifient pas seulement l'état du
+système, ils créent des fichiers que `rpm` ne suivra pas.**
+
+**`sssd.service` est `enabled` et la machine n'est pas jointe au domaine.** De quoi
+conclure l'inverse en regardant `systemctl list-unit-files`. Vérification :
+`authselect current` → profil **`local`**, et `/etc/sssd/` ne contient **aucun
+`sssd.conf`**. C'est un préréglage de Fedora. Un service sans configuration démarre, ne
+fait rien, et n'échoue pas — donc ne se signale jamais. Troisième variante d'un piège
+déjà connu sous deux formes : « un dépôt activé n'est pas un paquet installé », « une
+unité chargée n'est pas une unité exécutée », et maintenant **« un service activé n'est
+pas un service configuré »**.
+
+### Une erreur commise pendant l'audit, à ne pas refaire
+
+`secret-tool search` a été employé pour vérifier que l'entrée SMB du NAS existait dans le
+trousseau. **La commande affiche les secrets en clair** : le mot de passe du partage s'est
+retrouvé dans la transcription de la session. Rien n'est allé au dépôt, mais l'erreur est
+bête et évitable. Pour vérifier l'existence et l'état d'une collection sans la lire :
+
+```bash
+busctl --user get-property org.freedesktop.secrets \
+  /org/freedesktop/secrets/collection/login \
+  org.freedesktop.Secret.Collection Locked
+```
+
+Vaut a fortiori pour un agent automatisé, dont la sortie est conservée.
+
+### Ce qui a été corrigé sur le dépôt
+
+- `bin/snapshot.sh` : option **`--poste`**. Le script ne savait écrire que dans
+  `journal/<itération>/`, et le poste n'en est pas une — la case « première capture d'état
+  de ce poste » était **infaisable**. Elle écrit maintenant dans
+  `installation/etats/<date>/`, sans baseline (une baseline y mesurerait l'image ISO, pas
+  la distribution), et compare à la **capture précédente**. Trois mesures ajoutées à
+  `system.md` : version du compositeur, volumes LUKS, Secure Boot + TPM2.
+- `dotfiles/git/.gitconfig` : la ligne `editor = vim` retirée. **`vim` n'existe pas sur ce
+  poste** — l'image minimale fournit `vim-minimal`, donc `vi`. Un `git commit` sans `-m`
+  aurait échoué sur « command not found », et le paquet n'ayant jamais été posé, personne
+  ne s'en était aperçu. Sans `core.editor`, git suit `$VISUAL`/`$EDITOR`/`vi` : plus
+  portable que de nommer un binaire.
+- `poste/README.md` : fiche **RustDesk** créée, fiche **VM Windows** passée en « en
+  service » avec les mesures, pont `br0` prouvé au reboot, fiche snapper complétée.
+- Ajouts de sections à `procedure.md` : kitty (§8bis), RustDesk (§8ter), virtualisation et
+  `br0` (§8quater), outils réseau (§8quinquies).
+
+### Le chiffre qui résume l'écart entre le dépôt et la machine
+
+**53 paquets explicites à l'installation, 101 au 2026-09-07. 419 au total, 1235
+aujourd'hui.** Le poste a triplé de volume en trois jours, et le dépôt en documentait la
+moitié.
+
+### Ce qui reste, et par ordre
+
+1. **Enrôler le TPM2 sur LUKS.** Seule case du départ qui n'a pas bougé, et la plus
+   visible au quotidien. À faire d'autant plus que `luksDump` montre **un seul emplacement
+   de clé** : aujourd'hui, perdre la phrase de passe c'est perdre le disque.
+2. **Poser `bash` et `git`.** Tourner avec l'historique par défaut de Fedora (1000 lignes,
+   sans horodatage) sur un poste de lab dont toute la méthode repose sur « retrouver ce
+   qu'on a tapé » est la perte la plus concrète.
+3. **Configurer kitty.** Le raisonnement du `foot.ini` ne s'applique à rien.
+4. **Nommer la machine.**
+5. Répéter **à froid** la porte de sortie GRUB vers un instantané.
+
+### Temps passé
+
+Environ 2 h, dont la plus grande part en écriture et non en mesure. L'inventaire lui-même
+tient en une trentaine de commandes, dont une moitié n'exige aucun privilège.
+
+---
+
 ## 2026-09-07 — `grub-btrfs` posé, et une note du dépôt qui n'aurait pas démarré
 
 Point de départ : « où en est la config, surtout niveau sauvegarde ? ». La réponse a

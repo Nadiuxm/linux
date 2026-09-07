@@ -1,0 +1,6 @@
+repo id                                             repo name
+copr:copr.fedorainfracloud.org:dtutila:hyprland     Copr repo for hyprland owned by dtutila
+copr:copr.fedorainfracloud.org:pego-copr:grub-btrfs Copr repo for grub-btrfs owned by pego-copr
+fedora                                              Fedora 44 - x86_64
+fedora-cisco-openh264                               Fedora 44 openh264 (From Cisco) - x86_64
+updates                                             Fedora 44 - x86_64 - Updates

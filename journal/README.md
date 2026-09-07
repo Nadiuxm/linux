@@ -5,7 +5,10 @@ puis remplacée. Un dossier par itération, numéroté dans l'ordre chronologiqu
 
 | # | Dossier | Distro | Statut |
 |---|---|---|---|
-| 01 | [`01-fedora-44-workstation/`](01-fedora-44-workstation/) | Fedora 44 Workstation | 🟢 en cours |
+| 01 | [`01-fedora-44-workstation/`](01-fedora-44-workstation/) | Fedora 44 Workstation | ⏸️ en pause sur le SSD USB depuis le 2026-09-04 |
+
+> **Le poste de référence (`installation/`) n'est pas une itération** et n'entre pas dans
+> cette numérotation. Le protocole de baseline ne s'y applique pas.
 
 ## Comment tenir le journal
 
@@ -23,11 +26,23 @@ Règle : noter **le problème et le temps perdu**, pas seulement la solution.
 
 ## Procédure de bascule (avant de réinstaller la machine)
 
-En bare-metal, une réinstallation détruit tout — ce dépôt local inclus.
+> **Depuis le 2026-09-04, cette procédure ne concerne plus qu'une réinstallation du SSD
+> USB — donc du lab.** Une itération se mène sur le disque externe et ne touche ni le
+> poste de travail (NVMe interne, chiffré), ni le dépôt local qui y vit. La phrase « une
+> réinstallation détruit tout, ce dépôt local inclus » **n'est plus vraie**, et c'est ce
+> qui rend la procédure moins vitale sans la rendre inutile : elle reste la façon de clore
+> proprement une itération.
+>
+> **Pour réinstaller le POSTE**, ce n'est pas ce document mais
+> [`installation/procedure.md`](../installation/procedure.md), qui est écrit pour être
+> rejoué. La reproductibilité du poste est une exigence propre à cet axe.
+
 À dérouler **intégralement** avant de lancer le moindre installateur :
 
 1. Clore l'itération : verdict dans son `README.md`, dernière entrée dans `journal.md`.
-2. `./bin/snapshot.sh` — capture finale de l'état du système.
+2. `./bin/snapshot.sh` — capture finale de l'état du système. **Elle va dans
+   `etats/<date>/`, jamais dans `baseline/`** : le script refuse d'écraser la référence.
+   Pour le poste de référence, c'est `./bin/snapshot.sh --poste`.
 3. Reporter dans `dotfiles/` toute config à conserver (voir `dotfiles/README.md`).
 4. `git add -A && git commit && git push` — **vérifier que le push est bien passé sur GitHub**.
 5. Sauvegarder hors machine ce que git ne porte pas : clés SSH/GPG, base KeePassXC,

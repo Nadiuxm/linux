@@ -1,0 +1,9 @@
+# Exclusions globales — s'appliquent à TOUS les dépôts de cette machine.
+# (git lit ce chemin par défaut : core.excludesFile n'a pas besoin d'être réglé.)
+#
+# Rapatrié dans le dépôt le 2026-09-07 : le fichier existait sur le poste de
+# référence depuis le 2026-09-04 sans être versionné — exactement le cas que la
+# règle des trois destinations doit empêcher.
+
+# Réglages locaux de Claude Code : propres à la machine, jamais à partager.
+**/.claude/settings.local.json

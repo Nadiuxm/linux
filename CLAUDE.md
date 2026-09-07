@@ -50,9 +50,31 @@ Windows de secours. **Les deux moitiés sont fausses depuis le 2026-09-04.**
 | Disque | Rôle | Contenu |
 |---|---|---|
 | **NVMe interne** — KIOXIA BG6, 238 Go | **le poste de travail réel** | Fedora 44 minimale, **LUKS**, Btrfs. Cadrage dans `installation/` |
-| **SSD USB** — boîtier générique « Generic PCIE », 233 Go (`TRAN=usb`) | **le lab** — formaté à volonté | itération 01 (Fedora 44 Workstation), intacte |
+| **SSD USB** — boîtier générique « Generic PCIE », 233 Go (`TRAN=usb`) | **le lab** — formaté à volonté | itération 01 (Fedora 44 Workstation), intacte — **mais formatage annoncé le 2026-09-07** |
 
 Le Windows interne n'existe plus : le NVMe est entièrement Fedora.
+
+**Le reste du matériel, relevé le 2026-09-07** — il manquait, et il conditionne des
+décisions (positions d'écran dans deux fichiers, injection clavier de RustDesk) :
+
+- **Trois écrans Dell**, et l'ancrage se fait par **nom de sortie**, donc il suit le port :
+  `HDMI-A-2` = P2425H (1920x1080, position `0,180`), `DP-3` = P2725DE (2560x1440,
+  `1920,0`), `DP-1` = P2414H (1920x1080, `4480,180`). Les positions sont écrites **deux
+  fois** — dans `dotfiles/hypr/` et dans le `greeter.toml`, qui tourne sur un autre
+  compositeur et ne peut pas les deviner.
+- **Clavier et souris Logitech** par récepteur unifying, **casque Yealink WH64** (qui se
+  présente aussi comme un clavier). 14 périphériques clavier vus par Hyprland, **tous en
+  `fr/azerty`**.
+- **Secure Boot activé** (`enabled (deployed)`, `shim-x64`) : un module noyau non signé ne
+  se chargera pas, et le message ne le dira pas.
+- **TPM 2.0 présent** (`/dev/tpm0`, `has-tpm2` → yes) mais **PAS enrôlé sur LUKS** :
+  `luksDump` montre `Tokens:` vide et **un seul emplacement de clé**. Phrase de passe à
+  chaque démarrage, et aucune seconde voie d'ouverture du disque.
+- **Machine sans nom** : `hostnamectl` → `Static hostname: (unset)`. Le `fedora` affiché
+  partout est le nom transitoire par défaut.
+- **Réseau : pont `br0`** (la VM Windows est sur le réseau de l'employeur en direct, pas
+  derrière du NAT), `enp0s31f6` rattachée, et le profil Ethernet d'origine mis en
+  `autoconnect=false` — cette dernière moitié est celle qu'on oublie.
 
 **Conséquence sur la méthode, structurante.** La contrainte fondatrice — « chaque
 réinstallation efface la machine, ce dépôt compris » — **ne tient plus**. Une itération se
@@ -76,7 +98,7 @@ Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
 | `poste/` | Inventaire **vivant** des outils de travail, indépendant de la distro. |
 | `installation/` | **Le poste de référence** : cadrage, procédure rejouable, journal de construction. |
-| `dotfiles/` | Paquets **GNU Stow**. Poste de référence : `stow -v -t ~ bash git hypr foot nas desktop uwsm`. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). |
+| `dotfiles/` | Paquets **GNU Stow**. Poste de référence, *cible* : `stow -v -t ~ bash git hypr foot nas desktop uwsm`. **État réel au 2026-09-07 : 4 sur 7 seulement** — `hypr`, `foot`, `nas`, `uwsm` sont posés ; `bash` et `git` sont **refusés** (conflit avec les fichiers de l'ISO, jamais écartés) et `desktop` n'a plus d'objet. Ne pas lire cette ligne comme un état. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
 Itération 01 : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland) —
@@ -111,7 +133,9 @@ de la baseline d'une nouvelle itération. Il se déroule de haut en bas après u
 réinstallation, et alimente la procédure de bascule.
 Une fiche par outil, toujours la même structure : rôle, obtention, portabilité, ce
 qu'aucun `stow` ne restaurera, ce qu'il faut sauvegarder, ce qui est versionné.
-Deux fiches à ce jour : **VM Windows d'administration** et **Mattermost**.
+Cinq fiches au 2026-09-07 : **VM Windows d'administration**, **RustDesk**, **Mattermost**,
+**instantanés Btrfs (snapper)** et **WinBox**. Les deux outils **bloquants** — sans
+lesquels le travail ne se fait pas depuis ce poste — sont la VM Windows et RustDesk.
 
 **Second axe ouvert le 2026-09-01 : environnements de bureau.** Sway installé
 (transaction 8) en plus de GNOME, hors protocole de baseline mais après sa capture,
@@ -350,8 +374,17 @@ jour même, tant que le détail est frais.
   (`key: SUPER + SHIFT + code:49`) avec `keycode: 0`. Compter 71 liaisons enregistrées
   n'aurait rien dit — c'est leur forme qui parlait. Même famille que « une commande qui
   réussit n'est pas une commande qui fait ce qu'on croit ».
-  *Réponse retenue, transposable :* puisque `input:resolve_binds_by_sym` vaut **`true`** par
-  défaut, lier les **symboles réels** que produisent les touches. Sur AZERTY, la rangée du
+  *Réponse retenue, transposable — et sa justification était FAUSSE, corrigée le
+  2026-09-07 :* cette note affirmait que `input:resolve_binds_by_sym` vaut **`true`** par
+  défaut. Mesuré : `hyprctl getoption input:resolve_binds_by_sym` → **`bool: false
+  set: false`**. Le geste retenu est bon, la raison écrite était l'inverse de la vraie —
+  et c'est justement parce que l'option vaut **`false`** que lier les symboles marche :
+  Hyprland traduit alors le keysym écrit dans la config en **code de touche** via le keymap
+  courant, donc `eacute` désigne la touche physique `AE02` quel que soit le niveau où le
+  symbole se trouve. D'où la cohabitation de `$mod+eacute` et `$mod+SHIFT+2`.
+  **Une note de piège se re-teste — celle-ci était fausse depuis le jour où elle a été
+  écrite, et elle a « marché » pendant trois jours.** Un geste qui fonctionne ne valide pas
+  l'explication qu'on en donne. Lier les **symboles réels** que produisent les touches. Sur AZERTY, la rangée du
   haut donne au niveau 1 `& é " ' ( - è _ ç à` (`ampersand`, `eacute`, `quotedbl`,
   `apostrophe`, `parenleft`, `minus`, `egrave`, `underscore`, `ccedilla`, `agrave`) et au
   niveau 2 le chiffre. « Aller à l'espace N » se lie donc sur le symbole, « y envoyer la
@@ -552,6 +585,54 @@ jour même, tant que le détail est frais.
   l'ancrage se fait par **nom de sortie**, donc il suit le port et non l'écran — ancrable
   par `description` (numéro de série) si les branchements bougent.
 
+- **Un service ACTIVÉ n'est pas un service CONFIGURÉ.** Le 2026-09-07, `sssd.service`
+  apparaissait `enabled` sur le poste — de quoi conclure que la machine est jointe au
+  domaine. Elle ne l'est pas : `authselect current` donne le profil **`local`** et
+  `/etc/sssd/` ne contient **aucun `sssd.conf`**. C'est un préréglage de Fedora, rien de
+  plus. Un service sans fichier de configuration démarre, ne fait rien, et n'échoue pas.
+  Avant de déduire un rôle d'infrastructure d'une liste d'unités, chercher **le fichier de
+  configuration** correspondant. Même famille que « un dépôt activé n'est pas un paquet
+  installé » et « une unité chargée n'est pas une unité exécutée » — troisième variante du
+  même piège, cette fois entre l'activation et la configuration.
+
+- **Le `%post` d'un RPM hors distribution peut poser des fichiers que `rpm -qf` ne
+  reconnaîtra JAMAIS.** Le 2026-09-07, le RPM RustDesk a copié son unité dans
+  `/etc/systemd/system/`, deux `.desktop` dans `/usr/share/applications/`, créé le lien
+  `/usr/bin/rustdeskadmin`, puis lancé `systemctl enable` **et** `start` de lui-même.
+  `rpm -qf /usr/bin/rustdeskadmin` répond « n'appartient à aucun paquet », alors que le
+  paquet est installé et que c'est lui qui a créé le lien. Deux conséquences : un
+  inventaire fondé sur `rpm -ql` rate le binaire, le lanceur et le service ; et une
+  commande `systemctl enable --now` tapée après coup est inutile. **Complément au piège
+  précédent sur les scriptlets : ils ne modifient pas seulement l'état du système, ils
+  créent des fichiers hors de la base rpm.** Trois questions pour retrouver ce genre de
+  chose : `dnf repoquery --installed --qf '%{name}|%{from_repo}\n' | grep -v 'fedora\|updates'`
+  (un RPM local se signale par `@commandline`), un `rpm -qf` en boucle sur `/usr/local`, et
+  `find /etc/systemd/system -maxdepth 1 -type f`.
+
+- **`secret-tool search` AFFICHE les secrets en clair.** Erreur commise le 2026-09-07 en
+  vérifiant que l'entrée SMB du NAS existait : le mot de passe s'est retrouvé dans une
+  transcription. Pour vérifier l'existence et l'état d'une collection sans la lire :
+  `busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/login org.freedesktop.Secret.Collection Locked`.
+  Vaut a fortiori pour un agent automatisé, dont la sortie est conservée.
+
+- **Un titre de section peut mentir alors que la case en dessous est cochée — et c'est le
+  titre qu'on lit.** Le 2026-09-07, `procedure.md` §6 s'intitulait encore « FAIT le
+  2026-09-04, **non activé** » alors que la bascule vers greetd était cochée quinze lignes
+  plus bas et que le greeter ouvrait la session depuis trois jours. Sur les douze cases de
+  « Reste à faire » du cadrage, **neuf étaient faites**. Une liste de restes qui décrit un
+  travail déjà accompli ne se contente pas d'être inexacte : elle **oriente vers ce qui est
+  déjà fait** et masque ce qui manque vraiment. Corollaire de tenue : quand on coche une
+  case, relire le **titre** de sa section.
+
+- **La règle des trois destinations ne s'applique pas d'elle-même.** Le `greeter.toml` du
+  poste — session par défaut, disposition `fr/azerty`, positions des trois écrans — a vécu
+  trois jours dans `/var/lib/noctalia-greeter/`, root, hors du home, livré par aucun
+  paquet : il n'appartenait à **aucune** des trois destinations et aurait disparu à la
+  première réinstallation. `stow` couvre le home, pas le poste. **Un geste posé dans `/etc`
+  ou `/var` n'a qu'une destination possible — la procédure — et rien ne le rappelle au
+  moment où on le pose.** Le contrôle ne peut donc pas être « y ai-je pensé », il doit être
+  périodique : confronter le dépôt à la machine.
+
 ## Hors périmètre — ne pas relancer le sujet
 
 **La gestion et la sauvegarde des secrets** (clé SSH du dépôt, base KeePassXC) est
@@ -564,6 +645,13 @@ La sauvegarde des secrets reste listée à l'étape 5 de la procédure de bascul
 cocher, pas une invitation à rouvrir le débat.
 
 ## Points ouverts
+
+> **Trois points ci-dessous ne concernent QUE le lab, pas le poste de référence.**
+> Vérifié le 2026-09-07 : sur le poste, `sway`, `swaybg`, `waybar`, `gnome-shell`, `gdm` et
+> `firefox` sont **tous absents** — l'image minimale ne les a jamais installés. Les points
+> « `swaybg` résiduel », « ressenti Sway à froid » et « `waybar` inutilisée » portent donc
+> sur l'itération 01, sur le SSD USB, où ils restent mesurables. À ne pas rouvrir en
+> regardant le poste : il n'y a rien à y voir.
 
 - **L'axe « bureaux » porte sur l'interface, pas sur la pile logicielle.** Ce que Julien
   reproche à GNOME est esthétique et ergonomique ; les utilitaires GNOME
@@ -592,6 +680,24 @@ cocher, pas une invitation à rouvrir le débat.
   l'écraser ; les captures suivantes vont dans `etats/<AAAA-MM-JJ>/`, et le script affiche
   l'écart de paquets avec la baseline. Première capture datée : `etats/2026-09-03/`,
   19 paquets au-delà du protocole.
+  **Étendu au poste de référence le 2026-09-07.** Le script ne savait écrire que dans
+  `journal/<itération>/`, et le poste **n'est pas une itération** : la case « première
+  capture d'état de ce poste » de la procédure était donc infaisable. L'option `--poste`
+  écrit dans `installation/etats/<date>/` et **n'écrit jamais de baseline** — une baseline
+  y mesurerait l'image ISO, pas la distribution. L'écart affiché est celui avec la
+  **capture précédente** : sur ce poste la question n'est pas « qu'ai-je ajouté à la
+  distro » mais « qu'ai-je changé depuis la dernière fois ». Trois mesures ajoutées à
+  `system.md` au passage, absentes et structurantes ici : version du compositeur, nombre de
+  volumes LUKS, état de Secure Boot et du TPM2. Première capture : `installation/etats/2026-09-07/`.
+
+- **Le dépôt a pris trois jours de retard sur la machine, et c'est le mode de défaillance
+  principal à surveiller.** L'audit complet du 2026-09-07 a trouvé **neuf** cases faites
+  non notées, **cinq** affirmations devenues fausses et **trois** configurations réelles
+  n'appartenant à aucune des trois destinations. Aucune ne vient d'une erreur de
+  raisonnement : toutes viennent d'un écrit qui n'a pas suivi un geste. La parade n'est pas
+  plus de rigueur au moment du geste — ça a été tenté et ça n'a pas tenu trois jours —
+  c'est une **confrontation périodique du dépôt à la machine**, du type de celle du
+  2026-09-07. Compte rendu dans `installation/journal.md`.
 - **KeePassXC à la place de `gnome-keyring` comme fournisseur Secret Service.**
   Demandé par Julien le 2026-09-03, **instruit et testé le 2026-09-04**.
 

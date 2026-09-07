@@ -1,0 +1,46 @@
+UNIT FILE                          STATE   PRESET
+accounts-daemon.service            enabled enabled
+audit-rules.service                enabled enabled
+auditd.service                     enabled enabled
+authselect-apply-changes.service   enabled enabled
+avahi-daemon.service               enabled enabled
+bluetooth.service                  enabled enabled
+chronyd.service                    enabled enabled
+dbus-broker.service                enabled enabled
+fips-crypto-policy-overlay.service enabled enabled
+firewalld.service                  enabled enabled
+flatpak-add-fedora-repos.service   enabled enabled
+getty@.service                     enabled enabled
+greetd.service                     enabled disabled
+grub-btrfsd.service                enabled disabled
+iscsi-onboot.service               enabled enabled
+iscsi-starter.service              enabled enabled
+lvm2-monitor.service               enabled enabled
+mdmonitor.service                  enabled enabled
+NetworkManager-dispatcher.service  enabled enabled
+NetworkManager-wait-online.service enabled enabled
+NetworkManager.service             enabled enabled
+rpmdb-rebuild.service              enabled enabled
+rtkit-daemon.service               enabled enabled
+rustdeskadmin.service              enabled disabled
+selinux-autorelabel-mark.service   enabled enabled
+sshd.service                       enabled enabled
+sssd.service                       enabled enabled
+systemd-boot-clear-sysfail.service enabled enabled
+systemd-confext.service            enabled enabled
+systemd-homed-activate.service     enabled enabled
+systemd-homed.service              enabled enabled
+systemd-network-generator.service  enabled enabled
+systemd-oomd.service               enabled enabled
+systemd-pstore.service             enabled enabled
+systemd-resolved.service           enabled enabled
+systemd-sysext.service             enabled enabled
+systemd-tpm2-clear.service         enabled enabled
+udisks2.service                    enabled enabled
+upower.service                     enabled enabled
+virtlxcd.service                   enabled enabled
+virtqemud.service                  enabled enabled
+virtvboxd.service                  enabled enabled
+virtxend.service                   enabled enabled
+
+43 unit files listed.

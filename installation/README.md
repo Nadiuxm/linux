@@ -123,10 +123,40 @@ s'applique pas à `poste/`.
 | Greeter | **greetd** + **greeter Noctalia** | `greetd` par `dnf` ; le greeter **depuis les sources** | cohérence visuelle avec le shell |
 | Trousseau / Secret Service | **`gnome-keyring`** + `gnome-keyring-pam` | `dnf` | statu quo assumé ; KeePassXC reporté |
 | Gestionnaire de fichiers | **Nautilus** | `dnf` | installable seul (89 exigences, zéro composant de bureau) |
-| Terminal | **foot** — provisoire | `dnf` | kitty envisagé à court terme |
+| Terminal | ~~**foot** — provisoire~~ **périmé, voir plus bas** | `dnf` | ~~kitty envisagé à court terme~~ — kitty était installé le jour même |
 | Navigateur | **Chromium** | `dnf` | habitude, pas contrainte technique |
 | Plomberie freedesktop | `gvfs`, `gcr`, `xdg-desktop-portal-*` | `dnf` | ce n'est pas « GNOME le bureau » |
 | Non retenu | GNOME Shell, Mutter, gnome-session, GDM, Évince, Logiciels | — | rien n'en dépend une fois Hyprland et Noctalia posés |
+
+**Quatre lignes à ajouter, relevées par l'audit du 2026-09-07** — elles étaient sur la
+machine sans être dans ce tableau, et deux d'entre elles sont des briques de travail, pas
+des accessoires :
+
+| Composant | Choix | Obtention | Raison |
+|---|---|---|---|
+| **Support à distance** | **RustDesk** 1.4.9 | **RPM généré par Julien**, hors dépôt | c'est l'outil de traitement des tickets ; le RPM porte l'adresse du serveur et la clé de relais, donc il se **régénère**, il ne se télécharge pas |
+| **Virtualisation** | `qemu-kvm` 10.2.2 + `libvirt` 12.0.0 + `virt-manager` 5.1.0, `edk2-ovmf`, `swtpm-tools` | `dnf` | hôte de la VM Windows d'administration ; `edk2-ovmf` et `swtpm-tools` sont **obligatoires** pour Windows 11 (UEFI Secure Boot + TPM émulé) |
+| **Terminal** | **kitty** 0.47.1 | `dnf` | **tranché le 2026-09-04**, et non écrit pendant trois jours : c'est kitty qui tourne, `foot` est installé mais inutilisé |
+| Applications Flatpak | Mattermost 6.3.0, WinBox 4.3 | Flathub, portée **`system`** | seul canal identique d'une distro à l'autre — mais voir la nuance du 2026-09-07 dans `poste/README.md` |
+
+La ligne « Terminal — **foot** — provisoire » du tableau ci-dessus est donc **périmée**.
+Elle est laissée telle quelle plutôt que réécrite : c'est l'état au 2026-09-04, et le fait
+que la décision ait mis trois jours à atterrir dans le dépôt est lui-même la donnée
+intéressante.
+
+### Deux propriétés du socle qui ne figuraient nulle part
+
+**Secure Boot est actif** (`enabled (deployed)`, `shim-x64` 16.1-5, amorçage par
+`shimx64.efi`). Ça ne gêne rien aujourd'hui et ça se saura le jour où un module noyau non
+signé refusera de se charger — le symptôme sera « module introuvable », sans mention de
+signature. À connaître avant d'y perdre une heure.
+
+**La machine n'est PAS jointe au domaine**, et c'est mesuré, pas déduit : `authselect
+current` → profil **`local`**, et `/etc/sssd/` ne contient **aucun `sssd.conf`**. Pourtant
+`sssd.service` est `enabled` — c'est un préréglage de Fedora, pas une configuration.
+D'où un piège de méthode qui vaut au-delà de ce cas : **un service activé n'est pas un
+service configuré.** L'authentification est locale ; le NAS s'atteint par un secret dans le
+trousseau, pas par un ticket de domaine.
 
 ### Hyprland — la raison, écrite pour tenir six mois
 
@@ -217,11 +247,36 @@ gratuit**.
 
 Trois, et c'est le point où l'exigence « rejouable » coûte quelque chose de réel :
 
-| Composant | Origine | Ce que la procédure doit noter |
+| Composant | Origine | Relevé au 2026-09-07 |
 |---|---|---|
-| **Hyprland** | COPR | le nom exact du COPR **et** la version installée |
-| **greeter Noctalia** | sources | le **commit exact**, pas « depuis `main` » |
-| **`grub-btrfs`** | hors dépôt Fedora — vérifié le 2026-09-04, `dnf` ne connaît rien de ce nom | l'origine retenue et la version |
+| **Hyprland** | COPR | `dtutila/hyprland`, `hyprland` **0.56.2-3.fc44** + 12 autres paquets |
+| **greeter Noctalia** | sources, `meson install` dans `/usr/local` | tag **`v1.3.1`** = commit **`6379fe287bb02b0bb538ad155fe18b1bf8615daf`** (2026-09-02). **11 fichiers**, aucun possédé par un RPM |
+| **`grub-btrfs`** | COPR | `pego-copr/grub-btrfs`, **4.14-1.fc44**, script `master-2026-05-31T15:55:08+00:00` |
+| **RustDesk** | **RPM local, `@commandline`** | `rustdeskadmin` **1.4.9-0**, non signé, construit le 2026-09-01. Le RPM se **régénère** depuis la console de l'entreprise, il ne se télécharge pas |
+
+**Ils sont donc quatre, pas trois — et le quatrième est le plus fragile.** Les trois
+premiers se retrouvent : un COPR reste interrogeable, un commit git reste clonable. Le RPM
+RustDesk, lui, n'existe nulle part publiquement : il est produit à la demande et porte des
+paramètres d'entreprise. **La seule trace réutilisable est le numéro de version**, et le
+geste de reproduction n'est pas « retélécharger » mais « regénérer ».
+
+**Comment repérer un composant hors dépôt dans un inventaire**, puisque c'est la difficulté
+de fond — trois questions, trois commandes :
+
+```bash
+# 1. Quels paquets ne viennent pas de Fedora ?  (@commandline = RPM local)
+dnf repoquery --installed --qf '%{name}|%{from_repo}\n' | grep -v '|fedora\|updates'
+
+# 2. Qu'y a-t-il dans /usr/local que dnf ignore ?
+for f in $(find /usr/local -type f); do rpm -qf "$f" >/dev/null 2>&1 || echo "$f"; done
+
+# 3. Quelles unités systemd sont écrites en dehors de /usr/lib ?
+find /etc/systemd/system -maxdepth 1 -type f
+```
+
+La troisième a servi : elle a sorti `rustdeskadmin.service` et `grub-btrfsd.service`, tous
+deux posés dans `/etc/systemd/system/` par leur paquet — donc **survivants à une
+désinstallation**.
 
 « Compilé depuis `main` » n'est pas une instruction reproductible : dans six mois ce ne
 sera pas le même logiciel. Et un `sudo meson install` dans `/usr/local` n'est suivi par
@@ -241,11 +296,14 @@ de comparaison en soi, comme la note du 2026-09-03 l'annonçait.
   mais **l'ordonnancement au login n'est pas testé** — et c'est tout le chantier. Piste
   notée : `keepassxc.service` en `Type=dbus` + `BusName=org.freedesktop.secrets`, avec
   `nas-infoadmin.service` en `After=`. Ne couvre pas « la base est déverrouillée ».
-- **Terminal.** `foot` est en place et sa config rapatriée, mais kitty est envisagé à court
-  terme. Chaque terminal est un paquet `stow` indépendant : le changement est mécanique.
-  Ce qui doit survivre, c'est le **raisonnement** du `foot.ini` — `dpi-aware`, échelle
-  Wayland, densité du P2725DE — qui se posera à l'identique ailleurs, comme une
-  **question**, pas comme un réglage.
+- ~~**Terminal.**~~ **Tranché : kitty.** Il était installé le 2026-09-04 à 15:56 et c'est
+  lui qui tourne depuis — ce point « reporté » ne l'était plus, il n'avait juste pas été
+  écrit. Ce qui reste vrai, et qui est maintenant le vrai point ouvert : **le raisonnement
+  du `foot.ini` ne s'applique aujourd'hui à rien.** `~/.config/kitty/` est vide, kitty
+  tourne sur ses défauts, et les questions du `foot.ini` — `dpi-aware`, échelle Wayland,
+  densité du P2725DE à 2560x1440 sur 600 mm — se reposent à l'identique sans avoir été
+  reposées. C'est bien une **question** qui survit, pas un réglage : elle attend juste
+  qu'on la traite pour kitty.
 - **Retrait de Firefox** — envisagé le 2026-09-03, jamais décidé. Sans objet ici : l'image
   minimale ne l'a pas installé.
 
@@ -264,23 +322,84 @@ Quatre affirmations du dépôt sont devenues fausses, ou l'étaient déjà :
 3. **La section « Machine » de `CLAUDE.md` est périmée sur trois points** : le Windows
    interne de secours n'existe plus, le système ne vit plus sur un disque externe, et
    « il n'y a pas de second poste de secours » est faux — c'est l'itération 01 sur le SSD
-   USB qui joue ce rôle.
+   USB qui joue ce rôle. **Ce troisième point redevient vrai bientôt** : le formatage du
+   SSD USB est annoncé (2026-09-07), et la machine redeviendra unique. Une correction peut
+   se périmer aussi vite que ce qu'elle corrigeait.
 4. **`gnome-keyring` sans GDM n'emporte rien.** Voir plus haut.
 
-## Reste à faire avant de considérer le poste monté
+**Cinq de plus, relevées par l'audit du 2026-09-07.** Elles ont un point commun qui vaut
+d'être nommé : aucune ne vient d'une erreur de raisonnement, toutes viennent d'un **écrit
+qui n'a pas suivi un geste posé**. C'est le mode de défaillance principal de ce dépôt, et
+il n'est pas corrigé par plus de réflexion — seulement par la relecture périodique contre
+la machine.
 
-- [ ] Enrôler le TPM2 sur LUKS (`systemd-cryptenroll`)
-- [ ] Vérifier la version LUKS de `nvme0n1p3` (`cryptsetup luksDump`)
-- [ ] Installer `grub-btrfs` (**hors dépôt Fedora** — origine à choisir) et **vérifier
-      qu'il génère bien des entrées** avec ce `/boot`. C'est la case qui valide ou
-      invalide la décision de partitionnement par l'expérience : à faire tôt.
-- [ ] Hyprland depuis le COPR, version notée
-- [ ] Remonter la propagation d'environnement et `graphical-session.target` sans
-      `sway-systemd`
-- [ ] Réécrire la config du compositeur : AZERTY en codes physiques, trois écrans, espaces
-- [ ] `greetd` + greeter Noctalia compilé, commit noté, script système lu avant exécution
-- [ ] Les trois lignes `pam_gnome_keyring.so` dans `/etc/pam.d/greetd`
-- [ ] `nas-infoadmin.service` vérifié de bout en bout après le premier login réel
-- [ ] `stow` et pose des liens depuis `dotfiles/`
-- [ ] snapper, et `grub-btrfs` conditionné à la case ci-dessus
-- [ ] Récupérer la VM Windows et son NVRAM depuis le disque externe (`sudo` requis)
+5. **« Greeter non activé » — FAUX depuis le 2026-09-04.** Le titre de §6 de la procédure
+   le disait encore ; `greetd` est `enabled` **et** `active`, et c'est lui qui ouvre la
+   session de travail. La bascule était cochée quinze lignes plus bas.
+6. **« Terminal : foot, kitty envisagé » — FAUX depuis le 2026-09-04 à 15:56.** kitty était
+   installé le jour même de la décision.
+7. **« Mise à jour complète » comme étape d'installation — SANS OBJET sur une netinstall.**
+   `dnf history` ne contient aucun `upgrade` : le système est né à jour. Le coût de cette
+   étape est une propriété de **l'édition de l'image**, pas de la distribution.
+8. **`input:resolve_binds_by_sym` vaut `false`, pas `true`.** La note de `CLAUDE.md`
+   justifiait le bon geste par la mauvaise raison. Mesuré : `bool: false set: false` — et
+   c'est précisément ce `false` qui fait que lier les symboles AZERTY fonctionne, Hyprland
+   traduisant le keysym en code de touche via le keymap.
+9. **`greeter.toml` n'était nulle part.** Un fichier de configuration écrit à la main,
+   root, sous `/var/lib`, donc hors de portée de `stow` et hors de tout paquet : il
+   n'appartenait à **aucune** des trois destinations et aurait disparu à la première
+   réinstallation. Recopié intégralement dans la procédure. **La règle des trois
+   destinations ne suffit pas si personne ne vérifie qu'un geste y a bien atterri** — et
+   trois jours ont suffi pour que ce contrôle manque.
+
+## Le poste est monté — état au 2026-09-07
+
+> **Cette liste comptait douze cases vides. Neuf étaient faites.** L'audit complet du
+> 2026-09-07 (voir `journal.md`) les a confrontées à la machine une par une. Ce n'est pas
+> anodin : une liste de « reste à faire » qui décrit un poste déjà monté ne se contente pas
+> d'être inexacte, elle **oriente le travail vers ce qui est déjà fait** et masque les deux
+> ou trois choses qui manquent réellement. C'est le même piège que le `[ ]` de `nas` en
+> §9 de la procédure, à l'échelle d'un document.
+
+**Fait, et vérifié sur la machine :**
+
+- [x] `grub-btrfs` — COPR `pego-copr/grub-btrfs`, 4.14-1.fc44, **11 entrées générées** et
+      sourcées par `grub.cfg`. La décision de garder `/boot` séparé est validée **par la
+      mesure**, pas par la documentation seule
+- [x] Hyprland depuis le COPR `dtutila/hyprland`, 0.56.2-3.fc44, **13 paquets relevés**
+- [x] Propagation d'environnement et `graphical-session.target` — **active**, fournie par
+      `uwsm` 0.26.7. La « facture » annoncée n'existait pas
+- [x] Config du compositeur réécrite — 61 liaisons, 0 inerte, 9 règles d'espaces, trois
+      écrans. **Par symboles AZERTY, pas par codes physiques** : `code:NN` échoue
+      silencieusement en Lua (la formulation de cette case était déjà fausse)
+- [x] `greetd` + greeter Noctalia compilé — **tag `v1.3.1`, commit
+      `6379fe287bb02b0bb538ad155fe18b1bf8615daf`**, scripts système lus avant exécution,
+      **en service depuis le 2026-09-04**
+- [x] `pam_gnome_keyring.so` — deux des trois lignes étaient déjà livrées par Fedora, la
+      troisième a été ajoutée. Trousseau déverrouillé au login, vérifié `Locked = false`
+- [x] `nas-infoadmin.service` — vérifié de bout en bout, chaîne complète mesurée
+- [x] `stow` — **4 paquets sur 7** (`hypr`, `foot`, `nas`, `uwsm`). Voir ci-dessous
+- [x] snapper — configs `root` et `home`, minuteries actives, rétention 7 jours
+- [x] VM Windows et son NVRAM récupérés — **elle tourne**, 46 Go réels, agent invité à
+      l'écoute
+- [x] Version LUKS relevée : **LUKS2**, `aes-xts-plain64`, `argon2id`
+
+**Ce qui manque réellement, par ordre d'importance :**
+
+- [ ] **Enrôler le TPM2 sur LUKS** (`systemd-cryptenroll`). C'est la seule case du départ
+      qui n'a pas bougé, et c'est la plus visible au quotidien : phrase de passe à chaque
+      démarrage. `luksDump` confirme `Tokens:` vide et **un seul emplacement de clé** —
+      donc aussi aucune seconde voie d'ouverture si la phrase est perdue
+- [ ] **Poser `bash` et `git`** (`stow`). Sur un poste de lab dont la méthode repose sur
+      « retrouver ce qu'on a tapé », tourner avec l'historique par défaut de Fedora
+      (1000 lignes, sans horodatage) est la perte la plus concrète des trois paquets
+      manquants. `desktop` peut attendre : son unique entrée n'a plus d'objet
+- [ ] **Configurer kitty.** Le raisonnement du `foot.ini` ne s'applique à rien tant que
+      `~/.config/kitty/` est vide
+- [ ] **Nommer la machine.** `hostnamectl` → `(unset)` ; le `fedora` affiché est le nom
+      transitoire par défaut
+- [ ] Vérifier les portails **à l'usage** (capture d'écran, sélecteur de fichiers) : trois
+      processus qui tournent ne prouvent pas qu'un portail répond
+- [ ] Veille / reprise — jamais éprouvée, et c'est justement ce que le bare-metal doit dire
+- [ ] Répéter **à froid** la porte de sortie GRUB vers un instantané (détail en §10 de la
+      procédure). Une procédure de secours jamais exécutée est une intention

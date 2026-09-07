@@ -24,12 +24,13 @@ manuelle ni script de synchronisation à maintenir. Et `stow -D` défait tout pr
 | Paquet | Contenu | Notes |
 |---|---|---|
 | `bash` | `.bashrc`, `.bash_profile`, `.bashrc.d/` | Rendu portable : gère `/etc/bashrc` (Fedora/RHEL) **et** `/etc/bash.bashrc` (Debian/Ubuntu). Historique élargi et horodaté. |
-| `git` | `.gitconfig` | Identité, `main` par défaut, quelques alias. |
+| `git` | `.gitconfig`, `.config/git/ignore` | Identité, `main` par défaut, quelques alias. **Pas de `core.editor`** : la ligne `editor = vim` a été retirée le 2026-09-07, `vim` n'existant pas sur une image minimale (`vim-minimal` fournit `vi`) — git suit `$VISUAL`/`$EDITOR`/`vi`, ce qui est portable. `.config/git/ignore` porte les exclusions globales, rapatriées du poste le 2026-09-07. |
 | `sway` | `.config/sway/config` | WM tuilant Wayland, **tuilage seul** — le shell est à Noctalia. Config **possédée**, plus héritée : depuis le 2026-09-01 elle n'inclut plus `/etc/sway/config`, seulement `/etc/sway/config.d/*` (la ligne vitale, qui charge `sway-systemd`). Contient aussi la disposition `fr/azerty`, que Sway ne récupère nulle part ailleurs, et les liaisons en `bindcode`. |
 | `nas` | `.config/systemd/user/nas-infoadmin.service` | Montage automatique du partage SMB au login, sous GNOME **et** Sway. Crée aussi le lien `~/nas`. Le mot de passe n'est **pas** dans ce fichier — voir ci-dessous. |
 | `desktop` | `.local/share/applications/*.desktop` | Entrées de lanceur maison, visibles dans le lanceur Noctalia (`Super+d`). Une seule à ce jour : la VM Windows d'administration. |
 | `hypr` | `.config/hypr/hyprland.lua` | Compositeur, **tuilage seul** — le shell est à Noctalia. **En Lua, pas en `.conf`** : hyprlang est déprécié depuis Hyprland 0.55. Porte la disposition `fr/azerty`, les trois écrans et les liaisons `noctalia msg …`. Les espaces sont liés aux **symboles de niveau 1** de la rangée AZERTY (`ampersand`, `eacute`…) et non à `code:NN`, qui échoue silencieusement dans la config Lua. Remplace `sway` sur le poste de référence ; `sway` est gardé pour le lab. |
-| `foot` | `.config/foot/foot.ini` | Terminal Wayland. Corrige le défaut `size=8`, illisible à `scale=1`, que le zoom de foot ne persiste pas. **Ajouté au dépôt le 2026-09-04, après avoir failli être perdu** : il existait depuis le 2026-09-01 sans jamais avoir été commité. Terminal susceptible de changer (kitty envisagé) ; ce qui doit survivre est le raisonnement `dpi-aware` / échelle du fichier, pas la valeur. |
+| `uwsm` | `.config/uwsm/env` | **Environnement de la session graphique**, sourcé par `uwsm` (`man uwsm`). Il source `/etc/profile.d/flatpak.sh` pour `XDG_DATA_DIRS` — sans quoi aucune application Flatpak n'apparaît dans le lanceur. Raison de fond : `profile.d` ne s'exécute que dans un shell de **login**, et une session lancée par greetd → uwsm → Hyprland ne source jamais `/etc/profile`. **Exige `mkdir -p ~/.config/uwsm` AVANT le `stow`** (voir les limites). |
+| `foot` | `.config/foot/foot.ini` | Terminal Wayland. Corrige le défaut `size=8`, illisible à `scale=1`, que le zoom de foot ne persiste pas. **Ajouté au dépôt le 2026-09-04, après avoir failli être perdu** : il existait depuis le 2026-09-01 sans jamais avoir été commité. **Ce n'est plus le terminal du poste de référence** : kitty a pris la place le 2026-09-04. Paquet gardé — il documente un raisonnement (`dpi-aware`, échelle Wayland, densité du P2725DE) qui reste **la question à traiter pour kitty**, dont la config est vide. |
 
 ## Installation sur une machine neuve
 
@@ -50,13 +51,42 @@ for f in .bashrc .bash_profile .gitconfig; do
     [ -f ~/"$f" ] && [ ! -L ~/"$f" ] && mv ~/"$f" ~/.dotfiles-backup/
 done
 
-# 4. Poser les liens
-stow -v -t ~ bash git sway nas desktop
+# 4. SIMULER d'abord — la simulation nomme le niveau exact de chaque lien
+stow -n -v -t ~ bash git hypr foot nas uwsm
+
+# 5. Faire exister les dossiers que le tree folding remonterait trop haut
+mkdir -p ~/.config/uwsm
+
+# 6. Poser les liens
+stow -v -t ~ bash git hypr foot nas uwsm
 ```
 
-> Les paquets `sway`, `nas` et `desktop` ne servent que sur une machine où ils ont un
-> sens (compositeur Wayland, accès au partage, lanceur graphique). Sur une machine sans
-> session graphique, `stow -v -t ~ bash git` suffit.
+> **L'étape 4 n'est pas facultative.** `stow` remonte le lien au niveau le plus haut
+> possible (« tree folding ») : si `~/.config/uwsm` n'existe pas, il pose
+> `~/.config/uwsm → <dépôt>/uwsm/.config/uwsm`, et tout ce qu'un programme écrira ensuite
+> dans ce dossier finira **versionné**. Trois occurrences déjà sur ce dépôt :
+> `~/.bashrc.d`, `~/.config/systemd`, `~/.config/uwsm`. La simulation `-n -v` dit à quel
+> niveau le lien atterrirait — c'est le seul contrôle fiable.
+
+> **Choisir les paquets selon la machine.** `hypr` (poste de référence) et `sway` (lab)
+> sont **exclusifs** : ce sont deux compositeurs. `nas`, `desktop`, `foot` et `uwsm` n'ont
+> de sens que sur une machine avec session graphique. Sur une machine sans bureau,
+> `stow -v -t ~ bash git` suffit.
+
+### État réel des liens sur le poste de référence — 2026-09-07
+
+**Quatre paquets sur sept sont posés.** Vérifié par `stow -n -v` et par les liens :
+
+| Paquet | Posé ? | Pourquoi pas |
+|---|---|---|
+| `hypr`, `foot`, `nas`, `uwsm` | **oui** | — |
+| `bash` | non | conflit : `~/.bashrc` et `~/.bash_profile` sont les fichiers de l'ISO |
+| `git` | non | conflit : `~/.gitconfig` a été écrit à la main (`[user]` seul) |
+| `desktop` | non | poserait sans conflit, mais son unique entrée n'a plus d'objet |
+
+L'étape 3 ci-dessus (écarter les fichiers de la distro) est exactement ce qui débloque
+`bash` et `git`. Elle n'a jamais été exécutée sur ce poste — **`stow` ne remplace jamais
+un vrai fichier, et c'est une sécurité, pas un bug.**
 
 ## Usage courant
 
@@ -106,3 +136,25 @@ Une copie laissée dans `$HOME` et l'on ne sait plus laquelle des deux fait foi.
   déjà les dossiers de GNOME. Même mécanisme, profondeur différente selon la cible.
 - **Config spécifique à une distro** : si un paquet devient incompatible d'une distro à
   l'autre, le scinder (`bash-fedora`, `bash-debian`) plutôt que d'empiler les `if`.
+- **Ce qui n'est pas dans le home est hors d'atteinte, par construction.** Deux cas réels
+  sur le poste de référence, trouvés le 2026-09-07 :
+  - `/var/lib/noctalia-greeter/greeter.toml` — configuration du greeter, `greetd:greetd`,
+    écrite à la main et livrée par aucun paquet. Recopiée intégralement dans
+    `installation/procedure.md` : c'est la seule des trois destinations qui puisse
+    l'accueillir.
+  - `/etc/tmpfiles.d/noctalia-greeter.conf` — même situation, même traitement.
+
+  La leçon générale : **`stow` couvre le home, pas le poste.** Un geste posé dans `/etc`
+  ou `/var` n'a qu'une destination possible, la procédure — et rien ne le rappelle au
+  moment où on le pose.
+- **Noctalia écrit dans `XDG_STATE_HOME`, pas dans `.config`.** Ses réglages sont dans
+  `~/.local/state/noctalia/settings.toml`, à côté de son historique de notifications, de
+  son presse-papiers chiffré, de ses compteurs d'usage et de son cache de palettes
+  communautaires. **Décision du 2026-09-07 : pas de paquet `stow` pour ça.** Versionner ce
+  dossier, ce serait versionner un flux d'écriture continu ; l'isoler proprement
+  demanderait de trier fichier par fichier un dossier dont le contenu change à chaque
+  version de Noctalia. **La perte est donc assumée : après une réinstallation, les
+  réglages de Noctalia se refont à la main.** Écrit ici pour que ça reste un choix et pas
+  une surprise.
+  À distinguer du `greeter.toml`, qui est **déclaratif** et que le greeter ne réécrit
+  jamais — c'est ce qui le rend recopiable, pas le fait qu'il soit plus important.

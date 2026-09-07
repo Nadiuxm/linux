@@ -7,8 +7,51 @@
 | **Noyau** | 6.19.10-300.fc44.x86_64 |
 | **Installation** | ISO Workstation officielle, options par défaut |
 | **Début** | 2026-08-28 |
-| **Fin** | — |
-| **Statut** | 🟢 en cours |
+| **Fin** | 2026-09-04 — usage quotidien interrompu |
+| **Statut** | ⏸️ **en pause, pas close** — voir ci-dessous |
+
+> **Ce qui s'est passé le 2026-09-04, et pourquoi le statut n'est pas « terminée ».**
+> Le poste de travail a migré sur le NVMe interne (Fedora 44 minimale + Hyprland, voir
+> `installation/`). Cette itération n'a pas été effacée : elle vit encore sur le SSD USB,
+> amorçable. Vérifié le 2026-09-07 : rien n'a été touché sur `sda3`, monté en **lecture
+> seule** le temps de rapatrier la VM Windows.
+>
+> **Elle n'a reçu aucun verdict, et le tableau ci-dessous est vide.** L'écrire serait
+> honnête sur un point — sept jours d'usage réel, c'est mesurable — et malhonnête sur un
+> autre : l'itération a été interrompue par un changement de méthode, pas par une
+> conclusion.
+
+> ## ⚠️ Le disque va être formaté — le verdict a une date limite
+>
+> **Annoncé par Julien le 2026-09-07 : le SSD USB va probablement se prendre un coup de
+> formatage.** Ça change la nature de la question ouverte ci-dessus. « À trancher un jour »
+> devient **« à trancher avant le formatage, ou jamais »** : une fois le disque effacé, il
+> n'y aura plus moyen de retourner mesurer quoi que ce soit sur cette itération.
+>
+> **Ce qui reste récupérable, et seulement jusque-là :**
+>
+> - Ce que la `baseline/` et `etats/2026-09-03/` ne portent pas déjà. Les deux sont
+>   **poussées dans ce dépôt**, donc l'essentiel est hors de danger.
+> - Le **ressenti** des sept jours : GNOME contre Sway, ce qui a gêné, ce qui a servi.
+>   Ça ne vit dans aucun fichier — seulement dans la tête de Julien, et ça s'efface plus
+>   vite qu'un disque.
+> - Les frictions **non écrites** du modèle de test, s'il en reste.
+>
+> **Et ce que le formatage emporte, qui n'est pas dans le dépôt :** le poste de secours
+> amorçable. Après ça, la machine redevient unique — le `README.md` racine l'affirme
+> encore comme un acquis, et ce ne sera plus vrai.
+>
+> **Deux issues honnêtes, aucune n'étant « laisser en cours ».**
+>
+> 1. **Conclure sur les sept jours vécus**, en disant que c'est ce qu'on a : remplir le
+>    verdict, préciser qu'il porte sur une semaine et non sur la durée qu'exigeait la
+>    méthode. C'est une donnée partielle assumée, ce qui vaut mieux qu'un blanc.
+> 2. **Annuler l'itération 01** et repartir de l'itération 02 sur le disque formaté, en
+>    écrivant que la première n'a pas produit de verdict et pourquoi.
+>
+> Le pire choix serait de formater sans avoir tranché : la question disparaîtrait avec le
+> disque, sans que personne ne l'ait décidée. C'est exactement le mode de défaillance que
+> `CLAUDE.md` nomme pour l'axe distro — **mourir en silence.**
 
 ## Pourquoi celle-ci en premier
 

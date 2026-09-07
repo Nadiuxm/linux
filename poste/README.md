@@ -35,8 +35,40 @@ Même structure pour chaque outil, pour que la bascule soit mécanique et pas ar
 
 ## VM Windows — poste d'administration
 
-> **Statut : construite le 2026-09-03**, installation de Windows en cours.
-> Jointure au domaine et outils invités restent à faire.
+> **Statut : EN SERVICE sur le poste de référence depuis le 2026-09-07.**
+> Reprise depuis le SSD USB, elle tourne, et l'agent invité répond (`guest-info` →
+> **110.2.3**), ce qui règle le point « installé dans Windows ≠ joignable depuis l'hôte »
+> plus bas.
+>
+> *Statut antérieur, gardé pour la chronologie :* construite le 2026-09-03 sur
+> l'itération 01, installation de Windows en cours.
+
+### Ce que l'audit du 2026-09-07 a mesuré
+
+| Mesure | Valeur |
+|---|---|
+| Domaine libvirt | `win11`, `en cours d'exécution`, UUID `0f52632d-…` |
+| Portée | **`qemu:///system`** — pas `qemu:///session`. `virsh` sans `-c` ne la voit pas |
+| Mémoire / vCPU | 8 Go / 8 (`host-passthrough`, 13 `hyperv` enrichissements actifs) |
+| Firmware | OVMF `secboot` + `enrolled-keys`, NVRAM `/var/lib/libvirt/qemu/nvram/win11_VARS.qcow2` |
+| TPM | `tpm-crb` émulé par **swtpm** (`/run/libvirt/qemu/swtpm/1-win11-swtpm.sock`) |
+| Disque | `/var/lib/libvirt/images/win11.qcow2`, `virtio-blk`, `discard=unmap` |
+| **Occupation réelle** | **46 Go** (`du -sh`) |
+| **Taille apparente** | **101 Go** (`du -sbh`) |
+| Attribut | `+C` (NOCOW) sur le fichier **et** sur le sous-volume ID 259 |
+| SELinux | `svirt_image_t:s0:c159,c991` (catégories MCS posées) |
+| Réseau | `tap` sur **`br0`**, MAC invitée `52:54:00:f8:62:8b` |
+| Affichage | `qxl-vga` + SPICE sur `127.0.0.1:5900`, `usb-redir` ×2 |
+| CD | `virtio-win-0.1.302.iso` monté (836 Mo réels) |
+
+**L'écart 46 Go / 101 Go est la preuve que la copie creuse a fonctionné**, et c'est la
+seule façon de le vérifier après coup. Sans `cp --sparse=always`, le fichier occuperait ses
+101 Go apparents — sans erreur, sans avertissement, sans rien pour le signaler. Le disque a
+grossi depuis les 31 Go réels de septembre, ce qui est normal : Windows a tourné.
+
+**L'étiquette SELinux avec ses catégories MCS confirme que le piège du `mv` a été évité.**
+Un `mv` aurait conservé l'étiquette de l'ancien disque et `qemu`, confiné, n'aurait pas pu
+lire le fichier — le symptôme aurait été un refus de démarrage sans mention de SELinux.
 
 ### Rôle
 
@@ -212,9 +244,19 @@ supprimer `br0` et `br0-port` : NetworkManager régénère seul un profil par d�
 > a sauvé la mise. Même leçon que le point `SSH_AUTH_SOCK` du journal — **vérifier si
 > l'outil n'a pas déjà traité le problème avant de croire qu'on l'a résolu.**
 
-#### Reste à prouver
+#### Prouvé le 2026-09-07
 
-- La survie au reboot. Les profils sont dans `/etc`, donc c'est attendu — pas encore constaté.
+- **La survie au reboot est constatée.** Le pont a été refait sur le poste de référence le
+  2026-09-07 à 09:36, la machine a redémarré à 10:27, et `br0` porte l'adresse
+  `10.11.65.1/27` avec la route par défaut. Les trois profils sont dans
+  `/etc/NetworkManager/system-connections/`.
+- **Le profil Ethernet d'origine est bien neutralisé** : `Connexion filaire 2` porte
+  `autoconnect=false` et `autoconnect-priority=-999`. C'est la moitié du travail qu'on
+  oublie : laissé actif, il se dispute `enp0s31f6` avec `br0-port` à chaque démarrage, de
+  façon non déterministe. Un quatrième profil, `Connexion filaire 1`, reste avec
+  `autoconnect=oui` mais sans interface attachée — sans effet, à surveiller.
+- **La MAC physique est reprise sur le pont** (`mac-address=E8:CF:83:89:18:D4`), donc le
+  réseau de l'employeur ne voit pas apparaître une nouvelle adresse matérielle.
 
 ### Le piège Btrfs — à traiter AVANT de créer l'image
 
@@ -418,9 +460,126 @@ qu'il ne porte aucun identifiant.
 
 ---
 
+## RustDesk — prise en main à distance des postes
+
+> **Statut : installé le 2026-09-07** (08:57 locales) sur le poste de référence,
+> `rustdeskadmin` **1.4.9-0**, RPM local. Service actif, trois processus en cours.
+
+### Rôle
+
+**L'outil de traitement des tickets.** C'est par lui que se prend la main sur un poste
+utilisateur pour dépanner. Avec la VM Windows, c'est le second outil **bloquant** du poste :
+sans lui, la partie « support » du travail ne se fait pas depuis cette machine.
+
+Le nom du binaire est `rustdeskadmin`, pas `rustdesk` : c'est un **client personnalisé**,
+généré depuis la console RustDesk de l'entreprise. La distinction n'est pas cosmétique —
+voir « Obtention ».
+
+### Obtention
+
+**Un RPM généré à la demande, pas téléchargé.** Le client est produit par la console
+RustDesk de l'entreprise et embarque sa configuration dans
+`/usr/share/rustdeskadmin/custom.txt` : adresse du serveur de rendez-vous, clé publique de
+relais, nom d'application, options désactivées. Il n'existe à aucune URL publique.
+
+```bash
+sudo dnf install ~/rustdeskadmin-x86_64.rpm     # une seule commande, voir plus bas
+```
+
+- `Signature : (none)` — **le RPM n'est pas signé.** `Vendor : rustdeskadmin
+  <info@rustdeskadmin.com>`, `Build Host : build-linx`, construit le 2026-09-01.
+- Dépôt d'origine dans `dnf` : **`@commandline`**. C'est ainsi qu'un RPM local se signale,
+  et le seul moyen de le repérer dans un inventaire de paquets :
+  `dnf repoquery --installed --qf '%{name}|%{from_repo}\n' | grep commandline`.
+- 81 Mo installés, 7 paquets avec les dépendances.
+
+> **Son `%post` fait cinq choses que `rpm` ne suit pas** — lues avec
+> `rpm -q --scripts rustdeskadmin`, et c'est le vrai enseignement de cette fiche :
+>
+> 1. copie l'unité dans `/etc/systemd/system/rustdeskadmin.service` ;
+> 2. copie `rustdeskadmin.desktop` et `rustdeskadmin-link.desktop` dans
+>    `/usr/share/applications/` ;
+> 3. crée le lien `/usr/bin/rustdeskadmin` → `/usr/share/rustdeskadmin/rustdeskadmin` ;
+> 4. `systemctl daemon-reload` ;
+> 5. `enable` **puis** `start`.
+>
+> **Donc : ne pas taper `systemctl enable --now` après coup, c'est déjà fait.** Et surtout,
+> **`rpm -qf` ne reconnaît aucun de ces quatre fichiers** : `rpm -qf /usr/bin/rustdeskadmin`
+> répond « n'appartient à aucun paquet ». Un inventaire fondé sur `rpm -ql` rate le
+> lanceur, le binaire dans `$PATH` et l'unité systemd. Le `%preun` les retire bien, donc
+> l'état reste cohérent — mais tant que le paquet est installé, ces fichiers sont
+> invisibles à toute question posée à `rpm`. Même famille que « un dépôt activé n'est pas
+> un paquet installé », sur le versant inverse : ici c'est le paquet qui est là et les
+> fichiers qui sont hors de sa connaissance.
+
+### Portabilité
+
+**La meilleure du poste, et c'est pour ça que l'outil a été retenu.** Le client est généré
+par Julien lui-même : il peut demander un `.deb`, un `.rpm` ou un binaire selon la distro
+d'accueil. Aucune dépendance à Fedora, aucune à GNOME.
+
+Ce qui est à vérifier sur une nouvelle distro, dans l'ordre :
+
+1. **Le format de paquet disponible dans la console** — c'est la première question, et elle
+   ne se pose pas à la machine.
+2. **Wayland.** Sur ce poste, RustDesk crée un périphérique **`rustdesk-uinput-keyboard`**,
+   visible dans `hyprctl devices` : c'est ainsi qu'il injecte les frappes. Sous Wayland,
+   l'injection d'événements et la capture d'écran passent par `uinput` et les portails, pas
+   par X11 — donc à retester sur chaque compositeur, pas seulement sur chaque distro.
+3. **Rien à ouvrir dans le pare-feu.** Vérifié le 2026-09-07 : la zone `public`
+   (celle de `br0`) n'autorise que `dhcpv6-client`, `mdns` et `ssh`, et RustDesk
+   fonctionne. Il sort vers son relais, il n'écoute pas. **Ne pas « corriger » un pare-feu
+   qui n'a rien cassé.**
+
+### À refaire à la main après une bascule
+
+- **Régénérer le RPM** depuis la console de l'entreprise. « Réinstaller la même version »
+  n'a pas de sens ici : la version installée est une trace, pas une adresse.
+- **Rétablir l'identité de la machine dans la console**, si l'ID change. Un poste
+  réinstallé est un nouvel appareil du point de vue du serveur.
+
+### À sauvegarder avant un wipe
+
+`~/.config/rustdeskadmin/` — **et ce dossier contient des secrets, il ne va pas au dépôt.**
+Les clés présentes au 2026-09-07, sans leurs valeurs :
+
+| Fichier | Contient |
+|---|---|
+| `RustDeskAdmin.toml` | `enc_id`, `password`, `salt`, `key_pair` — **l'identité et le mot de passe d'accès** |
+| `RustDeskAdmin2.toml` | `rendezvous_server`, `serial`, `unlock_pin`, `trusted_devices` |
+| `RustDeskAdmin_local.toml` | `access_token`, `remote_id`, `kb_layout_type`, réglages d'interface |
+| `RustDeskAdmin_ab`, `RustDeskAdmin_group` | carnet d'adresses et groupes |
+| `peers/*.toml` | un fichier par poste contacté |
+
+> **Rien de tout ça n'est versionnable**, ni maintenant ni jamais : `password`, `key_pair`,
+> `access_token` et `unlock_pin` sont des secrets. Sauvegarde par les moyens propres de
+> Julien, comme la base KeePassXC — hors périmètre du dépôt.
+>
+> Le seul élément **récupérable sans sauvegarde** est le carnet d'adresses, s'il est
+> synchronisé côté serveur. À vérifier avant de compter dessus, plutôt qu'après.
+
+### Versionné dans le dépôt
+
+**Rien.** Pas de fichier de configuration hors secrets, pas d'unité systemd à écrire (le
+RPM la pose), pas d'entrée de lanceur à créer (le RPM en pose deux). C'est le cas le plus
+propre du poste — et il n'est propre que parce que tout le reste est soit dans le RPM, soit
+un secret.
+
+---
+
 ## Mattermost — messagerie interne de l'entreprise
 
 > **Statut : installé le 2026-09-03** (12:12 locales), Flatpak Flathub, version 6.3.0.
+> **Réinstallé sur le poste de référence le 2026-09-07**, même version, portée `system`.
+
+> **Sur une image minimale, `flatpak` n'est PAS livré.** Sur Fedora 44 Workstation il
+> était présent et la case « dépôts tiers » du premier démarrage ajoutait Flathub — coût
+> nul, donc jamais noté. Sur l'image minimale du poste de référence, il a fallu le paquet,
+> le dépôt Flathub, **et** un réglage de `XDG_DATA_DIRS` sans lequel les applications sont
+> installées mais invisibles au lanceur (détail dans `installation/procedure.md`).
+> **Donnée de comparaison à retenir :** « Flatpak est le seul canal identique partout » vaut
+> pour le *paquet applicatif*, pas pour le *coût d'obtention du système Flatpak lui-même* —
+> celui-là dépend de l'édition de la distro, pas seulement de la distro.
 
 ### Rôle
 
@@ -642,6 +801,26 @@ dernières heures, pour quasiment rien.
 Les instantanés **manuels** (`single`) et **automatiques** (`timeline`) relèvent de deux
 politiques distinctes : `NUMBER_LIMIT=10` pour les premiers, `TIMELINE_LIMIT_DAILY=7` pour
 les seconds. **La rotation quotidienne n'efface donc jamais un instantané pris à la main.**
+
+**État vérifié le 2026-09-07 sur le poste de référence** — et il confirme la théorie
+ci-dessus, ce qui est rare assez pour être noté :
+
+| Config | Instantanés | Nature |
+|---|---|---|
+| `root` | 1, 7, 8, 9, 10, 11 | `timeline` sauf le **10**, `single` : « avant grub-btrfs » |
+| `home` | 1, 7, 8, 9 | tous `timeline` |
+
+Un par jour depuis le 2026-09-04, plus celui pris à la main avant d'installer
+`grub-btrfs` — qui a bien survécu à deux rotations quotidiennes. `ALLOW_USERS=jzielona` +
+`SYNC_ACL=yes` expliquent au passage pourquoi `/.snapshots` est listable sans `sudo` :
+c'est voulu, pas un défaut de permissions.
+
+> **`grub-btrfsd` ne surveille QUE `/.snapshots`, pas `/home/.snapshots`.** Vérifié dans
+> l'unité : `ExecStart=/usr/bin/grub-btrfsd --syslog /.snapshots`, et l'`inotifywait`
+> associé ne regarde que ce dossier. **Les instantanés de `/home` n'apparaîtront donc
+> jamais au menu GRUB** — ce qui est cohérent, on ne démarre pas sur un `/home`, mais qui
+> se lit comme un oubli de configuration si on ne le sait pas. Restaurer `/home` se fait
+> depuis un système démarré, avec `snapper -c home`, pas depuis GRUB.
 
 ### Usage
 
@@ -986,6 +1165,11 @@ partage le même `org.freedesktop.Platform 25.08` et ne coûte que sa propre tai
 
 ### Attention : portée d'installation différente de Mattermost
 
+> **RÉSOLU sur le poste de référence le 2026-09-07** — les deux applications y sont en
+> portée **`system`**. L'écart décrit ci-dessous est celui de l'itération 01, gardé parce
+> qu'il explique pourquoi la colonne `installation` a été ajoutée à `flatpaks.txt`.
+> Réinstallation notée dans `installation/procedure.md`, section 8.
+
 ```
 com.mattermost.Desktop   system   -> /var/lib/flatpak          (tous les comptes)
 com.mikrotik.WinBox      user     -> ~/.local/share/flatpak    (ce compte seul)
@@ -1149,6 +1333,23 @@ Absent des dépôts Fedora — seuls `hyprcursor` (une bibliothèque) et `hypre`
 linéaire, sans rapport) y figurent. Il faudra un **COPR**. À noter comme donnée de
 comparaison : Sway est dans les dépôts officiels **avec un groupe dédié**, Hyprland non.
 
+> **CHRONOMÉTRÉE, et la facture n'est pas où on l'attendait.** Relevé le 2026-09-07 :
+> le COPR `dtutila/hyprland` fournit **13 paquets**, dont il **remplace** toutes les
+> bibliothèques `hypr*` de Fedora (`hyprgraphics` 0.5.1 contre 0.1.5, `hyprutils` 0.14.1
+> contre 0.7.1) et en ajoute deux que Fedora n'a pas (`hyprwire`, `hyprtoolkit`).
+>
+> **La friction réelle n'a pas été l'obtention — une commande — mais le format de
+> configuration.** hyprlang est déprécié depuis la 0.55 au profit d'une API Lua, et tous
+> les tutoriels en ligne sont encore en hyprlang : 425 lignes écrites pour rien le
+> 2026-09-04. Puis `code:NN`, qui marche en hyprlang, échoue **silencieusement** en Lua.
+> Un logiciel tiré d'un COPR est justement celui qui bouge vite, et c'est ça qui coûte,
+> pas le dépôt supplémentaire.
+>
+> **Coût récurrent à retenir pour la comparaison :** `dnf upgrade` doit **toujours** voir
+> ce COPR activé, sinon Fedora tente de redescendre les bibliothèques `hypr*`. Sway,
+> étant dans les dépôts officiels, n'imposait rien de tel. C'est une vraie différence
+> entre les deux, et elle se paiera à chaque mise à jour.
+
 ### Ce qui se décide à l'installation, et nulle part ailleurs
 
 Deux choses ne se rattrapent pas après coup et tombent au même moment :
@@ -1169,6 +1370,13 @@ ou composer.
 
 Passage de Firefox à **Chromium** (transaction 13, le 2026-09-03), par habitude — pas
 pour une contrainte technique. Désinstallation de Firefox **envisagée, pas décidée**.
+
+> **Question devenue sans objet sur le poste de référence.** Vérifié le 2026-09-07 :
+> `firefox` **n'est pas installé** — l'image minimale ne l'a jamais posé, il n'y a donc
+> rien à désinstaller. `chromium` 151.0.7922.173 tourne en `--ozone-platform=wayland`,
+> nativement. La décision qui traînait depuis le 2026-09-03 a été tranchée par le choix de
+> l'image, pas par une décision : c'est un cas où **changer de méthode a réglé une question
+> qu'on croyait devoir arbitrer.** Reste valable pour le lab, où Firefox est présent.
 
 À retenir pour la bascule : un navigateur porte sessions, extensions, marque-pages et mots
 de passe enregistrés. **Aucun `stow` ne restaure ça** et rien n'est versionné ici — c'est
