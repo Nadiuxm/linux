@@ -354,6 +354,76 @@ donc le symptôme « le montage NAS échoue » n'est pas encore mesurable.
 - [ ] `foot` — provisoire, kitty envisagé
 - [ ] `keepassxc`
 
+### Flatpak — FAIT le 2026-09-07
+
+**Absent de l'image minimale**, contrairement à Workstation où il était livré et où la
+case « dépôts tiers » du premier démarrage ajoutait Flathub. Ici les trois gestes sont à
+poser à la main :
+
+```bash
+sudo dnf install -y flatpak
+# le paquet fournit les dépôts « fedora » et « fedora-testing », PAS Flathub
+sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+sudo flatpak install -y flathub com.mattermost.Desktop com.mikrotik.WinBox
+flatpak list --app --columns=application,version,installation
+```
+
+- [x] `flatpak` 1.18.2, dépôt `flathub` ajouté en portée **system**
+- [x] `com.mattermost.Desktop` 6.3.0 et `com.mikrotik.WinBox` 4.3, **les deux en `system`**
+
+> **Changement assumé par rapport à l'itération 01 :** WinBox y était installé en portée
+> `user`, ce que `poste/README.md` qualifiait d'« incohérence à connaître » (un second
+> dépôt `flathub` au niveau utilisateur, et une application capturée par les instantanés
+> `/home` au lieu de `/`). Les deux sont désormais en `system` : un seul dépôt, une seule
+> portée, et `flatpak list --columns=…,installation` redevient lisible d'un coup d'œil.
+
+- [ ] **Après un `dnf install flatpak`, se déconnecter/reconnecter** — voir la section
+      suivante : sans ça les applications sont installées mais **invisibles au lanceur**
+
+### `XDG_DATA_DIRS` : les Flatpaks n'apparaissent pas dans le lanceur — FAIT le 2026-09-07
+
+Symptôme : `flatpak list` montre les applications, `Super+R` ne les propose pas.
+
+**Cause, mesurée sur le processus en session** (`tr '\0' '\n' < /proc/$(pgrep -x Hyprland)/environ`) :
+`XDG_DATA_DIRS=/usr/local/share:/usr/share` — les chemins Flatpak manquent, alors que les
+`.desktop` sont bien dans `/var/lib/flatpak/exports/share/applications/`.
+
+Fedora livre pourtant `/etc/profile.d/flatpak.sh`, qui fait exactement le travail. **Mais
+`profile.d` ne s'exécute que dans un shell de LOGIN**, et la session est lancée par
+greetd → uwsm → Hyprland, qui ne source jamais `/etc/profile`. Le script est là et ne
+tourne pas.
+
+Réponse retenue — le fichier que `man uwsm` prévoit pour ça (section CONFIGURATION,
+« Environment (shell) to be sourced for the graphical session ») :
+
+```bash
+mkdir -p ~/.config/uwsm          # AVANT le stow, sinon tree folding (voir ci-dessous)
+cd ~/linux && stow -n -v -t ~ -d dotfiles uwsm
+stow -v -t ~ -d dotfiles uwsm
+# puis déconnexion / reconnexion — l'environnement de session ne se recharge pas
+```
+
+Le paquet `dotfiles/uwsm/` contient un `env` d'une seule ligne utile, qui **source le
+script de Fedora** plutôt que de coder les chemins en dur — il interroge
+`flatpak --installations` et couvre donc les portées `system` et `user`, même si elles
+changent plus tard.
+
+**Piège Stow, le troisième de la même famille** (après `~/.bashrc.d` et
+`~/.config/systemd`) : `stow -n -v` annonçait
+`LINK: .config/uwsm => ../linux/dotfiles/uwsm/.config/uwsm`, donc tout `~/.config/uwsm/`
+devenait le dépôt — et `uwsm select` y écrit un `default-id`, qui se serait retrouvé
+versionné. Faire exister le dossier avant suffit : la simulation passe alors à
+`LINK: .config/uwsm/env`.
+
+Vérification, sur le processus en session et pas dans un shell quelconque :
+
+```bash
+tr '\0' '\n' < /proc/$(pgrep -x Hyprland)/environ | grep XDG_DATA_DIRS
+```
+
+Obtenu le 2026-09-07 :
+`/home/jzielona/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share`
+
 ## 9. Dotfiles
 
 ```bash
@@ -362,11 +432,21 @@ cd ~/linux/dotfiles
 # écarter d'abord les fichiers par défaut de la distro : stow ne remplace jamais
 # un vrai fichier — c'est une sécurité, pas un bug
 stow -v -t ~ hypr foot          # fait le 2026-09-04
+mkdir -p ~/.config/uwsm         # AVANT, contre le tree folding
+stow -v -t ~ uwsm               # fait le 2026-09-07
 stow -v -t ~ bash git nas desktop
 ```
 
-- [x] `hypr` et `foot` posés
-- [ ] `bash`, `git`, `nas`, `desktop` — à poser
+- [x] `hypr` et `foot` posés (2026-09-04)
+- [x] `uwsm` posé (2026-09-07) — `XDG_DATA_DIRS` pour les Flatpaks
+- [x] `nas` — **posé, mais ça n'avait pas été noté** ; l'unité tourne depuis le 2026-09-04
+- [ ] `bash`, `git`, `desktop` — **toujours pas posés au 2026-09-07** : `~/.bashrc`,
+      `~/.bash_profile` et `~/.gitconfig` sont encore les fichiers par défaut de Fedora et
+      `~/.bashrc.d` n'existe pas. Rien du paquet `bash` du dépôt n'est en service
+
+> **Un `[ ]` peut vouloir dire « pas fait » ou « fait, pas noté ».** Constaté le
+> 2026-09-07 : `nas` était déployé et l'unité active, mais la case était vide. La seule
+> façon de trancher est de regarder la machine — `ls -l` sur les cibles, pas la procédure.
 
 ## 10. Instantanés — FAIT le 2026-09-04, complété le 2026-09-07
 

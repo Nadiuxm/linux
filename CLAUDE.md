@@ -76,7 +76,7 @@ Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
 | `poste/` | Inventaire **vivant** des outils de travail, indépendant de la distro. |
 | `installation/` | **Le poste de référence** : cadrage, procédure rejouable, journal de construction. |
-| `dotfiles/` | Paquets **GNU Stow**. Poste de référence : `stow -v -t ~ bash git hypr foot nas desktop`. Le paquet `sway` ne sert plus qu'au lab. |
+| `dotfiles/` | Paquets **GNU Stow**. Poste de référence : `stow -v -t ~ bash git hypr foot nas desktop uwsm`. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
 Itération 01 : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland) —
@@ -505,6 +505,28 @@ jour même, tant que le détail est frais.
   existait et n'avait jamais été cochée. **Une procédure de secours se répète à froid, ou
   elle ne compte pas** — corollaire de « une note de piège se re-teste », appliqué aux
   gestes plutôt qu'aux faits.
+
+- **`/etc/profile.d/` n'est PAS lu par une session graphique.** Le 2026-09-07, les deux
+  applications Flatpak étaient installées et n'apparaissaient pas dans le lanceur : le
+  compositeur avait `XDG_DATA_DIRS=/usr/local/share:/usr/share`, sans les chemins Flatpak.
+  Fedora livre pourtant `/etc/profile.d/flatpak.sh` qui fait le travail — mais `profile.d`
+  ne s'exécute que dans un shell de **login**, et la session est lancée par
+  greetd → uwsm → Hyprland, qui ne source jamais `/etc/profile`. **Le script est là et ne
+  tourne pas.** Tout ce que la distro pose dans `profile.d` est donc absent d'une session
+  Wayland lancée par un greeter, et ça ne se voit qu'à l'usage. Réponse : le fichier prévu
+  par l'outil — `~/.config/uwsm/env`, documenté dans `man uwsm` — qui **source le script de
+  la distro** plutôt que de recopier ses chemins. Même famille que « un fichier de conf dans
+  `/etc` n'est pas lu par tout le monde » : vérifier *qui* lit un fichier, et *quand*.
+  Corollaire de mesure : lire la variable sur le **processus en session**
+  (`tr '\0' '\n' < /proc/$(pgrep -x Hyprland)/environ`), jamais dans le shell d'un agent —
+  les deux environnements ne se ressemblent pas.
+
+- **Le tree folding de Stow frappe partout où le dossier cible n'existe pas encore.**
+  Troisième occurrence le 2026-09-07, après `~/.bashrc.d` et `~/.config/systemd` :
+  `stow uwsm` allait poser `LINK: .config/uwsm => <dépôt>`, or `uwsm select` écrit un
+  `default-id` dans ce dossier — il aurait fini versionné. Remède minimal et systématique :
+  **`stow -n -v` d'abord** (la simulation nomme le niveau exact du lien), et faire exister
+  le dossier parent avant si le lien remonte trop haut.
 
 ## Hors périmètre — ne pas relancer le sujet
 
