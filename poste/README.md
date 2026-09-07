@@ -585,13 +585,20 @@ Trois choses **n'existent pas** sur Fedora et il vaut mieux le savoir avant d'es
 
 | Manquant | Conséquence |
 |---|---|
-| `grub-btrfs` absent des dépôts | **Pas d'entrée GRUB pour démarrer sur un instantané.** Si `/` ne boote plus, la restauration est manuelle (live USB, ou `rootflags=subvol=…` à la main dans GRUB) |
+| ~~`grub-btrfs` absent des dépôts~~ — **résolu le 2026-09-07** | Le paquet est absent des dépôts Fedora, mais un COPR le fournit : les instantanés **sont amorçables** depuis le menu GRUB. Voir la sous-fiche « grub-btrfs » plus bas |
 | Pas de greffon snapper pour **dnf5** | **Aucun instantané automatique avant/après transaction.** `python3-dnf-plugin-snapper` existe mais vise dnf4 ; le système utilise dnf5 |
 | Timeshift inutilisable en mode Btrfs | Sa propre description l'annonce : « supported only on BTRFS systems having an Ubuntu-type subvolume layout (with @ and @home subvolumes) ». Fedora nomme ses sous-volumes `root` et `home` |
 
 Autrement dit, le scénario « la mise à jour casse, je reboote sur l'instantané d'avant »
 qu'on associe à openSUSE **n'est pas livré clé en main ici**. Ce qui marche sans effort,
 c'est l'instantané manuel avant opération risquée, et la récupération de fichiers.
+
+> **Nuance apportée le 2026-09-07.** La moitié « je reboote sur l'avant » est désormais
+> disponible : `grub-btrfs` installé depuis un COPR génère les entrées. Mais l'autre
+> moitié — « la mise à jour crée l'instantané toute seule » — **manque toujours**, faute
+> de greffon snapper pour dnf5. Le filet existe, il faut encore le tendre à la main avant
+> chaque opération risquée. Ne pas lire la première ligne de ce tableau comme si le
+> scénario openSUSE était reconstitué.
 
 ### Portabilité
 
@@ -702,14 +709,128 @@ déverrouillage automatique pour gagner une fonctionnalité qu'on a déjà. Le `
 n'est donc pas un pis-aller : c'est la bonne disposition.
 
 **Attention à l'obtention : `grub-btrfs` n'est pas dans les dépôts Fedora** — vérifié le
-2026-09-04, `dnf` ne connaît aucun paquet de ce nom. C'est un composant hors dépôt de plus,
-à traiter comme tel (origine et version notées dans `installation/procedure.md`).
+2026-09-04, re-vérifié le 2026-09-07, `dnf` ne connaît aucun paquet de ce nom. C'est un
+composant hors dépôt de plus, à traiter comme tel (origine et version notées dans
+`installation/procedure.md`).
 
-**La porte de sortie existe sans rien installer.** `/boot` étant séparé et
-partagé, le noyau est trouvé quelle que soit la racine choisie : au menu GRUB, touche `e`,
-puis remplacer `rootflags=subvol=root` par `rootflags=subvol=.snapshots/<N>/snapshot`. Les
-instantanés étant en lecture seule, le système démarre dégradé — assez pour restaurer, pas
-pour travailler. **À répéter à froid une fois, pas le jour où ça casse.**
+**Trois voies, et une seule tient — comparaison du 2026-09-07.**
+
+| Voie | Verdict |
+|---|---|
+| **COPR `pego-copr/grub-btrfs`** | **retenu** — `grub-btrfs-4.14-1.fc44`, construit le 2 mars 2026 pour le chroot f44 |
+| COPR `kylegospo/grub-btrfs` | **écarté** — instantané git de septembre 2022, release `.fc38` recopiée dans le chroot f44. Le nom du chroot ne dit rien de l'âge du paquet |
+| `make install` depuis le git upstream | **écarté** — pose dans `/usr/local`, donc exactement le piège SELinux du greeter Noctalia, et aucune mise à jour |
+
+> **Le nom d'un chroot COPR n'est pas une preuve de fraîcheur.** `kylegospo` apparaît bien
+> avec `fedora-44-x86_64` dans ses chroots actifs, ce qui laisse croire à un paquet à jour ;
+> la `release` dit `.fc38` et le `buildtime` dit 2022. Interroger le paquet, pas la liste
+> des chroots : `dnf repoquery --repofrompath=… --qf '%{name}-%{version}-%{release} (%{buildtime})'`
+> répond sans rien installer. Même famille que « un dépôt activé n'est pas un paquet installé ».
+
+**Le RPM a été ouvert avant d'être installé** (`rpm -qlp`, `rpm -qRp`, `rpm -qp --scripts`,
+`rpm2cpio`), et c'est ce qui a évité une mauvaise surprise :
+
+- contenu propre et packagé — `/usr/bin/grub-btrfsd`, `/etc/grub.d/41_snapshots-btrfs`,
+  `/etc/default/grub-btrfs/config`, `/usr/lib/systemd/system/grub-btrfsd.service`, deux
+  pages de manuel. **Rien dans `/usr/local`**, donc étiquetage SELinux fait par RPM ;
+- `Requires: grub2-tools btrfs-progs inotify-tools util-linux` — seul `inotify-tools`
+  manquait sur la machine ;
+- le `config` livré **détecte Fedora tout seul** (`if [ -f /etc/fedora-release ]`) et pose
+  `GRUB_BTRFS_GRUB_DIRNAME=/boot/grub2`, `MKCONFIG=/usr/sbin/grub2-mkconfig`,
+  `SCRIPT_CHECK=grub2-script-check`. Aucune édition nécessaire ;
+- l'unité surveille déjà `/.snapshots`, le chemin exact de snapper ici ;
+- **et le `%post` lance `grub2-mkconfig -o /boot/grub2/grub.cfg` de lui-même.** C'est le
+  seul point qui demandait une précaution : `dnf install` réécrit `grub.cfg` sans le
+  demander, sur une machine en UEFI + BLS. La copie de sauvegarde se prend **avant**
+  l'installation, pas après. Lire les scriptlets d'un RPM hors distribution avant de
+  l'installer, c'est ce qui permet de le savoir.
+
+**La porte de sortie existe sans rien installer** — utile sur une distro où `grub-btrfs`
+n'est pas disponible, et le jour où le menu généré serait lui-même cassé. `/boot` étant
+séparé et partagé, le noyau est trouvé quelle que soit la racine choisie : au menu GRUB,
+touche `e`, puis passer la racine voulue en option de noyau. Les instantanés étant en
+lecture seule, le système démarre dégradé — assez pour restaurer, pas pour travailler.
+**À répéter à froid une fois, pas le jour où ça casse.**
+
+> **CORRIGÉ le 2026-09-07 — un chemin qui n'aurait pas démarré.** Cette ligne disait :
+> « remplacer `rootflags=subvol=root` par `rootflags=subvol=.snapshots/<N>/snapshot` ».
+> La **forme** était bonne, le **chemin** était faux.
+>
+> `/` est monté en `subvol=/root` et `.snapshots` est imbriqué *dedans* : depuis la racine
+> Btrfs, un instantané est **`root/.snapshots/<N>/snapshot`**. C'est grub-btrfs qui l'a
+> démenti en une ligne de sa propre sortie —
+> `Found snapshot: … | root/.snapshots/10/snapshot | single | avant grub-btrfs |`.
+>
+> Manip correcte, mesurée sur l'entrée vivante (`sudo grubby --info=ALL`) :
+>
+> ```
+> args="ro rootflags=subvol=root rd.luks.uuid=luks-680cb146-… rhgb quiet"
+>                        ^^^^ remplacer par root/.snapshots/<N>/snapshot
+> ```
+
+> **Deux fichiers, deux formes de `rootflags` — ne pas les confondre.** L'entrée BLS
+> vivante porte `rootflags=subvol=root`, `subvol` seul. Le `grub-btrfs.cfg` généré porte
+> `rootflags=compress=zstd:1,x-systemd.device-timeout=0,subvol="root/…"`, car grub-btrfs
+> reconstruit la ligne depuis `GRUB_CMDLINE_LINUX` et les options de `fstab` au lieu de
+> reprendre les `args` BLS.
+>
+> *Piège de méthode qui en découle, vécu le 2026-09-07 :* un `grep -o 'rootflags=subvol=[^ ]*'`
+> lancé sur le **fichier généré** ne renvoie **rien**, alors que le motif est parfaitement
+> valable pour l'**entrée vivante**. Sortie vide, motif correct, mauvaise cible — et la
+> conclusion tirée sur le coup (« la forme de l'option est différente de ce que dit la
+> note ») était fausse. **Une sortie vide ne distingue pas un motif inadapté d'une cible
+> inadaptée.**
+
+### Démarrer sur un instantané : ce sera DÉGRADÉ, et c'est documenté
+
+> **Recherché le 2026-09-07 dans la documentation de l'outil, pas déduit.** Le `ro` absent
+> des entrées générées avait fait craindre un échec de montage. Ce n'est pas le sujet :
+> dracut monte la racine depuis la ligne de commande du noyau, et un sous-volume en lecture
+> seule se monte en lecture seule quoi qu'on demande. **Le vrai problème est en espace
+> utilisateur**, et le projet l'annonce lui-même.
+
+`/etc/grub.d/41_snapshots-btrfs`, lignes 11-12, porte l'avertissement en tête de fichier :
+
+```
+#   Warning : booting on read-only snapshots can be tricky.
+#   (Read about it, https://github.com/Antynea/grub-btrfs#warning-booting-on-read-only-snapshots-can-be-tricky)
+```
+
+Et la section pointée dit la condition en une phrase :
+
+> « If you wish to use read-only snapshots, `/var/log` or even `/var` must be on a separate
+> subvolume. Otherwise, make sure your snapshots are writable. »
+
+**Ce poste est exactement dans le cas qui échoue, et c'est mesuré :** `findmnt -t btrfs`
+ne montre que deux sous-volumes montés, `root` et `home`. `/var` et `/var/log` sont
+**dans** `root`, donc dans l'instantané, donc en lecture seule au démarrage. C'est la
+disposition Fedora par défaut — pas une erreur de montage de notre part.
+
+**Les deux échappatoires officielles sont fermées ici, chacune pour une raison propre :**
+
+| Voie annoncée par le projet | Pourquoi elle ne s'applique pas |
+|---|---|
+| `/var` (ou au moins `/var/log`) en sous-volume séparé | Décision de **partitionnement**, à prendre à l'installation. Ne se rattrape pas d'un `mount` |
+| overlayfs en RAM — `rd.live.overlay.overlayfs=1` / `rd.live.overlay.readonly=1`, à passer via `GRUB_BTRFS_SNAPSHOT_KERNEL_PARAMETERS` | Le module dracut `70overlayfs` **est bien présent**, mais le projet annonce que **dracut < 109 exige un correctif manuel** — et la machine est en **dracut-108-7.fc44** |
+| Rendre l'instantané inscriptible (`btrfs property set -ts <chemin> ro false`) | Possible ponctuellement, mais casse la garantie qui fait l'intérêt d'un instantané. À réserver à une restauration en cours |
+
+Et l'[issue #324](https://github.com/Antynea/grub-btrfs/issues/324) décrit **précisément** ce
+cas — Fedora qui se fige juste avant l'écran de connexion GNOME depuis un instantané en
+lecture seule. L'utilisateur a essayé les trois options ci-dessus, **aucune n'a marché**,
+et l'issue est **toujours ouverte**. Ce n'est donc pas un réglage qui nous manque : c'est
+un problème non résolu en amont.
+
+> **Conclusion, et elle ne change pas la décision.** La phrase déjà écrite dans cette fiche
+> — « le système démarre dégradé, assez pour restaurer, pas pour travailler » — était juste.
+> Elle est maintenant **appuyée sur la documentation de l'outil et sur la disposition
+> mesurée du disque**, plus sur une intuition. Ce qu'il faut en retenir pour le jour où ça
+> sert : **ne pas attendre un bureau utilisable**. On démarre sur un instantané pour
+> obtenir un shell et lancer une restauration, point. Espérer une session GNOME complète
+> ferait perdre du temps à chercher une panne qui n'en est pas une.
+
+**Ce qui reste à mesurer, et c'est plus étroit qu'avant :** jusqu'où va « dégradé ». Un
+shell root sur tty suffit-il à lancer `snapper rollback` ? C'est la seule question ouverte,
+et elle se répond en dix minutes à froid — pas le jour où ça casse.
 
 ### À refaire à la main après une bascule
 
@@ -719,9 +840,14 @@ pour travailler. **À répéter à froid une fois, pas le jour où ça casse.**
    fiche VM Windows) — sinon le disque de la VM entre dans les instantanés.
 4. `create-config` pour `root` et `home`, réappliquer les réglages ci-dessus.
 5. Activer `snapper-timeline.timer` et `snapper-cleanup.timer`.
-6. **Installer `grub-btrfs`** — hors dépôt Fedora (vérifié le 2026-09-04). Aucune
-   condition de partitionnement : il gère un `/boot` séparé. Vérifier tout de même qu'il
-   **génère bien des entrées** après `grub2-mkconfig`, plutôt que de le supposer.
+6. **Installer `grub-btrfs`** — hors dépôt Fedora (vérifié le 2026-09-04, re-vérifié le
+   2026-09-07). Aucune condition de partitionnement : il gère un `/boot` séparé, mesuré.
+   Sur Fedora : COPR `pego-copr/grub-btrfs`. Vérifier tout de même qu'il **génère bien des
+   entrées** après `grub2-mkconfig`, plutôt que de le supposer — et surtout que le
+   `grub.cfg` principal **source** le fichier généré, sinon les entrées existent dans un
+   fichier que personne ne lit.
+7. **Activer `grub-btrfsd`** (`systemctl enable --now`), sans quoi le menu ne suit pas les
+   instantanés créés ensuite.
 
 ### Mise en place sur le poste de référence — 2026-09-04
 
@@ -765,15 +891,68 @@ obtenu, tout vérifié plutôt que supposé :
       *Bénéfice constaté au passage :* la lecture a réussi **sans `sudo`**, ce qui prouve
       `SYNC_ACL=yes` — le `+` de `drwxr-x---+` sur `/.snapshots` est l'ACL posée pour
       `ALLOW_USERS`.
-- [ ] `grub-btrfs` — toujours pas installé, donc **pas d'entrée GRUB pour démarrer sur un
-      instantané**. Le scénario « la mise à jour casse, je reboote sur l'avant » reste
-      indisponible.
+- [x] **`grub-btrfs` — en place le 2026-09-07.** Les instantanés sont amorçables depuis le
+      menu GRUB. Compte rendu dans la sous-fiche ci-dessous.
+
+### grub-btrfs en place — 2026-09-07
+
+`grub-btrfs 4.14-1.fc44` (COPR `pego-copr/grub-btrfs`), script en version
+`master-2026-05-31T15:55:08+00:00`. **Aucune ligne de configuration écrite** : le `config`
+livré par le RPM détecte Fedora et l'unité surveille déjà `/.snapshots`. C'est le meilleur
+cas possible pour un composant hors dépôt — encore fallait-il le vérifier avant, pas après.
+
+État obtenu, chaque ligne mesurée :
+
+| Mesure | Résultat |
+|---|---|
+| `rpm -q grub-btrfs` | `grub-btrfs-4.14-1.fc44.noarch` |
+| `/etc/grub.d/41_snapshots-btrfs --version` | `master-2026-05-31T15:55:08+00:00` |
+| Instantanés détectés au `%post` | **5**, chemins en `root/.snapshots/<N>/snapshot` |
+| `grep -c menuentry /boot/grub2/grub-btrfs.cfg` | **11** = 1 en-tête + 5 instantanés × 2 noyaux |
+| Le menu principal source-t-il le fichier ? | **oui** — `grub.cfg:266-274`, `configfile "${prefix}/grub-btrfs.cfg"` |
+| `/boot` séparé détecté ? | **oui, sans rien forcer** — `GRUB_BTRFS_OVERRIDE_BOOT_PARTITION_DETECTION` laissée commentée |
+| `grub-btrfsd` | `enabled` + `active (running)`, `inotifywait` sur `/.snapshots` |
+
+**Ce que la vérification du menu principal a évité.** Le script avertit lui-même :
+« `grub2-mkconfig` needs to run at least once to generate the snapshots (sub)menu entry in
+grub the main menu ». Compter 11 entrées dans `grub-btrfs.cfg` n'aurait rien prouvé — un
+fichier plein d'entrées qu'aucun `configfile` ne lit est indiscernable, de l'extérieur,
+d'une installation qui marche. Les deux mesures sont nécessaires, pas la première seule.
+
+**Le `/boot` séparé, enfin mesuré et non plus déduit.** L'entrée générée est
+`linux "/vmlinuz-7.1.13-200.fc44.x86_64"` — chemin relatif à la racine de la partition
+`/boot` — précédé d'un `search --no-floppy --fs-uuid --set=root 4a4ba7f7-…`, l'UUID de
+l'ext4. Le noyau vient donc du `/boot` **vivant**, et `rd.luks.uuid=` est conservé dans la
+ligne de commande. C'est le démenti du 2026-09-04 confirmé par l'observation : la
+disposition Fedora par défaut n'interdisait rien.
+
+**Et le démon fait moins de dégâts que supposé.** On pouvait craindre qu'il relance un
+`grub2-mkconfig` complet à chaque instantané — donc un `os-prober` toutes les heures.
+`grub-btrfsd:209-216` dit l'inverse : il teste si `grub.cfg` contient `snapshots-btrfs`, et
+si oui n'appelle que `/etc/grub.d/41_snapshots-btrfs`, qui régénère le seul
+`grub-btrfs.cfg`. Le `grub2-mkconfig` complet reste réservé aux mises à jour de noyau.
+**Lu dans le script, pas supposé** — et la supposition était pessimiste, ce qui arrive
+aussi.
+
+**Un effet de bord à connaître.** Le `grub2-mkconfig` du `%post` a rapporté
+`Found Fedora Linux 44 (Workstation Edition) on /dev/sda3` : `os-prober` a trouvé le **SSD
+USB du lab** (itération 01) et lui a ajouté une entrée de menu. Le menu GRUB du poste
+dépend donc de ce qui est **branché au moment d'un `grub2-mkconfig` complet** — une entrée
+vers l'itération 01 qui apparaît ou disparaît selon le câble. Sans conséquence, mais à ne
+pas prendre pour une anomalie le jour où on la voit bouger.
+
+**Ce qui reste vrai malgré tout : un instantané amorçable n'est pas une sauvegarde.** Voir
+l'encadré en tête de fiche — les instantanés vivent toujours sur le disque qu'ils
+protègent. `grub-btrfs` répare le scénario « la mise à jour casse », pas le scénario « le
+disque meurt ».
 
 ### Versionné dans le dépôt
 
-Rien. Les configurations vivent dans `/etc/snapper/configs/`, hors du périmètre de Stow
-qui ne gère que `$HOME`. Les réglages sont reproduits dans cette fiche — c'est elle qui
-fait foi.
+Rien. Les configurations vivent dans `/etc/snapper/configs/` et
+`/etc/default/grub-btrfs/config`, hors du périmètre de Stow qui ne gère que `$HOME`. Le
+fichier de grub-btrfs est **laissé tel que livré**, sans aucune modification : c'est une
+information à conserver, puisqu'une future mise à jour du paquet ne rencontrera donc aucun
+conflit. Les réglages snapper sont reproduits dans cette fiche — c'est elle qui fait foi.
 
 ---
 

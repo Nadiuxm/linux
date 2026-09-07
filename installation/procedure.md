@@ -368,17 +368,68 @@ stow -v -t ~ bash git nas desktop
 - [x] `hypr` et `foot` posés
 - [ ] `bash`, `git`, `nas`, `desktop` — à poser
 
-## 10. Instantanés
+## 10. Instantanés — FAIT le 2026-09-04, complété le 2026-09-07
 
-- [ ] `snapper`, configurations `root` et `home`
-- [ ] **Convertir `/var/lib/libvirt/images` en sous-volume AVANT tout instantané**
-- [ ] `snapper-timeline.timer` et `snapper-cleanup.timer`
-- [ ] `grub-btrfs` — **hors dépôt Fedora**, origine et version à noter ici. Puis
-      `grub2-mkconfig` et **vérifier que des entrées d'instantané apparaissent vraiment**
-      au menu : la documentation dit que le `/boot` séparé est géré, elle ne prouve pas
-      que ça marche sur cette machine
-- [ ] Répéter **à froid** la porte de sortie manuelle (`e` au menu GRUB, puis
-      `rootflags=subvol=.snapshots/<N>/snapshot`), pas le jour où ça casse
+- [x] `snapper`, configurations `root` et `home` — 0.13.0, dépôt Fedora (2026-09-04)
+- [x] **Convertir `/var/lib/libvirt/images` en sous-volume AVANT tout instantané** —
+      sous-volume ID 259, `+C` posé à vide, `restorecon` → `virt_image_t` (2026-09-04)
+- [x] `snapper-timeline.timer` et `snapper-cleanup.timer` — les deux `enabled` + `active`.
+      Attention, `timeline` a `UnitFilePreset=disabled` : installer `snapper` ne suffit pas
+- [x] **`grub-btrfs` — hors dépôt Fedora, posé le 2026-09-07 depuis un COPR.**
+
+      ```bash
+      # sauvegarde AVANT : le %post du RPM lance grub2-mkconfig tout seul
+      sudo snapper -c root create -d "avant grub-btrfs"
+      sudo cp -a /boot/grub2/grub.cfg /root/grub.cfg.avant-grub-btrfs
+
+      sudo dnf copr enable pego-copr/grub-btrfs
+      sudo dnf install grub-btrfs          # tire inotify-tools
+      sudo systemctl enable --now grub-btrfsd
+      ```
+
+      **Origine et version :** COPR `pego-copr/grub-btrfs`, paquet
+      `grub-btrfs-4.14-1.fc44.noarch`, script en version `master-2026-05-31T15:55:08+00:00`.
+      Clé OpenPGP `3EEC594E5659BB518F800A200E5CA0BCBECCC126`.
+      **Ne pas prendre `kylegospo/grub-btrfs`** : ses chroots incluent `fedora-44` mais le
+      paquet est un instantané git de 2022 en release `.fc38`.
+
+      **Aucune configuration à écrire** — le `config` livré détecte Fedora, l'unité
+      surveille déjà `/.snapshots`. Vérifié avant installation avec `rpm -qlp`, `rpm -qRp`
+      et `rpm -qp --scripts` sur le RPM téléchargé.
+
+- [x] **Vérifier que ça marche vraiment, en DEUX mesures** (2026-09-07) — la documentation
+      dit que le `/boot` séparé est géré, elle ne prouve pas que ça marche sur cette machine :
+
+      ```bash
+      sudo sh -c 'grep -c menuentry /boot/grub2/grub-btrfs.cfg'          # attendu : > 0
+      sudo sh -c 'grep -n "41_snapshots" /boot/grub2/grub.cfg'           # attendu : un configfile
+      ```
+
+      La seconde est la moins évidente et la plus importante : sans elle, des entrées
+      peuvent exister dans un fichier qu'aucun `configfile` ne lit. Résultat obtenu :
+      11 entrées, et `grub.cfg:266-274` les source bien.
+
+- [ ] Répéter **à froid** la porte de sortie manuelle, pas le jour où ça casse. Mesuré sur
+      l'entrée vivante le 2026-09-07 (`sudo grubby --info=ALL`) :
+
+      ```
+      args="ro rootflags=subvol=root rd.luks.uuid=luks-680cb146-… rhgb quiet"
+      ```
+
+      Au menu GRUB, touche `e`, puis remplacer `subvol=root` par
+      **`subvol=root/.snapshots/<N>/snapshot`**.
+      *Le chemin a été corrigé le 2026-09-07* — il portait `.snapshots/<N>/snapshot`, sans
+      le préfixe `root/`, et n'aurait pas démarré. Démenti dans la fiche « Instantanés
+      Btrfs » de `poste/README.md`.
+
+      **À quoi s'attendre, documenté le 2026-09-07 — ne pas chercher une panne qui n'en
+      est pas une.** Le démarrage sera **dégradé** : `/var` et `/var/log` sont dans le
+      sous-volume `root`, donc dans l'instantané, donc en lecture seule. Le projet exige
+      `/var` en sous-volume séparé pour un démarrage propre (avertissement en tête de
+      `41_snapshots-btrfs`), sa parade overlayfs demande **dracut ≥ 109** alors que la
+      machine est en **108**, et l'issue #324 décrit ce cas exact toujours **non résolu**.
+      **Objectif du test : obtenir un shell suffisant pour lancer `snapper rollback`.** Pas
+      une session graphique
 
 ## 11. Reprise depuis l'ancien disque
 

@@ -448,6 +448,64 @@ jour même, tant que le détail est frais.
   puis `restorecon -R`, ce qui déclare la nature du répertoire au lieu de desserrer
   SELinux. Vaut sur toute distro avec du MAC, pour tout `make install`.
 
+- **Un chroot COPR listé n'est pas un paquet à jour.** Le 2026-09-07, deux COPR annonçaient
+  `fedora-44-x86_64` pour `grub-btrfs`. L'un livrait `4.14-1.fc44` construit en mars 2026,
+  l'autre un instantané git de **2022** en release **`.fc38`**, simplement recopié dans le
+  chroot récent. La page COPR affiche « fedora-44 » dans les deux cas. La question se pose
+  au paquet, pas à la liste des chroots :
+  `dnf repoquery --repofrompath="c,<url du chroot>" --repo=c --nogpgcheck --qf '%{name}-%{version}-%{release} (%{buildtime})\n'`
+  — ça répond sans rien installer. Même famille que « un dépôt activé n'est pas un paquet
+  installé ».
+
+- **Une sortie vide ne distingue pas un mauvais MOTIF d'une mauvaise CIBLE.** Le
+  2026-09-07, `grep -o 'rootflags=subvol=[^ ]*'` n'a rien renvoyé sur `grub-btrfs.cfg`, et
+  la conclusion tirée — « la note du dépôt se trompe sur la forme de l'option » — était
+  **fausse**. Il y a deux fichiers et deux formes : l'entrée BLS **vivante** porte
+  `rootflags=subvol=root` (`grubby --info=ALL`), tandis que le `grub-btrfs.cfg` **généré**
+  porte `rootflags=<flags de fstab>,subvol="…"`, grub-btrfs reconstruisant la ligne depuis
+  `GRUB_CMDLINE_LINUX`. Le motif était bon, la cible ne l'était pas. **Quand une mesure
+  revient vide : lire le contenu brut (`sed -n '1,60p'`), et vérifier qu'on interroge le
+  fichier dont parle la note.** Même famille que « une liste tronquée n'est pas l'état du
+  dépôt ».
+
+- **Un avertissement peut être en tête du fichier qu'on a déjà sur son disque.** Le
+  2026-09-07, la question « démarrer sur un instantané en lecture seule, ça marche ? » a été
+  laissée « non mesurée » après deux déductions sur le montage `rw`/`ro`. La réponse était
+  aux **lignes 11-12** de `/etc/grub.d/41_snapshots-btrfs`, déjà extrait en local :
+  « Warning : booting on read-only snapshots can be tricky », avec le lien vers la section
+  du README qui donne la condition — « `/var/log` or even `/var` must be on a separate
+  subvolume ». Le problème n'était pas le montage de la racine mais l'espace utilisateur.
+  **Avant de qualifier une question de « non mesurée », `grep -n -i 'warning\|caveat\|note'`
+  sur le fichier concerné.** Un fichier qu'on remplace se lit en entier — un fichier qu'on
+  *installe* aussi.
+
+- **Un RPM hors distribution se lit avant de s'installer — surtout ses SCRIPTLETS.** Le
+  `%post` du `grub-btrfs` du COPR lance `grub2-mkconfig -o /boot/grub2/grub.cfg` de
+  lui-même : `dnf install` réécrit donc le `grub.cfg` d'une machine UEFI + BLS sans le
+  demander. Le sachant, la copie de sauvegarde se prend **avant** l'installation ; sans le
+  savoir, elle ne se prend jamais. Séquence qui a servi, sans rien installer :
+  `dnf repoquery --location`, `curl -o`, puis `rpm -qlp` (contenu), `rpm -qRp`
+  (dépendances), `rpm -qp --scripts` (scriptlets), `rpm2cpio | cpio -idm` (lire les
+  fichiers de conf livrés). Bénéfice symétrique le même jour : ça a aussi montré qu'il n'y
+  avait **aucune** configuration à écrire, le paquet détectant Fedora tout seul.
+
+- **Une supposition gratuite peut être PESSIMISTE — ça reste une supposition.** Le
+  2026-09-07, `grub-btrfsd` était soupçonné de relancer un `grub2-mkconfig` complet (donc
+  `os-prober`) à chaque instantané. Trois lignes de `grep` dans `/usr/bin/grub-btrfsd`
+  disent l'inverse : il n'appelle que `/etc/grub.d/41_snapshots-btrfs` quand `grub.cfg`
+  contient déjà `snapshots-btrfs`. Se méfier de la déduction ne suffit pas si on ne se
+  méfie que dans un sens : **lire le code du composant coûte moins cher que le raisonnement
+  sur son comportement**, y compris quand le raisonnement annonce une mauvaise nouvelle.
+
+- **Une procédure de secours jamais exécutée n'est pas une procédure, c'est une intention.**
+  La porte de sortie manuelle du dépôt — éditer l'entrée GRUB pour démarrer sur un
+  instantané — portait un chemin **faux** : `.snapshots/<N>/snapshot` au lieu de
+  `root/.snapshots/<N>/snapshot`, `/` étant monté en `subvol=/root`. Elle n'aurait pas
+  démarré, et ça ne se serait su que le jour où elle sert. La case « répéter à froid »
+  existait et n'avait jamais été cochée. **Une procédure de secours se répète à froid, ou
+  elle ne compte pas** — corollaire de « une note de piège se re-teste », appliqué aux
+  gestes plutôt qu'aux faits.
+
 ## Hors périmètre — ne pas relancer le sujet
 
 **La gestion et la sauvegarde des secrets** (clé SSH du dépôt, base KeePassXC) est
@@ -601,9 +659,14 @@ cocher, pas une invitation à rouvrir le débat.
   chaque démarrage — matériel vérifié, `/dev/tpm0` présent et `has-tpm2` → `yes`.
   Le lab sur SSD USB reste non chiffré ; ça se décide itération par itération.
 
-- **`/boot` séparé : décision inversée le 2026-09-04, sur un démenti.** La note du même
-  jour exigeait `/boot` *dans* le sous-volume Btrfs pour `grub-btrfs`. La disposition
-  Fedora par défaut (`/boot` ext4 séparé) est finalement **conservée sciemment**, parce
-  que `grub-btrfs` gère le cas et qu'un `/boot` chiffré interdirait le déverrouillage
-  TPM — GRUB ne sait pas déchiffrer par TPM. Raisonnement complet dans
-  `installation/README.md`.
+- **`/boot` séparé : décision inversée le 2026-09-04, sur un démenti — et CONFIRMÉE par la
+  mesure le 2026-09-07.** La note du même jour exigeait `/boot` *dans* le sous-volume Btrfs
+  pour `grub-btrfs`. La disposition Fedora par défaut (`/boot` ext4 séparé) est finalement
+  **conservée sciemment**, parce que `grub-btrfs` gère le cas et qu'un `/boot` chiffré
+  interdirait le déverrouillage TPM — GRUB ne sait pas déchiffrer par TPM. Raisonnement
+  complet dans `installation/README.md`.
+  **Vérifié le 2026-09-07** : `grub-btrfs` installé détecte le `/boot` séparé sans qu'on
+  touche à `GRUB_BTRFS_OVERRIDE_BOOT_PARTITION_DETECTION`, et génère des entrées qui
+  prennent le noyau sur la partition `/boot` vivante (`search --fs-uuid` sur l'ext4, chemin
+  `/vmlinuz-…` relatif à cette partition). 11 entrées, sourcées par le `grub.cfg` principal.
+  La décision reprise ne reposait donc pas sur une seconde déduction : elle est mesurée.

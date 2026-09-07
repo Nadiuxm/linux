@@ -8,6 +8,190 @@ Ce journal est celui de la **construction du poste de travail**, distinct de
 
 ---
 
+## 2026-09-07 — `grub-btrfs` posé, et une note du dépôt qui n'aurait pas démarré
+
+Point de départ : « où en est la config, surtout niveau sauvegarde ? ». La réponse a
+d'abord été un état des lieux, et il a sorti deux choses que personne ne cherchait.
+
+### L'état des lieux avant de toucher à quoi que ce soit
+
+Le dépôt est propre et poussé — rien de perdu de ce côté. Mais **la dernière écriture
+datait du 4 septembre** : trois jours d'usage réel du poste Hyprland n'ont pas été
+journalisés, et la VM Windows annoncée « prévue le lundi 7 septembre » ne l'est pas encore.
+C'est exactement le risque que `CLAUDE.md` s'était donné en ouvrant l'axe du poste de
+référence — le confort du poste interne fait qu'on ne note plus.
+
+**Et `stow` n'est appliqué qu'à moitié sur ce poste.** Seuls `hypr` et `foot` sont posés.
+`~/.bashrc`, `~/.bash_profile` et `~/.gitconfig` sont encore **les fichiers par défaut de
+Fedora**, `~/.bashrc.d` n'existe pas — donc rien du paquet `bash` du dépôt n'est en
+service. `procedure.md:365` le disait sans marqueur de date, ce qui se lit comme un reste
+à faire ; c'en était bien un. Le paquet `nas`, lui, est déployé et l'unité tourne, mais la
+procédure ne le notait pas fait : **un `[ ]` peut aussi bien vouloir dire « pas fait » que
+« fait, pas noté »**, et la seule façon de trancher est de regarder la machine.
+
+À noter que l'écart va dans le bon sens : le dépôt a mieux que la machine. Rien n'est
+perdu, il y a juste un `stow` à passer.
+
+### Le choix d'obtention — un chroot COPR ne dit rien de l'âge du paquet
+
+`grub-btrfs` reste absent des dépôts Fedora (re-vérifié aujourd'hui, la note du 4 tient).
+Deux COPR annoncent `fedora-44-x86_64` dans leurs chroots actifs. Ça ressemble à deux
+candidats équivalents ; ce n'en est pas :
+
+| Voie | Ce que le paquet dit de lui-même |
+|---|---|
+| `pego-copr/grub-btrfs` | `grub-btrfs-4.14-1.fc44`, `buildtime` = 2 mars 2026 |
+| `kylegospo/grub-btrfs` | `grub-btrfs-0.0.git.275.8c61d8ef-1.**fc38**`, `buildtime` = 2 sept **2022** |
+
+Un vieux paquet recopié dans un chroot récent y apparaît comme disponible. La page COPR
+affiche « fedora-44 » dans les deux cas et ne raconte pas ça. La question exacte se pose au
+paquet, sans rien installer :
+
+```bash
+dnf repoquery --repofrompath="c,https://download.copr.fedorainfracloud.org/results/<owner>/grub-btrfs/fedora-44-x86_64/" \
+  --repo=c --nogpgcheck --qf '%{name}-%{version}-%{release} (%{buildtime})\n'
+```
+
+> **Leçon, déjà connue sous une autre forme.** « Un dépôt activé n'est pas un paquet
+> installé » a un cousin : **un chroot listé n'est pas un paquet à jour.** Dans les deux
+> cas l'outil rapporte un fait étroit — ici « ce chroot existe » — et c'est le lecteur qui
+> ajoute « donc le paquet est construit pour cette version ».
+
+La troisième voie, `make install` depuis le git upstream, a été écartée sans hésiter : le
+Makefile pose dans `$PREFIX=/usr` par défaut, mais tout écart y mène à `/usr/local`, et le
+greeter Noctalia a déjà coûté une séance de `semanage fcontext` pour cette raison. Un RPM
+laisse RPM étiqueter.
+
+### Ouvrir le RPM avant de l'installer — et ce que ça a évité
+
+`rpm -qlp`, `rpm -qRp`, `rpm -qp --scripts` puis `rpm2cpio` sur le fichier téléchargé,
+avant tout `dnf install`. Trois choses en sont sorties.
+
+Deux bonnes : le `config` livré **détecte Fedora tout seul**
+(`if [ -f /etc/fedora-release ]` → `/boot/grub2`, `grub2-mkconfig`, `grub2-script-check`),
+et l'unité systemd surveille déjà `/.snapshots`, le chemin exact de snapper ici.
+**Zéro ligne de configuration à écrire** — mais on ne pouvait pas le savoir sans regarder.
+
+Une qui demandait une précaution : **le `%post` lance `grub2-mkconfig -o /boot/grub2/grub.cfg`
+de lui-même.** Donc `dnf install` réécrit le `grub.cfg` d'une machine en UEFI + BLS sans
+rien demander. La copie de sauvegarde se prend **avant** l'installation. Sans avoir lu le
+scriptlet, on l'aurait prise après — c'est-à-dire jamais.
+
+### Vérifier en DEUX mesures, parce que la première seule ne prouve rien
+
+Le script l'annonce lui-même dans sa sortie : « `grub2-mkconfig` needs to run at least once
+to generate the snapshots (sub)menu entry in grub the main menu ».
+
+- `grep -c menuentry /boot/grub2/grub-btrfs.cfg` → **11** (1 en-tête + 5 instantanés × 2 noyaux) ;
+- `grep -n 41_snapshots /boot/grub2/grub.cfg` → **`grub.cfg:266-274`**, avec
+  `configfile "${prefix}/grub-btrfs.cfg"`.
+
+La première mesure sans la seconde aurait laissé croire à une installation réussie alors
+que les entrées auraient pu vivre dans un fichier qu'aucun `configfile` ne lit. **Un
+fichier bien rempli et un fichier bien rempli mais jamais lu se ressemblent beaucoup.**
+Même famille que « un paquet installé n'est pas un paquet utilisé ».
+
+### Le vrai gain de la journée : une note du dépôt était fausse
+
+`poste/README.md` décrivait la porte de sortie manuelle — éditer l'entrée GRUB avec `e` le
+jour où la racine ne boote plus. Elle disait : remplacer `rootflags=subvol=root` par
+`rootflags=subvol=.snapshots/<N>/snapshot`. **Le chemin était faux**, et c'est la sortie de
+grub-btrfs qui l'a démenti :
+
+```
+Found snapshot: 2026-09-07 08:58:24 | root/.snapshots/10/snapshot | single | avant grub-btrfs |
+```
+
+`/` est monté en `subvol=/root` et `.snapshots` est imbriqué dedans : depuis la racine
+Btrfs, c'est `root/.snapshots/<N>/snapshot`. Sans le préfixe, ça ne démarre pas.
+
+Cette note était le plan de secours *du jour où ça casse*. On ne l'aurait découvert qu'à ce
+moment-là. **Une procédure de secours qu'on n'a jamais exécutée n'est pas une procédure,
+c'est une intention** — la case « répéter à froid » existait dans `procedure.md` et n'a
+jamais été cochée. Elle reste ouverte.
+
+### Trois pièges de lecture dans ma propre vérification — dont deux de mes conclusions fausses
+
+**Mon `grep` a produit un faux négatif, et j'en ai tiré une conclusion fausse.** J'avais
+proposé `grep -o "rootflags=subvol=[^ ]*"` : il n'a **rien** renvoyé sur
+`grub-btrfs.cfg`, et j'en ai déduit que la note du dépôt avait aussi tort sur la *forme* de
+l'option, pas seulement sur le chemin. Faux. Il y a **deux fichiers, deux formes** :
+
+| Où | Forme |
+|---|---|
+| Entrée BLS vivante (`grubby --info=ALL`) | `ro rootflags=subvol=root` — `subvol` seul |
+| `grub-btrfs.cfg` généré | `rootflags=compress=zstd:1,…,subvol="root/…"` |
+
+Le motif était **valable pour l'entrée vivante**, je l'ai lancé sur le fichier généré. Ni
+motif mal formé, ni absence : **mauvaise cible.** La note du dépôt avait donc raison sur la
+forme, et une seule erreur — le chemin. Corollaire : quand une mesure revient vide, lire le
+contenu brut (`sed -n '1,60p'`), et vérifier qu'on interroge bien **le fichier dont parle
+la note**. Une sortie vide ne distingue pas un motif inadapté d'une cible inadaptée.
+
+**Et j'ai enchaîné avec une seconde déduction, aussi fausse.** Voyant `ro` absent des
+entrées générées, j'ai annoncé un risque de montage `rw` sur un sous-volume `ro`, et laissé
+la question « non mesurée ». Elle était **documentée depuis le début**, en tête du script
+livré (lignes 11-12 de `41_snapshots-btrfs`) : *« Warning : booting on read-only snapshots
+can be tricky »*, avec un lien vers la section du README qui donne la condition —
+« `/var/log` or even `/var` must be on a separate subvolume ». Le problème n'est pas le
+montage de la racine, il est en **espace utilisateur**. Détail complet dans la fiche de
+`poste/README.md` ; ce qu'il faut retenir ici, c'est la mécanique de l'erreur : **deux
+déductions plausibles enchaînées, alors que la réponse était dans les douze premières
+lignes d'un fichier déjà extrait sur mon disque.**
+
+> **Ce que ça coûte, dit franchement.** Julien a dû interrompre pour demander une recherche
+> claire plutôt qu'une nouvelle hypothèse. Trois erreurs de la journée ont la même forme :
+> un indice réel, un mécanisme plausible, et aucune lecture de ce que l'outil dit de
+> lui-même. C'est exactement le piège que `CLAUDE.md` porte déjà — « un mécanisme plausible
+> n'est pas une contrainte » — appliqué trois fois de suite sans être reconnu.
+
+**Et une supposition pessimiste s'est retournée aussi.** J'avais craint que `grub-btrfsd`
+relance un `grub2-mkconfig` complet à chaque instantané — donc un `os-prober` toutes les
+heures. Lecture de `/usr/bin/grub-btrfsd`, lignes 209-216 : il teste si `grub.cfg` contient
+`snapshots-btrfs`, et si oui n'appelle que `/etc/grub.d/41_snapshots-btrfs`, qui régénère
+le seul `grub-btrfs.cfg`. Le `grub2-mkconfig` complet reste réservé aux mises à jour de
+noyau. **Le code était lisible en trois lignes de `grep` ; la supposition, elle, était
+gratuite.** À noter que la déduction gratuite peut aussi être pessimiste — ce n'est pas
+seulement l'optimisme qui trompe.
+
+### Un effet de bord qui apparaîtra et disparaîtra tout seul
+
+Le `grub2-mkconfig` du `%post` a rapporté
+`Found Fedora Linux 44 (Workstation Edition) on /dev/sda3` : `os-prober` a trouvé le **SSD
+USB du lab** et lui a ajouté une entrée. Le menu GRUB du poste dépend donc de ce qui est
+branché au moment d'un `grub2-mkconfig` complet. Sans conséquence — mais consigné pour ne
+pas le prendre pour une anomalie le jour où on verra l'entrée bouger. C'est aussi la
+première fois que les deux axes du dépôt se croisent dans un même fichier de
+configuration : le lab et le poste de référence partagent le bootloader.
+
+### Ce que cette journée ne règle PAS
+
+`grub-btrfs` répare le scénario « la mise à jour casse, je reboote sur l'avant ». Il ne
+touche pas à l'autre moitié :
+
+- **Toujours aucune sauvegarde hors machine.** Les instantanés vivent sur le disque qu'ils
+  protègent. Le point ouvert du 4 septembre — le Windows de secours disparu — reste
+  entièrement ouvert. Un instantané amorçable n'est pas une copie.
+- **Toujours pas d'instantané automatique avant/après transaction**, faute de greffon
+  snapper pour dnf5. Le filet existe, il faut encore le tendre à la main.
+
+### Ce qui reste, et quand
+
+- **La porte de sortie manuelle à répéter à froid** — avec le chemin corrigé. C'est
+  maintenant la case la plus rentable du dépôt, puisqu'on vient de prouver que son contenu
+  pouvait être faux sans que personne le sache.
+- **Sauvegarde hors machine** — le NAS est monté et serait une destination. Non tranché.
+- `stow -n -v -t ~ bash git desktop` puis le vrai, pour combler l'écart constaté ce matin.
+- **VM Windows d'administration** — annoncée pour aujourd'hui, non commencée.
+- Retirer les deux lignes redondantes de `hyprland.lua`, après quelques jours d'`uwsm`.
+- Enrôlement TPM2 pour LUKS.
+
+### Temps passé
+
+<!-- TODO : à compléter. Toujours la donnée qui manque. -->
+
+---
+
 ## 2026-09-04 — Ouverture de l'axe : un poste de référence, et une décision reprise sur un démenti
 
 Journée de cadrage, pas de construction : aucun paquet installé au-delà de `git`.
