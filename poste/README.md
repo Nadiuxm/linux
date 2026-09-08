@@ -18,6 +18,15 @@ compare des distributions ; ce dossier décrit le poste de travail réel, celui 
 exister pour bosser. Rien de ce qui est listé ici ne doit être installé avant la capture
 de la baseline d'une nouvelle itération.
 
+> **La règle qui manquait, ajoutée le 2026-09-07 : une fiche décrit le poste ACTUEL.**
+> Ce qui décrit un état passé va dans `journal/` (si c'est propre à une itération) ou en
+> archive datée (si c'est une note de décision dépassée). Sans cette règle, rien n'éjectait
+> jamais rien : ce fichier a porté trois mois d'itération 01 — Sway, GDM, GNOME — au
+> présent, dans un document qui s'annonce « vivant ». Les mesures d'une itération close
+> restent citables, à condition d'être **datées et attribuées à leur itération** ; ce qui
+> ne l'est pas se lit comme l'état courant, et c'est exactement le mode de défaillance
+> principal du dépôt.
+
 Il alimente l'étape de remontée en charge de la procédure de bascule
 (`journal/README.md`) : après une réinstallation, ce fichier se déroule de haut en bas.
 
@@ -83,10 +92,22 @@ titre que KeePassXC l'est pour la baseline.
 
 ### Obtention
 
-Sur Fedora 44 Workstation, **la pile de virtualisation est déjà entièrement présente** —
-`qemu-kvm`, `libvirt` (démons modulaires, activés par socket), OVMF/UEFI, SPICE,
-`swtpm` (TPM 2.0 virtuel), `qemu-guest-agent`. Elle est tirée par `gnome-boxes`, livré
-dans l'image Workstation. Coût : **zéro manipulation**.
+**Deux réponses selon l'image, et l'écart est énorme — à ne pas confondre.**
+
+Sur Fedora 44 **Workstation** (itération 01), la pile de virtualisation est déjà
+entièrement présente — `qemu-kvm`, `libvirt` (démons modulaires, activés par socket),
+OVMF/UEFI, SPICE, `swtpm` (TPM 2.0 virtuel), `qemu-guest-agent`. Elle est tirée par
+`gnome-boxes`, livré dans l'image. Coût : **zéro manipulation**.
+
+Sur l'image **minimale** du poste de référence, rien de tout ça n'est là. Coût réel,
+mesuré le 2026-09-07 : **228 paquets**, la plus grosse transaction après l'installation
+elle-même (`installation/mesures.md` §8quater). Séquence exacte : `installation/procedure.md` §8quater.
+
+> **Le « coût zéro » ci-dessus est donc une propriété de l'ÉDITION de l'image, pas de la
+> distribution** — même piège que la mise à jour initiale (`installation/mesures.md` §3)
+> et que le coût d'obtention de Flatpak. Cette fiche a affirmé « coût zéro » tout court
+> pendant trois jours alors que le poste venait de payer 228 paquets : une comparaison
+> entre distros fondée là-dessus aurait comparé des images.
 
 Ne manquent que :
 
@@ -396,22 +417,32 @@ l'alternative native de QEMU, utile quand on n'utilise *pas* SPICE. Il a été r
    au domaine.** Il installe NetKVM, le ballooning, l'agent invité et l'affichage.
 2. **Jointure au domaine**, puis vérification Kerberos (`klist`, test par FQDN).
 
-### Placement dans la session Sway
+### Placement de la fenêtre dans la session
 
-Règle ajoutée à `dotfiles/sway/.config/sway/config` :
+**État sur le poste de référence, mesuré le 2026-09-07 : il n'y a AUCUNE règle de
+placement.** `dotfiles/hypr/.config/hypr/hyprland.lua` ne contient aucune règle de fenêtre
+— la console de la VM s'ouvre donc sur l'espace qui a le focus, où qu'il soit.
 
-```
-assign     [app_id="^virt-manager$"] workspace number 6
-for_window [app_id="^virt-manager$"] focus
-```
+> **Cette section décrivait une règle Sway jusqu'au 2026-09-07**
+> (`assign [app_id="^virt-manager$"] workspace number 6`), et la listait plus bas comme
+> « versionnée, revient seule avec `stow` ». Les deux étaient faux depuis le 2026-09-04 :
+> `sway` n'est pas posé sur ce poste, et il n'y a pas d'équivalent Hyprland. La règle
+> existe toujours dans `dotfiles/sway/`, qui ne sert plus qu'au lab.
 
-`assign` place la fenêtre sur l'espace 6 dès sa création, `for_window … focus` bascule
-l'affichage et le clavier dessus. **On désigne un espace, jamais une sortie** : l'espace 6
-est déjà affecté à DP-1 par le bloc `workspace … output`, donc une seule affectation fait
-foi et un changement de prise ne casse qu'un endroit.
+Ce qui reste vrai et transposable, indépendamment du compositeur :
 
-Le critère est `app_id` et non `class` : virt-manager est un client **Wayland natif**.
-Ne pas le deviner — le lire sur une fenêtre ouverte, `swaymsg -t get_tree`.
+- **On désigne un espace, jamais une sortie.** Les espaces sont déjà ancrés aux écrans par
+  `hl.workspace_rule` (9 règles, `installation/mesures.md` §4) : viser l'espace 6
+  suffit, et un changement de prise ne casse alors qu'un seul endroit.
+- **Le critère se lit sur une fenêtre ouverte, il ne se devine pas.** virt-manager est un
+  client Wayland natif. Sous Sway ça se lisait avec `swaymsg -t get_tree` ; l'équivalent
+  Hyprland est à relever une fois sur une fenêtre ouverte (`hyprctl clients`), et le nom
+  exact du champ est à constater, pas à supposer.
+
+- [ ] **Décider si une règle de placement est voulue ici.** Si oui, la syntaxe se prend
+      dans `/usr/share/hypr/stubs/hl.meta.lua` — l'API Lua générée, seule référence à jour,
+      hyprlang étant déprécié depuis la 0.55. Ne pas recopier un exemple de tutoriel en
+      ligne : ils sont tous en hyprlang.
 
 ### À refaire à la main après une bascule
 
@@ -451,8 +482,9 @@ Dans cet ordre — chaque étape conditionne la suivante :
 
 ### Versionné dans le dépôt
 
-- **La règle de placement Sway** (`dotfiles/sway/.config/sway/config`) — revient seule
-  avec `stow`.
+**Rien qui serve sur ce poste.** L'entrée de lanceur `dotfiles/desktop/…/vm-win11.desktop`
+existe mais n'est **pas posée** (`installation/mesures.md` §9) : la VM se retrouve
+par le lanceur Noctalia. La règle de placement de `dotfiles/sway/` ne s'applique qu'au lab.
 
 Ne le sont pas, et ne le seront pas : l'image disque, le NVRAM, les ISO. Le XML de
 définition pourrait l'être une fois la VM stabilisée — à décider alors, en vérifiant
@@ -576,7 +608,7 @@ un secret.
 > était présent et la case « dépôts tiers » du premier démarrage ajoutait Flathub — coût
 > nul, donc jamais noté. Sur l'image minimale du poste de référence, il a fallu le paquet,
 > le dépôt Flathub, **et** un réglage de `XDG_DATA_DIRS` sans lequel les applications sont
-> installées mais invisibles au lanceur (détail dans `installation/procedure.md`).
+> installées mais invisibles au lanceur (geste dans `installation/procedure.md` §8bis, mesure dans `mesures.md` §8).
 > **Donnée de comparaison à retenir :** « Flatpak est le seul canal identique partout » vaut
 > pour le *paquet applicatif*, pas pour le *coût d'obtention du système Flatpak lui-même* —
 > celui-là dépend de l'édition de la distro, pas seulement de la distro.
@@ -633,22 +665,38 @@ seule fois : les Flatpaks suivants qui partagent `org.freedesktop.Platform 25.08
 coûteront que leur propre taille. À ne pas présenter comme un défaut de Flatpak sans
 préciser ça — mais à garder en tête sur un SSD de 233 Go.
 
-### Intégration au bureau — ce qui a été vérifié sous Sway
+### Intégration au bureau — mesures de l'itération 01, sous Sway
+
+> **Toutes les mesures de cette section datent du 2026-09-03, sur l'itération 01
+> (GNOME/Sway, SSD USB).** Elles ne décrivent pas le poste de référence, où il n'y a ni
+> Sway ni GDM (`installation/mesures.md` §8sexies). Ce qui se transpose est indiqué au
+> cas par cas ; **ce qui reste à refaire sous Hyprland est en fin de section.**
 
 - **Wayland natif**, vérifié dans l'arbre Sway : `app_id = com.mattermost.Desktop`,
   aucune `class` X11. L'application ne passe pas par XWayland alors que le manifeste
   demande les deux permissions. Aucun défaut d'affichage constaté à l'usage.
 - **L'icône de zone de notification fonctionne**, et le repli dans la barre est utilisable
   comme mode de travail normal. Le Flatpak demande `org.kde.StatusNotifierWatcher` ; ce
-  service est enregistré sur le bus de session par **Noctalia**, pas par Sway
-  (`busctl --user list | grep StatusNotifier`). Point pour l'axe « bureaux » : un WM
+  service est enregistré sur le bus de session par **Noctalia**, pas par le compositeur
+  (`busctl --user list | grep StatusNotifier`). **Se transpose tel quel** : Noctalia est le
+  shell des deux côtés, seul le compositeur a changé. Point pour l'axe « bureaux » : un WM
   tuilant nu ne fournit aucun hôte de tray, c'est le shell qui l'apporte.
 - **Le partage d'écran est prévu pour Wayland.** Le lanceur passe
   `--enable-features=WebRTCPipeWireCapturer`, donc capture via PipeWire et portails plutôt
   que X11. À confirmer en usage réel — le partage d'écran est justement une des
   « frictions Wayland » listées dans l'itération 01.
-- **Accès au trousseau** : le Flatpak demande `org.freedesktop.secrets`, déjà fonctionnel
-  sous Sway (activé par D-Bus, déverrouillé par PAM au login GDM).
+- **Accès au trousseau** : le Flatpak demande `org.freedesktop.secrets`. Fonctionnel des
+  deux côtés, **mais pas par le même mécanisme** — et c'est la seule ligne de cette section
+  qui change vraiment de poste à poste : à l'itération 01 le trousseau était déverrouillé
+  par PAM au login **GDM** ; sur le poste de référence il n'y a plus de GDM, c'est
+  **greetd + `pam_gnome_keyring`** (`installation/mesures.md` §7).
+
+#### Ce qui reste à refaire sous Hyprland
+
+- [ ] Reprendre les trois premières mesures ci-dessus sur le poste (natif ou XWayland,
+      tray, partage d'écran). Rien ne dit qu'elles sont fausses ; elles ne sont simplement
+      **pas mesurées ici**, et le partage d'écran dépend du portail, qui a changé
+      (`xdg-desktop-portal-hyprland` au lieu de `-wlr`).
 
 #### La méthode, pour le prochain outil
 
@@ -657,12 +705,16 @@ rien, beaucoup d'applications Electron retombant sur XWayland faute de
 `--ozone-platform=wayland`. Seule la fenêtre ouverte répond :
 
 ```bash
-swaymsg -t get_tree | grep -E '"(app_id|class)"'
+swaymsg  -t get_tree | grep -E '"(app_id|class)"'   # itération 01 (Sway)
+hyprctl clients                                     # poste de référence — champ à constater
 ```
 
-`app_id` renseigné = client Wayland natif ; `class` seul = XWayland. Même méthode que pour
-virt-manager. À refaire pour chaque application ajoutée au poste — une permission déclarée
-dit ce qui est *possible*, pas ce qui est *utilisé*.
+`app_id` renseigné = client Wayland natif ; `class` seul = XWayland. **La commande Hyprland
+n'a pas encore servi ici : relever le nom exact du champ sur une fenêtre ouverte plutôt que
+de le supposer** — le dépôt a déjà payé une commande écrite de mémoire sur ce logiciel
+(`CLAUDE.md`, piège `hyprctl dispatch`). Même méthode que pour virt-manager. À refaire pour
+chaque application ajoutée au poste — une permission déclarée dit ce qui est *possible*,
+pas ce qui est *utilisé*.
 
 ### Permissions déclarées
 
@@ -890,7 +942,7 @@ n'est donc pas un pis-aller : c'est la bonne disposition.
 **Attention à l'obtention : `grub-btrfs` n'est pas dans les dépôts Fedora** — vérifié le
 2026-09-04, re-vérifié le 2026-09-07, `dnf` ne connaît aucun paquet de ce nom. C'est un
 composant hors dépôt de plus, à traiter comme tel (origine et version notées dans
-`installation/procedure.md`).
+`installation/mesures.md` §10).
 
 **Trois voies, et une seule tient — comparaison du 2026-09-07.**
 
@@ -1168,7 +1220,7 @@ partage le même `org.freedesktop.Platform 25.08` et ne coûte que sa propre tai
 > **RÉSOLU sur le poste de référence le 2026-09-07** — les deux applications y sont en
 > portée **`system`**. L'écart décrit ci-dessous est celui de l'itération 01, gardé parce
 > qu'il explique pourquoi la colonne `installation` a été ajoutée à `flatpaks.txt`.
-> Réinstallation notée dans `installation/procedure.md`, section 8.
+> Réinstallation notée dans `installation/mesures.md` §8.
 
 ```
 com.mattermost.Desktop   system   -> /var/lib/flatpak          (tous les comptes)
@@ -1204,7 +1256,9 @@ QT_QPA_PLATFORM=xcb
 WinBox passe donc par **XWayland**, là où Mattermost est un client Wayland natif. C'est un
 point à surveiller pour l'axe « bureaux » : mise à l'échelle, presse-papiers et capture
 d'écran suivent des chemins différents sous XWayland. À noter si une friction apparaît —
-et à ne pas imputer à Sway sans avoir vérifié quel chemin l'application emprunte.
+et **à ne pas imputer au compositeur sans avoir vérifié quel chemin l'application
+emprunte**. Sur le poste de référence, XWayland est fourni par `Xwayland` seul :
+`xorg-x11-server-Xorg` n'est pas installé (`installation/mesures.md` §8sexies).
 
 ### Permissions déclarées
 
@@ -1233,151 +1287,9 @@ accès à des équipements réseau.
 
 ---
 
-## Cible pour l'installation finale — réflexion du 2026-09-03
+## Archives — ce qui a quitté ce fichier
 
-> **CETTE NOTE A ÉTÉ DÉPASSÉE PAR LES FAITS le 2026-09-04.** L'installation a eu lieu, et
-> les décisions qu'elle instruisait sont désormais prises et consignées dans
-> **`installation/README.md`**, qui fait foi. Ce qui suit est conservé pour son travail de
-> mesure (dépendances de Nautilus, lignes PAM de GDM, absence d'Hyprland des dépôts), pas
-> pour ses conclusions.
->
-> Trois points ont changé : « installation finale » est devenu **poste de référence** (une
-> réinstallation est envisagée, donc la reproductibilité est une exigence) ; la contrainte
-> sur `/boot` était **fausse** ; et le greeter retenu est **le greeter Noctalia**, dont les
-> conditions réelles ont été vérifiées le 2026-09-04 — `greetd` reste obligatoire, le
-> greeter est un projet séparé à compiler, et il embarque son propre compositeur wlroots.
->
-> **Ce n'est pas une fiche d'outil, c'est une note de décision.** Elle sert à ne pas
-> refaire ce raisonnement dans plusieurs semaines, un installateur ouvert devant soi.
-
-### Le contexte, à ne pas confondre
-
-Cette machine est un **lab** : on y empile Sway, Noctalia, Hyprland peut-être, pour les
-éprouver côte à côte. L'accumulation y est volontaire et ne viole aucun protocole.
-
-**L'installation finale est un autre moment** : une seule pile, aucune brique inutile.
-Ce qui suit décrit cette cible-là. Le protocole de baseline reste inchangé pour comparer
-les distributions entre elles.
-
-### Ce dont la cible dépend réellement
-
-L'itération 01 a suivi le chemin GNOME complet → Sway → Noctalia. La question posée est :
-peut-on aller directement à la cible ? La réponse est oui, et la liste est courte.
-
-| Composant | Statut pour la cible |
-|---|---|
-| **GNOME Shell, Mutter, gnome-session, Logiciels, Évince…** | **Inutiles.** Rien n'en dépend une fois Sway et Noctalia en place |
-| `gnome-keyring`, `gvfs`, `gcr`, `xdg-desktop-portal-*` | **Gardés** — ce n'est pas « GNOME le bureau », c'est de la plomberie freedesktop que la plupart des environnements utilisent |
-| **`gdm`** | **Remplaçable.** Voir ci-dessous |
-| **`nautilus`** | **Gardé** — décision du 2026-09-03, il ne gêne pas. Vérifié installable seul |
-
-### GDM n'est pas obligatoire — ce sont trois lignes PAM
-
-Le journal du 1er septembre notait que `gnome-keyring` est déverrouillé « par PAM au login
-GDM ». Exact, mais l'important n'est pas GDM : ce sont les lignes de sa pile PAM.
-
-```
-/etc/pam.d/gdm-password
-  auth      optional  pam_gnome_keyring.so
-  password  optional  pam_gnome_keyring.so use_authtok
-  session   optional  pam_gnome_keyring.so auto_start
-```
-
-**N'importe quel greeter peut les porter.** `greetd` (0.10.3, dépôt Fedora) a sa propre
-pile PAM à compléter, et `gtkgreet`/`tuigreet` sont également packagés.
-
-Corollaire : GDM sort de la liste des dépendances GNOME incontournables. Ce qui restait le
-principal argument pour garder un bout de GNOME tombe.
-
-### Le greeter Noctalia existe, mais pas dans le paquet Fedora
-
-L'IPC le nomme explicitement :
-
-```
-noctalia msg greeter-sync
-  → « Sync wallpaper, colors, and monitor layout to Noctalia Greeter »
-```
-
-Mais `rpm -ql noctalia` ne contient aucun fichier de greeter et `dnf search noctalia` ne
-retourne rien d'autre. **À récupérer en amont** — vraisemblablement une configuration
-Quickshell lancée par `greetd`. **À vérifier avant de compter dessus.**
-
-### Nautilus s'installe seul — vérifié
-
-C'était la dernière vraie application GNOME de la liste. Mesure de ses dépendances :
-
-```
-89 exigences : glib2, gtk4, libadwaita, gvfs, gnome-autoar,
-               gsettings-desktop-schemas, libcairo, libX11 …
-gnome-shell / mutter / gnome-session / gdm  ->  0 occurrence
-```
-
-`gnome-autoar` est une bibliothèque d'archives, `gsettings-desktop-schemas` un jeu de
-définitions : **des bibliothèques, pas le bureau**. Nautilus est donc installable seul,
-et il est **gardé** dans la cible.
-
-### La piste qui le rendrait superflu — à tester, pas acquise
-
-Nautilus n'est en réalité nécessaire que pour **une seule opération** : écrire le mot de
-passe du NAS dans le trousseau, `gio mount` ne sachant pas le faire (piège documenté le
-1er septembre).
-
-**`secret-tool store`** (paquet `libsecret`) sait écrire dans le trousseau. Reste à
-vérifier si `gvfsd` retrouve ensuite le secret sous le bon schéma et les bons attributs.
-Si oui, la cible n'a plus **aucune** application GNOME. **Rien de tout cela n'est
-vérifié** — c'est une piste, notée pour ne pas être réinventée.
-
-### Hyprland : friction à chronométrer
-
-Absent des dépôts Fedora — seuls `hyprcursor` (une bibliothèque) et `hypre` (algèbre
-linéaire, sans rapport) y figurent. Il faudra un **COPR**. À noter comme donnée de
-comparaison : Sway est dans les dépôts officiels **avec un groupe dédié**, Hyprland non.
-
-> **CHRONOMÉTRÉE, et la facture n'est pas où on l'attendait.** Relevé le 2026-09-07 :
-> le COPR `dtutila/hyprland` fournit **13 paquets**, dont il **remplace** toutes les
-> bibliothèques `hypr*` de Fedora (`hyprgraphics` 0.5.1 contre 0.1.5, `hyprutils` 0.14.1
-> contre 0.7.1) et en ajoute deux que Fedora n'a pas (`hyprwire`, `hyprtoolkit`).
->
-> **La friction réelle n'a pas été l'obtention — une commande — mais le format de
-> configuration.** hyprlang est déprécié depuis la 0.55 au profit d'une API Lua, et tous
-> les tutoriels en ligne sont encore en hyprlang : 425 lignes écrites pour rien le
-> 2026-09-04. Puis `code:NN`, qui marche en hyprlang, échoue **silencieusement** en Lua.
-> Un logiciel tiré d'un COPR est justement celui qui bouge vite, et c'est ça qui coûte,
-> pas le dépôt supplémentaire.
->
-> **Coût récurrent à retenir pour la comparaison :** `dnf upgrade` doit **toujours** voir
-> ce COPR activé, sinon Fedora tente de redescendre les bibliothèques `hypr*`. Sway,
-> étant dans les dépôts officiels, n'imposait rien de tel. C'est une vraie différence
-> entre les deux, et elle se paiera à chaque mise à jour.
-
-### Ce qui se décide à l'installation, et nulle part ailleurs
-
-Deux choses ne se rattrapent pas après coup et tombent au même moment :
-
-1. **Le chiffrement du disque** — point ouvert de `CLAUDE.md`, rendu plus pressant par le
-   fait que le système vit sur un SSD **externe**, qui se débranche.
-2. **Le partitionnement** — Btrfs conditionne toute la fiche « Instantanés ».
-   **L'emplacement de `/boot`, en revanche, n'est PAS une contrainte** : la version
-   antérieure de ce point l'affirmait sur une prémisse fausse (voir la fiche
-   « Instantanés Btrfs », corrigée le 2026-09-04). `grub-btrfs` gère un `/boot` séparé,
-   et un `/boot` chiffré coûterait le déverrouillage TPM. Le défaut Fedora convient.
-
-Et une troisième, presque aussi difficile à rattraper : **le choix de l'image**
-(Workstation complète, Everything netinstall, spin) détermine ce qu'il faudra désinstaller
-ou composer.
-
-### Navigateur
-
-Passage de Firefox à **Chromium** (transaction 13, le 2026-09-03), par habitude — pas
-pour une contrainte technique. Désinstallation de Firefox **envisagée, pas décidée**.
-
-> **Question devenue sans objet sur le poste de référence.** Vérifié le 2026-09-07 :
-> `firefox` **n'est pas installé** — l'image minimale ne l'a jamais posé, il n'y a donc
-> rien à désinstaller. `chromium` 151.0.7922.173 tourne en `--ozone-platform=wayland`,
-> nativement. La décision qui traînait depuis le 2026-09-03 a été tranchée par le choix de
-> l'image, pas par une décision : c'est un cas où **changer de méthode a réglé une question
-> qu'on croyait devoir arbitrer.** Reste valable pour le lab, où Firefox est présent.
-
-À retenir pour la bascule : un navigateur porte sessions, extensions, marque-pages et mots
-de passe enregistrés. **Aucun `stow` ne restaure ça** et rien n'est versionné ici — c'est
-à traiter au même titre que les autres secrets, hors dépôt.
+- **« Cible pour l'installation finale », note du 2026-09-03** →
+  [`installation/archive-cible-2026-09-03.md`](../installation/archive-cible-2026-09-03.md).
+  Note de décision antérieure à l'installation, dépassée par les faits le 2026-09-04. Ses
+  mesures gardent leur valeur, ses conclusions non. Déplacée le 2026-09-07.

@@ -1,35 +1,75 @@
-# Procédure — poste de référence, rejouable
+# Procédure — rebâtir ce poste, dans l'ordre
 
-> **But : rebâtir ce poste sans rien réinventer.** Ce fichier n'explique pas les choix
-> (c'est `README.md`) et ne raconte pas la construction (c'est `journal.md`). Il est la
-> **séquence**, dans l'ordre, avec les versions exactes.
+> **Ce fichier ne contient que des GESTES.** Il se déroule de haut en bas sur une machine
+> nue et n'explique rien : chaque étape renvoie à `mesures.md`, **même numéro de section
+> principale (§1 à §12)**, pour le pourquoi, les versions exactes et ce qui a été appris.
+> Les sous-sections (`8bis`, `8ter`…) ont divergé entre les deux fichiers : les renvois les
+> nomment explicitement.
 >
-> **Règle de tenue :** un geste posé sur la machine s'écrit ici le jour même, ou il sera
+> **Le test de ce fichier :** *un lecteur qui ne lit que les blocs de code obtient-il la
+> machine ?* Si la réponse est non, c'est un défaut de ce fichier, pas du lecteur.
+>
+> | Fichier | Contenu |
+> |---|---|
+> | **`procedure.md`** (ici) | les gestes, à l'impératif. **Seule source de ce qu'on tape.** |
+> | `mesures.md` | les constats, versions, tableaux de mesure, et ce que chaque étape a appris |
+> | `README.md` | les décisions et leurs raisons |
+> | `journal.md` | le récit daté de la construction |
+>
+> **Règle de tenue :** un geste posé sur ce poste s'écrit **ici** le jour même, ou il sera
 > perdu. Trois destinations possibles pour un geste — ce fichier, `dotfiles/`, ou `poste/`.
-> Rien d'autre.
+> Rien d'autre. Un geste posé dans `/etc` ou `/var` n'a qu'une destination possible : ici.
+>
+> Découpé de l'ancien `procedure.md` le 2026-09-08, qui mélangeait les deux et était devenu
+> un registre de constats plutôt qu'un mode opératoire.
 
-**État : rejouable pour l'essentiel depuis le 2026-09-07.** Les étapes non cochées ne sont
-pas encore faites, et tant qu'elles ne le sont pas, ce fichier n'est pas rejouable.
-
-> **Toutes les cases ont été confrontées à la machine le 2026-09-07** (audit complet :
-> `dnf history`, `rpm -q --qf '%{installtime:date}'`, `systemctl`, `cryptsetup luksDump`,
-> `hyprctl`, `virsh`, `loginctl`, `semanage fcontext -l -C`). Neuf cases se sont révélées
-> **faites sans avoir été notées** — c'est précisément le piège signalé en §9. Une case
-> vide ne prouve rien ; seule la machine tranche.
+**Convention :** `→` = la vérification qui dit que l'étape a marché.
+`⚠ ORDRE` = étape dont la position est contrainte, avec ce qui casse si on l'inverse.
+`✎ INVENTÉ` = geste non attesté dans le dépôt, reconstitué. À confirmer au premier passage.
 
 ---
 
-## 1. Installation de base — FAIT le 2026-09-04
+## Étape 0 — prérequis externes, à réunir AVANT de démarrer l'ISO
 
-| Paramètre | Valeur retenue |
+Rien de ce qui suit n'est dans le dépôt, et c'est volontaire pour les secrets
+(`CLAUDE.md`, « Hors périmètre »). L'étape existe parce que le blocage se découvre sinon
+à l'étape 2, machine déjà formatée.
+
+| # | À réunir | Bloque à |
+|---|---|---|
+| 1 | ISO **Fedora 44 Everything netinstall** + clé USB | §1 |
+| 2 | **Phrase de passe LUKS** (nouvelle, choisie) | §1 |
+| 3 | Mot de passe du compte, **et le compte doit être administrateur** | §1 |
+| 4 | **Clé SSH `gitlinux`** (deploy key du dépôt) — ou de quoi en créer une et l'ajouter sur GitHub | **§2 — sans elle, pas de dépôt, donc pas de procédure** |
+| 5 | **RPM RustDesk régénéré** depuis la console de l'entreprise | §8ter |
+| 6 | **Sauvegarde de la VM** : `win11.qcow2`, `win11_VARS.qcow2`, le XML | §11 |
+| 7 | ISO **`virtio-win`** + ISO **Windows 11** + licence — seulement si 6 manque | §11 |
+| 8 | **Mot de passe SMB** du partage NAS | §7 |
+| 9 | Identifiants de domaine pour la VM, URL Mattermost, accès MikroTik | §11, §8 |
+| 10 | **Renseignements réseau employeur** : la nouvelle carte a une **nouvelle MAC** — à déclarer ? 802.1X ? seconde machine sur le port ? | §8quater |
+| 11 | Matériel branché **à l'identique** : P2425H → HDMI-A-2, P2725DE → DP-3, P2414H → DP-1 | §4, §6 |
+
+> **Le point 11 n'est pas du confort.** L'ancrage des espaces et les positions d'écran se
+> font **par nom de sortie**, donc par port. Un câble déplacé et deux fichiers sont faux.
+> Détail : `mesures.md` §4, « Écrans ».
+
+---
+
+## 1. Installation de base
+
+Dans l'installateur, à saisir tel quel :
+
+| Paramètre | Valeur |
 |---|---|
-| Image | Fedora 44, **Everything netinstall** — minimale, aucun bureau |
-| Cible | **NVMe interne** (KIOXIA BG6 256 Go), `nvme0n1` |
+| Image | Fedora 44 **Everything netinstall** |
+| Cible | **NVMe interne**, `nvme0n1` |
 | Chiffrement | **LUKS** sur `nvme0n1p3` |
 | Système de fichiers | **Btrfs**, sous-volumes `root` et `home`, `compress=zstd:1` |
 | Cible systemd | `multi-user.target` |
+| Compte | `jzielona`, **administrateur** |
+| Langue / clavier / fuseau | ✎ INVENTÉ — `fr_FR.UTF-8`, AZERTY, `Europe/Paris` |
 
-Partitionnement obtenu, **conservé sciemment** (raison dans `README.md`) :
+Partitionnement à obtenir — **le `/boot` séparé est voulu**, raison dans `README.md` :
 
 ```
 nvme0n1p1   600 Mo  vfat   /boot/efi
@@ -37,54 +77,27 @@ nvme0n1p2     2 Go  ext4   /boot          <- séparé, et c'est voulu
 nvme0n1p3   236 Go  LUKS -> btrfs         /  (subvol=root)  et  /home  (subvol=home)
 ```
 
-Résultat : **53 paquets explicites, 419 au total.** (Pour comparaison, au 2026-09-07 :
-**101 explicites, 1235 au total** — l'écart est mesuré dans `etats/2026-09-07/`.)
+→ `lsblk -f` reproduit le tableau ci-dessus
+→ `bootctl status` → `Secure Boot: enabled (deployed)`
 
-**Secure Boot est actif, et ce n'est pas neutre.** `bootctl status` →
-`Secure Boot: enabled (deployed)`, `shim-x64` 16.1-5 installé, amorçage par
-`\EFI\fedora\shimx64.efi`. Conséquence à connaître avant d'en avoir besoin : **un module
-noyau non signé ne se chargera pas** (pilote propriétaire, DKMS maison). Rien sur ce poste
-n'en dépend aujourd'hui ; le jour où ça arrivera, le symptôme sera un module « introuvable »
-sans autre explication.
+> ✎ **Le fuseau et la disposition console ne sont écrits nulle part dans le dépôt.**
+> Un fuseau faux casse Kerberos dans la VM (< 5 min d'écart exigé). Et
+> `/etc/X11/xorg.conf.d/00-keyboard.conf` porte `XkbVariant "oss"` sur ce poste, donc la
+> variante réellement choisie au premier écran n'est pas connue. À trancher une fois, puis
+> à écrire ici.
 
-- [x] Installation
-- [ ] **Enrôler le TPM2 sur LUKS** — `systemd-cryptenroll`. Matériel vérifié :
-      `/dev/tpm0`, `/dev/tpmrm0`, `systemd-analyze has-tpm2` → `yes` (+firmware, +driver,
-      +system, +subsystem, +libraries). **Toujours pas fait au 2026-09-07** : le `luksDump`
-      montre `Tokens:` **vide** et un seul emplacement de clé. Sans ça, phrase de passe à
-      chaque démarrage.
-- [x] **Version LUKS relevée le 2026-09-07** — `sudo cryptsetup luksDump /dev/nvme0n1p3` :
+- [ ] **Enrôler le TPM2 sur LUKS** — `systemd-cryptenroll`. **Jamais fait.** Sans ça,
+      phrase de passe à chaque démarrage, et **aucune seconde voie d'ouverture du disque**
+      (un seul emplacement de clé). Matériel vérifié : `mesures.md` §1.
 
-      | | |
-      |---|---|
-      | Version | **LUKS2** |
-      | UUID | `680cb146-2018-49f5-b166-c4ecec3dfe26` |
-      | Chiffrement | `aes-xts-plain64`, clé de **512 bits**, secteur 512 o |
-      | Dérivation | `argon2id`, coût 8, mémoire 1 Go, 4 fils |
-      | Emplacements de clé | **1 seul** (0), priorité normale |
-      | Jetons | **aucun** → pas de TPM2, pas de FIDO2, pas de clé de secours |
-      | Drapeaux | `allow-discards` |
-
-      `/etc/crypttab` :
-      `luks-680cb146-… UUID=680cb146-… none discard,x-initrd.attach`.
-      Pas de `crypttab.initramfs`.
-
-      **Le seul emplacement de clé est un point de fragilité à connaître.** Perdre la
-      phrase de passe, c'est perdre le disque : il n'y a aucune seconde voie d'ouverture.
-      Enrôler le TPM2 en ajoutera une — mais liée à la machine, donc pas une sauvegarde.
-
-## 2. Accès au dépôt — FAIT le 2026-09-04
+## 2. Accès au dépôt
 
 ```bash
 sudo dnf install git
-
-git config --global user.name  "jzielona"
-git config --global user.email "zielonajulien@gmail.com"
 ```
 
 **La clé du dépôt est une deploy key nommée `gitlinux`**, donc `ssh` ne la propose pas
-spontanément (il n'essaie que `id_ed25519`, `id_rsa`…). Sans le bloc ci-dessous, le clone
-échoue sur `Permission denied (publickey)` :
+spontanément. Sans ce bloc, le clone échoue sur `Permission denied (publickey)` :
 
 ```
 # ~/.ssh/config
@@ -95,230 +108,113 @@ Host github.com
     IdentitiesOnly yes
 ```
 
-Clé d'hôte GitHub à ajouter **après comparaison** avec les empreintes publiées sur
+Clé d'hôte GitHub, **après comparaison** avec les empreintes publiées sur
 `https://api.github.com/meta` — un `ssh-keyscan` seul ne vérifie rien :
 
 ```bash
 ssh-keyscan -t rsa,ecdsa,ed25519 github.com > /tmp/gh
 ssh-keygen -lf /tmp/gh          # comparer aux 3 empreintes de api.github.com/meta
 cat /tmp/gh >> ~/.ssh/known_hosts
-```
 
-Puis :
-
-```bash
 git clone git@github.com:Nadiuxm/linux.git ~/linux
 ```
 
-- [x] `git`, identité, `~/.ssh/config`, clone
+→ `git ls-remote` aboutit **dans un vrai terminal** (pas dans celui d'un agent)
 
-## 3. Mise à jour complète — SANS OBJET sur une netinstall, vérifié le 2026-09-07
+> ⚠ **ORDRE — ne PAS taper `git config --global` ici.** C'est ce qui crée un `~/.gitconfig`
+> réel, et donc le conflit qui fait **refuser `stow git`** en §9. L'identité vient du
+> paquet `git` de `dotfiles/`. L'ancienne procédure faisait les deux et fabriquait
+> elle-même le conflit qu'elle documentait quinze sections plus bas.
 
-Cette étape venait du protocole de baseline du lab, où l'on part d'une image ISO figée.
-**Elle n'a jamais été exécutée ici, et c'est normal :** `dnf history` ne contient aucun
-`upgrade`, la transaction 1 (l'installation elle-même) a posé un noyau
-`7.1.13-200.fc44.x86_64` **construit le 2026-09-02**, soit deux jours avant l'installation.
-Une image *netinstall* télécharge les paquets depuis `fedora` + `updates` au moment de
-l'installation : le système naît à jour.
+## 3. Mise à jour complète — SANS OBJET
 
-**La leçon est transposable :** le coût de la mise à jour initiale n'est pas une propriété
-de la distribution, c'est une propriété de **l'édition de l'image**. Une comparaison entre
-distros qui chronomètre ce temps compare des images, pas des distros — même piège que le
-« coût d'obtention de Flatpak » relevé en §8.
-
-- [x] Noyau obtenu : `7.1.13-200.fc44.x86_64` (2026-09-02), inchangé au 2026-09-07
-- [ ] `sudo dnf upgrade` — à faire *périodiquement*, pas comme étape d'installation.
-      **Toujours avec le COPR `dtutila/hyprland` activé**, sinon Fedora tentera de
-      redescendre les bibliothèques `hypr*` (voir §4)
+Une netinstall naît à jour : les paquets viennent de `fedora` + `updates` au moment de
+l'installation. Aucun geste. Détail et leçon transposable : `mesures.md` §3.
 
 ## 4. Compositeur — Hyprland
 
-Absent des dépôts Fedora ; **un COPR est nécessaire**. Fedora fournit les bibliothèques
-(`hyprutils`, `hyprlang` 0.6.4, `hyprgraphics` 0.1.5, `hyprcursor` 0.1.11,
-`hyprland-protocols` 0.4.0) mais pas le compositeur.
+### 4.0 Pilotes graphiques — EN PREMIER
 
-- [x] COPR retenu : **`dtutila/hyprland`**, `hyprland` 0.56.2-3.fc44 (2026-09-04).
-      `solopasha/hyprland`, le COPR de référence, n'a **aucun chroot fedora-44**.
-- [x] Relevé des versions : `scripts/versions-01.txt`
-- [x] **La commande exacte, relevée dans `dnf history` le 2026-09-07** — elle fait plus
-      que le compositeur, et c'est par elle que `stow`, `keepassxc`, `foot`, `noctalia`
-      et (par dépendance faible) `uwsm` sont arrivés :
+```bash
+sudo dnf install mesa-dri-drivers
+```
 
-      ```bash
-      sudo dnf copr enable dtutila/hyprland
-      sudo dnf install -y hyprland xdg-desktop-portal-hyprland \
-                          xdg-desktop-portal-gtk noctalia foot stow keepassxc
-      ```
+⚠ **ORDRE — avant tout lancement du compositeur.** Une image minimale n'installe **aucun**
+pilote graphique : sans ça **Hyprland ne démarre pas du tout**, et le symptôme ne le
+désigne pas.
 
-      **317 paquets.** `keepassxc` et `stow` sont là parce qu'ils sont le protocole de
-      baseline du lab, pas parce qu'Hyprland en a besoin.
+### 4.1 Le COPR et la transaction
 
-- [x] **Les 13 paquets réellement fournis par le COPR au 2026-09-07** — la liste compte,
-      c'est elle qu'un `dnf upgrade` sans le COPR essaierait de redescendre :
+```bash
+sudo dnf copr enable dtutila/hyprland
+sudo dnf install -y hyprland hyprland-guiutils xdg-desktop-portal-hyprland \
+                    xdg-desktop-portal-gtk noctalia foot stow keepassxc
+```
 
-      | Paquet | Version | Raison |
-      |---|---|---|
-      | `hyprland` | 0.56.2-3.fc44 | User |
-      | `hyprland-guiutils` | 0.2.2-2.fc44 | User |
-      | `xdg-desktop-portal-hyprland` | 1.4.1-1.fc44 | User |
-      | `aquamarine` | 0.15.0-2.fc44 | dépendance |
-      | `hyprcursor` | 0.1.13-2.fc44 | dépendance |
-      | `hyprgraphics` | 0.5.1-2.fc44 | dépendance |
-      | `hyprlang` | 0.6.8-1.fc44 | dépendance |
-      | `hyprtoolkit` | 0.5.4-3.fc44 | dépendance |
-      | `hyprutils` | 0.14.1-2.fc44 | dépendance |
-      | `hyprwire` | 0.3.1-2.fc44 | dépendance |
-      | `lua55` | 5.5.0-1.fc44 | dépendance |
-      | `uwsm` | 0.26.7-1.fc44 | **dépendance FAIBLE** |
+317 paquets. `keepassxc` et `stow` viennent du protocole de baseline du lab, pas
+d'Hyprland. `uwsm` arrive avec, en **dépendance faible** — c'est lui qui fournit toute la
+plomberie de session.
 
-      `lua55` est arrivé avec : c'est le moteur de la configuration Lua. `uwsm` n'est
-      exigé par aucun `Requires` — d'où le fait qu'il n'apparaisse dans aucune liste
-      qu'on lit spontanément.
-- [ ] **Décalage de versions : il a déjà eu lieu.** Le COPR a remplacé toutes les
-      bibliothèques `hypr*` de Fedora (`hyprgraphics` 0.5.1 vs 0.1.5, `hyprutils` 0.14.1
-      vs 0.7.1, `hyprlang` 0.6.8 vs 0.6.4, plus `hyprwire` inexistant chez Fedora).
-      **`dnf upgrade` doit toujours voir ce COPR activé**, sinon Fedora tentera de
-      redescendre ces paquets. À surveiller à chaque mise à jour.
+→ `dnf repoquery --installed --qf '%{name} reason=%{reason} from=%{from_repo}\n' uwsm`
+   → `reason=Weak Dependency`
+→ les 13 paquets du COPR : liste et versions dans `mesures.md` §4
 
-### La plomberie de session : `uwsm` la fournit — MESURÉ le 2026-09-04
+⚠ **ORDRE, permanent celui-là — tout `dnf upgrade` ultérieur doit voir ce COPR activé**,
+sinon Fedora tente de redescendre les bibliothèques `hypr*` que le COPR a remplacées.
 
-Sous Sway, `/etc/sway/config.d/10-systemd-session.conf` lançait
-`/usr/libexec/sway-systemd/session.sh` : propagation de l'environnement vers systemd et
-D-Bus, démarrage de `sway-session.target`, agent SSH, portails.
+### 4.2 La configuration
 
-Ce paragraphe affirmait qu'aucun équivalent n'existait pour Hyprland dans Fedora, `uwsm`
-compris. **C'était faux** : `uwsm` 0.26.7 arrive comme *dépendance faible* du COPR
-`dtutila/hyprland`, et le paquet `hyprland` livre `hyprland-uwsm.desktop`. Voir le piège
-« un paquet peut arriver par une dépendance FAIBLE » dans `CLAUDE.md`.
+```bash
+cd ~/linux/dotfiles
+stow -n -v -t ~ hypr        # simulation d'abord, toujours
+stow    -v -t ~ hypr
+```
 
-**Se connecter par la session « Hyprland (uwsm-managed) », pas « Hyprland ».** Les deux
-apparaissent dans le sélecteur du greeter et la différence n'est pas cosmétique :
+Si `stow` refuse : Hyprland a généré son propre `hyprland.lua`. **L'écarter dans
+`~/.dotfiles-backup/`, ne pas forcer** — `stow` ne remplace jamais un vrai fichier, c'est
+une sécurité.
 
-| | `Hyprland` | `Hyprland (uwsm-managed)` |
-|---|---|---|
-| Environnement propagé vers systemd/D-Bus | oui, par les 2 lignes de `hyprland.lua` | oui, par `wayland-wm-env@.service` |
-| `noctalia --daemon` lancé | oui, par `hl.on("hyprland.start")` | oui, idem |
-| **`graphical-session.target`** | **inactive** | **active** |
+→ `~/.config/hypr/hyprland.lua` est un lien vers le dépôt
 
-- [x] Session lancée via `uwsm` → `graphical-session.target` **active**, avec
-      `wayland-wm@hyprland.desktop.service`, `wayland-session@…target`,
-      `wayland-session-xdg-autostart@…target` et les slices graphiques
-- [x] Propagation vérifiée : `systemctl --user show-environment` contient
-      `WAYLAND_DISPLAY`, `XDG_CURRENT_DESKTOP`, `HYPRLAND_INSTANCE_SIGNATURE`
-- [ ] Retirer les deux lignes devenues redondantes de `hyprland.lua`
-      (`dbus-update-activation-environment`, `systemctl --user import-environment`) —
-      **seulement après** avoir confirmé qu'`uwsm` est la session retenue au quotidien
-- [x] Montage NAS de bout en bout — **fait**, détail et mesures en §7
-- [x] **`uwsm` EST la session retenue au quotidien**, mesuré le 2026-09-07 :
-      `graphical-session.target` **active**, `wayland-session@hyprland.desktop.target`
-      active, `wayland-wm@hyprland.desktop.service` porte le compositeur, et le
-      `greeter.toml` fixe `default = "Hyprland (uwsm-managed)"`. La condition de la ligne
-      précédente est donc remplie — le nettoyage de `hyprland.lua` peut se faire.
-      À noter : `~/.config/uwsm/` ne contient **que** le lien `env` posé par `stow`, pas
-      de `default-id` — le greeter passe la session explicitement, `uwsm select` n'a jamais
-      servi. Le piège du tree folding a donc été évité pour rien, mais il reste juste.
+### 4.3 Premier lancement
 
-> **Pourquoi `graphical-session.target` n'est pas un luxe.** Elle porte
-> `RefuseManualStart=yes` : impossible de la démarrer avec un `exec` dans `hyprland.lua`.
-> Sans `uwsm`, il faudrait écrire une unité maison qui la tire, ou rebrancher
-> `nas-infoadmin.service` sur `default.target` — et alors son `PartOf=` ne démonterait
-> plus le partage à la déconnexion : le NAS resterait monté après le logout, avec le
-> secret qui a servi à le monter. Ce n'est pas de la robustesse théorique, c'est un
-> comportement différent et moins bon.
+⚠ **ORDRE — depuis un AUTRE tty** (`Ctrl+Alt+F3`), pas celui où l'on travaille : lancer
+Hyprland depuis le tty courant emporte la session en cours.
 
-**Un effet de bord d'`uwsm` à connaître :** il charge les unités d'autostart XDG
-(`app-*@autostart.service`). Celles de `gnome-keyring` apparaissent dans
-`systemctl --user list-units 'app-*'` mais **ne s'exécutent jamais**
-(`ExecMainStartTimestamp` vide, `pid=0`) — elles sont filtrées, `XDG_CURRENT_DESKTOP`
-valant `Hyprland`. Une unité **chargée** n'est pas une unité **exécutée** : ne pas lui
-imputer un symptôme sans regarder son horodatage. Même famille que « un paquet installé
-n'est pas un paquet utilisé ».
+```bash
+Hyprland
+```
 
-### Configuration
+Puis, **depuis la session active uniquement** — logind libère les périphériques d'une
+session inactive, et une mesure faite ailleurs décrit la mauvaise session :
 
-- [x] **La config est en LUA, pas en `.conf`** : hyprlang est déprécié depuis Hyprland
-      0.55. Référence à lire : `/usr/share/hypr/stubs/hl.meta.lua` (API générée) et
-      l'exemple `/usr/share/hypr/hyprland.lua`. Les tutoriels en ligne sont encore en
-      hyprlang, donc faux pour cette version.
-- [x] Paquet `dotfiles/hypr/.config/hypr/hyprland.lua` créé, posé par `stow`.
-      Le fichier autogénéré par Hyprland a été écarté dans `~/.dotfiles-backup/` —
-      `stow` refuse de remplacer un vrai fichier, et c'est une sécurité.
-- [x] **AZERTY : par SYMBOLES de niveau 1, pas par `code:NN`.** `code:NN` est la syntaxe
-      hyprlang et **échoue silencieusement** dans la config Lua. Voir le journal du
-      2026-09-04. Diagnostic : dans `hyprctl binds`, une liaison analysée montre une clé
-      courte (`key: L`) ; une liaison ratée garde la chaîne entière et `keycode: 0`.
-- [x] Vérifié le 2026-09-04 : **71 liaisons, 0 non analysée**. Trois écrans aux bonnes
-      positions. **Re-mesuré le 2026-09-07 après la réécriture de la config :
-      61 liaisons, 0 non analysée** (aucune clé ne contient de ` + `, seul signe fiable
-      d'une liaison inerte). `hyprctl configerrors` : vide.
-- [x] **Espaces ancrés par règle**, mesuré le 2026-09-07 : 9 `workspace_rule` actives,
-      1/4/7 → `HDMI-A-2`, 2/5/8 → `DP-3`, 3/6/9 → `DP-1`, avec `default = true` sur la
-      première de chaque écran. Sans ces règles, Hyprland distribue 1..N dans l'ordre des
-      `monitorID`, qui change d'un démarrage à l'autre.
-- [x] **`input:resolve_binds_by_sym` vaut `false`, et c'est POUR ÇA que les symboles
-      marchent** — mesuré le 2026-09-07 : `hyprctl getoption input:resolve_binds_by_sym`
-      → `bool: false set: false`. La note de `CLAUDE.md` affirmait le contraire (`true`
-      par défaut) : le raisonnement était à l'envers, le geste retenu était bon. Avec
-      `false`, Hyprland traduit le keysym écrit dans la config en **code de touche** via
-      le keymap courant, donc `eacute` désigne la touche physique `AE02` quel que soit son
-      niveau — d'où le fait que `$mod+eacute` et `$mod+SHIFT+2` cohabitent.
-      **Une note de piège se re-teste : celle-là était fausse depuis le début.**
+```bash
+loginctl list-sessions                  # UNE seule session attendue
+hyprctl monitors                        # trois écrans, positions de mesures.md §4
+hyprctl devices                         # claviers en l "fr", v "azerty"
+hyprctl binds                           # 61 liaisons, aucune clé contenant " + "
+hyprctl configerrors                    # vide
+```
 
-### Écrans — relevé du 2026-09-07
+→ une liaison ratée garde la chaîne entière (`key: SUPER + SHIFT + code:49`) et
+  `keycode: 0`. **Compter les liaisons ne dit rien — c'est leur forme qui parle.**
 
-Les positions ne sont pas dans la config par hasard : elles sont recopiées dans le
-`greeter.toml` (§6), qui tourne sur un **autre** compositeur et n'a aucun moyen de les
-deviner.
-
-| Sortie | Modèle | Série | Mode | Position |
-|---|---|---|---|---|
-| `HDMI-A-2` | Dell P2425H | `BH19JF4` | 1920x1080@60 | `0,180` |
-| `DP-3` | Dell P2725DE | `FVTKM84` | 2560x1440@59,95 | `1920,0` |
-| `DP-1` | Dell P2414H | `36WJX4BI4L0L` | 1920x1080@60 | `4480,180` |
-
-**L'ancrage se fait par nom de sortie, donc il suit le PORT, pas l'écran.** Si les câbles
-bougent, les espaces suivent le port. Pour ancrer à l'écran physique, utiliser
-`description` (qui porte le numéro de série, colonne ci-dessus).
+Ce qui ne marche pas encore, et c'est normal : le trousseau ne se déverrouille pas (pas de
+greeter, donc pas de PAM), `~/nas` ne monte pas (`graphical-session.target` n'existe pas
+tant que la session n'est pas lancée par `uwsm`).
 
 ## 5. Shell — Noctalia
 
-- [x] `noctalia` 5.0.0~beta.10 installé. **Livré en binaire natif** — ce n'est plus une
-      configuration Quickshell comme en version 3, `quickshell` n'est ni installé ni requis.
-- [x] Vérifié par `hyprctl layers` : barre, fond d'écran et OSD sur les **trois** écrans.
-- [ ] Vérifier l'intégration des espaces et des actions de session à l'usage
-- [x] `hyprctl devices` depuis la session **active** : claviers présents, tous en
-      `l "fr", v "azerty"`, `active keymap: French (AZERTY)`. La liste vide observée
-      auparavant décrivait une session inactive, pas la machine — logind libère les
-      périphériques d'une session en arrière-plan. **Certaines mesures n'ont de sens que
-      depuis la session active.**
-- [x] Un seul daemon Noctalia doit tourner. Vérifier avec `hyprctl layers` **qui possède
-      les surfaces** (3 par namespace = une par écran), pas avec `pgrep` : un daemon
-      surnuméraire peut être totalement inerte. Même leçon que le `swaybg` résiduel.
+**Aucun geste** : `noctalia` est arrivé avec la transaction §4.1. Il est livré en binaire
+natif, `quickshell` n'est ni installé ni requis.
 
-**Deux pièges de la 0.56 à connaître :**
-- `hyprctl dispatch exec foo` ne marche plus — il faut
-  `hyprctl dispatch 'hl.dsp.exec_cmd("foo")'`.
-- `hl.on("hyprland.start", …)` **ne rejoue pas** sur un `hyprctl reload` : après un
-  rechargement, l'autostart est à relancer à la main. Ça fait croire qu'il est cassé.
+→ `hyprctl layers` → barre, fond d'écran et OSD sur les **trois** écrans, 3 surfaces par
+  namespace. C'est cette mesure qui prouve qu'un seul daemon peint, pas `pgrep` : un
+  daemon surnuméraire peut être totalement inerte.
 
-## 6. Greeter — greetd + greeter Noctalia — FAIT et **EN SERVICE** depuis le 2026-09-04
+## 6. Greeter — greetd + greeter Noctalia
 
-> **Ce titre disait « non activé » jusqu'au 2026-09-07.** C'était faux : mesuré le
-> 2026-09-07, `greetd.service` est `enabled` **et** `active (running)` depuis le boot,
-> `/etc/systemd/system/display-manager.service` pointe sur lui, et la session ouverte
-> porte `Service: greetd`, `Leader: 2176 (greetd)`, `TTY: tty1`. **C'est le greeter
-> Noctalia qui ouvre la session de travail depuis trois jours.** La bascule était notée
-> plus bas dans la même section, cochée — seul le titre avait pris du retard, et c'est
-> exactement ce qui rend un titre dangereux : on le lit sans lire la suite.
-
-`greetd` 0.10.3 est packagé. Le greeter Noctalia est un **projet séparé à compiler**, et
-`greetd` reste obligatoire : c'est lui qui démarre le compositeur wlroots embarqué du
-greeter.
-
-**La ligne du README upstream ne s'applique pas telle quelle à Fedora 44.** Deux de ses
-paquets n'y existent pas — `libEGL-devel` et `mesa-libGLES-devel` : c'est `libglvnd-devel`
-qui fournit `pkgconfig(egl)`, `pkgconfig(glesv2)` et `pkgconfig(gl)`. Et `greetd-selinux`
-est à ajouter, SELinux étant en `Enforcing`.
+### 6.1 Dépendances de compilation
 
 ```bash
 sudo dnf install meson gcc-c++ just \
@@ -332,32 +228,47 @@ sudo dnf install meson gcc-c++ just \
   libwebp-devel librsvg2-devel
 ```
 
-100 paquets, 443 Mo. `wlroots-devel` 0.20.2 (`updates`) fournit bien
-`pkgconfig(wlroots-0.20)`. Le scriptlet `sysusers` de `greetd` crée le compte **`greetd`**
-(UID 986) — **pas** `greeter`, comme l'écrit le README upstream.
+100 paquets, 443 Mo. **Deux substitutions par rapport au README amont**, qui liste des
+paquets inexistants dans Fedora 44 : `libglvnd-devel` remplace `libEGL-devel` +
+`mesa-libGLES-devel`, et `greetd-selinux` s'ajoute (SELinux en `Enforcing`).
 
-- [x] Cloner `noctalia-dev/noctalia-greeter` — **compiler un tag, pas `main`** :
-      `v1.3.1` = commit `6379fe287bb02b0bb538ad155fe18b1bf8615daf`. Le projet publie des
-      tags (v1.0.0 → v1.3.1) et `main` n'en était qu'à 2 commits, tous deux de CI : rien
-      n'obligeait à suivre une branche mouvante. Cloné dans `~/src/`, **hors de ce dépôt**.
-- [x] `scripts/setup_greeter_system.sh` lu en entier avant exécution — ainsi que ses deux
-      dépendances, `greetd_setup_lib.sh` et `setup_greetd_pam.sh`, où se trouve le vrai
-      travail
-- [x] `just configure-release && just build-release && sudo meson install -C build-release`
-      → trois binaires en `/usr/local/bin` : `noctalia-greeter`, `-apply-appearance`,
-      `-compositor`, plus une politique polkit et un `tmpfiles.d`
-- [x] `sudo ./scripts/setup_greeter_system.sh`
-- [x] Préfixe d'installation : **`/usr/local`** (défaut), donc **hors de `dnf`**.
-      Vérifié le 2026-09-07 : **11 fichiers** dans `/usr/local`, aucun possédé par un RPM
-      (`rpm -qf` échoue sur chacun) — 5 binaires dans `bin/`, 4 scripts dans
-      `share/noctalia-greeter/`, le `tmpfiles.d`, et un `mimeinfo.cache`.
+→ le scriptlet `sysusers` de `greetd` crée le compte **`greetd`**, pas `greeter`
 
-### `greeter.toml` — le fichier recopié ici, parce qu'aucun `stow` ne l'atteindra
+### 6.2 Compiler — un TAG, pas `main`
 
-`/var/lib/noctalia-greeter/greeter.toml` appartient à `greetd:greetd` sous `/var/lib` :
-il est **hors du home**, donc hors de portée de `stow`, et il n'est pas livré par un
-paquet. Il n'a que deux destinations possibles — ce fichier, ou l'oubli. D'où la recopie
-intégrale ci-dessous, à réécrire telle quelle après une réinstallation :
+```bash
+git clone https://github.com/noctalia-dev/noctalia-greeter ~/src/noctalia-greeter
+cd ~/src/noctalia-greeter
+git checkout v1.3.1        # = commit 6379fe287bb02b0bb538ad155fe18b1bf8615daf
+
+just configure-release && just build-release
+sudo meson install -C build-release
+```
+
+Cloné dans `~/src/`, **hors du dépôt**. Préfixe `/usr/local`, donc **hors de `dnf`** : ce
+que `dnf` ne connaît pas, seule cette procédure le sait.
+
+⚠ **Lire `scripts/setup_greeter_system.sh` EN ENTIER avant de l'exécuter**, ainsi que ses
+deux dépendances `greetd_setup_lib.sh` et `setup_greetd_pam.sh`, où se trouve le vrai
+travail. Il s'exécute en root et modifie l'état système.
+
+```bash
+sudo ./scripts/setup_greeter_system.sh
+```
+
+→ 11 fichiers dans `/usr/local`, aucun possédé par un RPM
+
+**Le bloc `config.toml` que le script imprime finit par `systemctl enable --now greetd`.
+Reprendre le bloc SANS le `--now`** : il basculerait l'écran de connexion séance tenante.
+
+- [ ] **TROU CONNU : le contenu de `/etc/greetd/config.toml` n'est pas dans ce dépôt.**
+      Seul fichier de la chaîne du greeter dans ce cas. Le relever et le recopier ici :
+      `sudo cat /etc/greetd/config.toml`. Une minute, et sans lui greetd démarre sur son
+      greeter par défaut (écran texte) — le `greeter.toml` du §6.3 ne servirait alors à rien.
+
+### 6.3 Les deux fichiers hors du home — aucun `stow` ne les atteindra
+
+`/var/lib/noctalia-greeter/greeter.toml`, à écrire tel quel :
 
 ```toml
 # ── Réglages du poste de référence ───────────────────────────────────────────
@@ -384,729 +295,419 @@ layout = "HDMI-A-2:0,180; DP-3:1920,0; DP-1:4480,180"
 timeout = 300
 ```
 
-**Trois choses à savoir sur ce fichier.**
+`/etc/tmpfiles.d/noctalia-greeter.conf`, qui surcharge celui du greeter — lequel code en
+dur `greeter:greeter`, compte inexistant ici, et **prescrit lui-même sa surcharge** dans
+son propre commentaire :
 
-1. **Il est déclaratif et le greeter ne l'écrit jamais.** Ce que l'interface et la synchro
-   Noctalia modifient va dans `sync.toml`, à côté ; ce qui est fixé ici l'emporte. C'est
-   pour ça qu'il est recopiable tel quel, contrairement aux réglages Noctalia de la session
-   (voir §8bis).
-2. **Les positions d'écran sont une duplication assumée.** Le greeter tourne sur son propre
-   compositeur wlroots, qui ne lit pas `hyprland.lua`. Si les écrans bougent, **deux**
-   fichiers sont à corriger — celui-ci et le paquet `hypr` de `dotfiles/`.
-3. **Le `[keyboard]` n'est pas du confort.** Sans lui, l'écran où l'on saisit son mot de
-   passe est en US QWERTY. Même piège que Sway à l'itération 01, sur un troisième
-   compositeur.
+```
+# Surcharge de /usr/local/lib/tmpfiles.d/noctalia-greeter.conf, qui code en dur
+# « greeter:greeter ». Sur Fedora le paquet greetd crée le compte « greetd ».
+d /var/lib/noctalia-greeter 0750 greetd greetd -
+```
 
-Le dossier livré à côté au 2026-09-07 : `greeter.toml`, `greeter.toml.bak` (laissé par le
-script d'installation) et `sync.toml`, tous en `greetd:greetd` et `xdm_var_lib_t`.
-- [x] `systemctl enable greetd` + `systemctl set-default graphical.target` — **fait le
-      2026-09-04**, tty de secours vérifié avant
+→ `/var/lib/noctalia-greeter` en `greetd:greetd 0750`
 
-**Quatre choses apprises, à ne pas redécouvrir.**
+> **Les positions d'écran sont une duplication assumée** : le greeter tourne sur son propre
+> compositeur wlroots, qui ne lit pas `hyprland.lua`. Si les écrans bougent, **deux**
+> fichiers sont à corriger — celui-ci et `dotfiles/hypr/`.
 
-1. **Le script résout le compte tout seul.** `resolve_greeter_user` interroge
-   `apply-appearance --print-greeter-user`, qui lit `/etc/greetd/config.toml` ; il a
-   annoncé `greetd`. Le `user = "greeter"` du README n'est qu'un exemple, le projet gère
-   la variation entre distributions.
-2. **Il patche `/etc/pam.d/greetd`** en y ajoutant `session required pam_systemd.so`
-   (sauvegarde `.bak.noctalia.<horodatage>`). Sa garde `grep -F pam_systemd.so` ne lit que
-   *ce fichier*, alors que Fedora apporte déjà le module via `session include system-auth`.
-   Il y a donc deux appels, dont un en `required`. **`man pam_systemd` ne documente aucun
-   problème d'appel répété** : à **mesurer** au premier login (`loginctl`, une seule
-   session attendue), pas à préjuger — et le `.bak` est là si besoin.
-   **MESURÉ le 2026-09-07, sans effet : `loginctl list-sessions` ne montre qu'UNE session
-   utilisateur** (`2`, `seat0`, `tty1`, `active`) ; les autres lignes sont un `manager`
-   (`user@1000.service`) et un `background`, qui existent sur toute machine systemd. Le
-   double appel n'a créé aucune session en trop. **Sujet clos : le geste documenté par
-   l'outil était le bon, et l'écart déduit n'aurait rien corrigé.** Le `.bak` du script
-   (`greetd.bak.noctalia.<horodatage>`) peut rester où il est.
-3. **Le bloc `config.toml` qu'il imprime finit par `systemctl enable --now greetd`.** Le
-   `--now` basculerait l'écran de connexion séance tenante. Reprendre le bloc sans lui.
-4. **Son `tmpfiles.d` code en dur `greeter:greeter`**, un compte inexistant ici — et son
-   propre commentaire prescrit la réponse : « override under `/etc/tmpfiles.d/` if your
-   greetd user differs ». D'où `/etc/tmpfiles.d/noctalia-greeter.conf`, recopié ici pour
-   la même raison que le `greeter.toml` — un fichier de `/etc` qu'aucun paquet ne livre :
-
-   ```
-   # Surcharge de /usr/local/lib/tmpfiles.d/noctalia-greeter.conf, qui code en dur
-   # « greeter:greeter ». Sur Fedora le paquet greetd crée le compte « greetd ».
-   d /var/lib/noctalia-greeter 0750 greetd greetd -
-   ```
-
-   Vérifié le 2026-09-07 : le dossier est bien en `greetd:greetd 0750`.
-
-**Le clavier n'est pas un détail de confort.** Le compositeur du greeter est wlroots : il
-ne lit ni `gsettings`, ni `/etc/X11/xorg.conf.d/00-keyboard.conf`, et retomberait sur
-**US QWERTY** — pour saisir un mot de passe. `[keyboard] layout = "fr"` /
-`variant = "azerty"` est obligatoire, et `azerty` est bien une variante XKB de `fr`
-(`fr: French (AZERTY)`). Même piège que Sway à l'itération 01, sur un autre compositeur.
-
-**La bascule tient en deux commandes, sans rien écrire.** `greetd.service` déclare
-`Alias=display-manager.service` et `graphical.target` porte `Wants=display-manager.service` :
-`enable greetd` + `set-default graphical.target` suffisent.
-
-**Le filet est structurel.** `greetd` ne prend que le **VT 1** (`Conflicts=getty@tty1.service`,
-`vt = 1`), et `autovt@.service → getty@.service` avec `NAutoVTs = 6` : les VT 2 à 6 restent
-servis à la demande. Repli depuis un tty : `systemctl disable --now greetd` puis
-`systemctl set-default multi-user.target`.
-
-**SELinux, à mesurer après la bascule — pas à traiter d'avance.** `/usr/local/bin/*`
-s'étiquette `bin_t`, exactement comme `/usr/bin` : aucun problème d'exécution. Mais
-`/var/lib/noctalia-greeter` est en `var_lib_t` alors que `/var/lib/greetd` est en
-`xdm_var_lib_t`. **Le déni s'est produit** — `denied { write }` sur `sync.toml`,
-`scontext=xdm_t`, `tcontext=var_lib_t` — et le greeter le signalait lui-même dans le
-journal (`failed to save sync.toml`). Effet : il ne mémorise pas le dernier choix de
-session. Correctif appliqué :
+### 6.4 SELinux — le répertoire d'état du greeter
 
 ```bash
 sudo semanage fcontext -a -t xdm_var_lib_t '/var/lib/noctalia-greeter(/.*)?'
 sudo restorecon -Rv /var/lib/noctalia-greeter
 ```
 
-Résultat vérifié : `xdm_var_lib_t`, plus aucun déni. **Les deux commandes sont
-nécessaires** — `restorecon` seul corrige l'état présent, `semanage fcontext` enregistre
-la règle pour qu'un relabel complet ultérieur ne la défasse pas. Règle persistante
-confirmée le 2026-09-04 :
+**Les deux commandes sont nécessaires** : `restorecon` corrige l'état présent,
+`semanage fcontext` enregistre la règle pour qu'un relabel complet ne la défasse pas. Un
+logiciel installé hors gestionnaire de paquets n'a personne pour l'étiqueter.
 
-```
-/var/lib/noctalia-greeter(/.*)?   all files   system_u:object_r:xdm_var_lib_t:s0
-```
+→ `sudo semanage fcontext -l | grep noctalia`
+→ plus aucun `denied { write }` sur `sync.toml` (sinon : le greeter ne mémorise pas le
+  dernier choix de session, et il le signale lui-même dans le journal)
 
-Contrôle après une réinstallation : `sudo semanage fcontext -l | grep noctalia`.
-
-## 7. Trousseau — gnome-keyring
+## 7. Trousseau et NAS
 
 ```bash
 sudo dnf install gnome-keyring gnome-keyring-pam
 ```
 
 `gnome-keyring-pam` ne dépend que de `gnome-keyring`, `pam` et `libselinux` : **il ne tire
-pas GDM**.
+pas GDM.**
 
-**Fedora en a déjà écrit deux sur trois — et elles sont inertes.** Vérifié le 2026-09-04 :
-le `/etc/pam.d/greetd` livré par le paquet `greetd` contient déjà
+Ajouter dans `/etc/pam.d/greetd` **la seule ligne manquante** — Fedora livre déjà les deux
+autres, et elles sont inertes tant que le paquet n'est pas là (préfixe `-` = ignorer un
+module absent, en silence) :
 
 ```
--auth       optional    pam_gnome_keyring.so
--session    optional    pam_gnome_keyring.so auto_start
+-password   optional    pam_gnome_keyring.so use_authtok
 ```
 
-Il ne manque que la ligne `password … use_authtok`, absente aussi de `system-auth`. Mais
-`gnome-keyring-pam` n'est pas installé, donc `/usr/lib64/security/pam_gnome_keyring.so`
-**n'existe pas** — et le préfixe `-` dit précisément à PAM d'ignorer un module manquant
-**en silence**. Les lignes sont là et ne font rien.
+après `password include system-auth`. Garder le préfixe `-` comme les autres lignes : si le
+paquet est retiré un jour, PAM ignore le module au lieu de casser le login.
 
-> **Piège de méthode :** vérifier la présence du **module**, pas celle de la ligne. Même
-> famille que « un dépôt activé n'est pas un paquet installé ». C'est le paquet qui
-> manque, pas la configuration.
+⚠ **ORDRE, le plus serré de la procédure.** Après `greetd` (§6 livre
+`/etc/pam.d/greetd`) et **avant le premier login par le greeter**, sinon le trousseau n'est
+pas déverrouillé et `nas-infoadmin.service` échoue — avec un symptôme qui accuse le NAS.
 
-> **Les deux paragraphes qui suivaient ici décrivaient l'état d'AVANT la bascule et sont
-> périmés** — ils disaient « il n'y a pas de DM, donc aucun déverrouillage PAM » et
-> « `nas-infoadmin.service` n'existe pas encore sur ce poste ». Les deux sont faux depuis
-> le 2026-09-04 : greetd est le DM, PAM déverrouille, l'unité NAS tourne. Gardés
-> supprimés plutôt que corrigés, la suite de la section portant déjà l'état vérifié.
-
-- [x] **Décision du 2026-09-04 : `gnome-keyring`**, KeePassXC reste reporté
-- [x] `sudo dnf install gnome-keyring-pam`, puis ajout de la seule ligne manquante
-      (`-password optional pam_gnome_keyring.so use_authtok`, après
-      `password include system-auth`). Préfixe `-` comme les autres lignes du fichier :
-      si le paquet est retiré un jour, PAM ignore le module au lieu de casser le login.
-- [x] **Vérifié après un vrai login** — et une simple déconnexion/reconnexion suffit,
-      PAM s'exécutant au *login* et non au boot :
-
-  | Mesure | Résultat |
-  |---|---|
-  | `~/.local/share/keyrings/` | `login.keyring` + `user.keystore` créés |
-  | Collections exposées | **deux** : `session` *et* `login` (contre `session` seule avant) |
-  | **`login` déverrouillé** | **`Locked = false`** |
-  | `gcr-prompter` après le correctif | **aucun** |
-
-  > **La mesure qui compte est `Locked`, pas l'existence du fichier.** Un
-  > `login.keyring` présent mais verrouillé redemanderait le mot de passe à chaque
-  > client. Vérifier :
-  > `busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/login org.freedesktop.Secret.Collection Locked`
-
-  **Deux processus `gnome-keyring-daemon` coexistent**, comme à l'itération 01 :
-  `--daemonize --login` (lancé par PAM, c'est lui qui détient le nom) et
-  `--start --components=secrets`. Ce n'est pas un doublon anormal.
-  **Re-mesuré le 2026-09-07, avec une précision qui change la lecture :** le processus
-  PAM vit dans `session-2.scope` (cgroup de la session greetd), l'autre dans
-  `app-dbus-:1.2-org.freedesktop.secrets@0.service` — deux **cgroups différents**, donc
-  deux mécanismes de démarrage distincts pour un même paquet. C'est le cas déjà noté dans
-  `CLAUDE.md` (« un paquet peut être à moitié disponible »), vu ici sous sa forme complète.
-
-- [x] **Montage NAS de bout en bout — VÉRIFIÉ le 2026-09-07, et c'était fait depuis le
-      2026-09-04 sans avoir été noté.** La chaîne complète mesurée :
-
-      | Maillon | Mesure |
-      |---|---|
-      | Unité | `nas-infoadmin.service` `enabled` + `active (exited)`, depuis le boot |
-      | `ExecStart` | `gio mount smb://pdc-nas-info.te-mgmt.io/infoadmin` → `status=0` |
-      | `ExecStartPost` | lien `~/nas` posé vers `/run/user/1000/gvfs/smb-share:…` |
-      | Secret | entrée `org.gnome.keyring.NetworkPassword` dans `login.keyring`, créée le 2026-09-04 |
-      | Montage | `gvfsd-fuse` sur `/run/user/1000/gvfs`, `gvfsd-smb` en cours |
-      | Contenu | `~/nas` listable, dossiers du partage présents |
-
-      **`~/nas` n'est pas un montage CIFS, c'est un lien vers un montage gvfs de session.**
-      Il n'apparaît donc **pas** dans `df` ni dans `findmnt -t cifs` — seulement dans
-      `findmnt -t fuse.gvfsd-fuse`. Chercher le partage avec les mauvais outils fait
-      conclure à une panne qui n'existe pas.
-
-      > **Ne jamais relever ce secret avec `secret-tool search`** : la commande **affiche
-      > le mot de passe en clair** sur la sortie standard. Erreur commise le 2026-09-07
-      > pendant l'audit, le mot de passe SMB s'est retrouvé dans une transcription. Pour
-      > vérifier qu'une entrée existe sans la lire, interroger la collection :
-      > `busctl --user get-property org.freedesktop.secrets /org/freedesktop/secrets/collection/login org.freedesktop.Secret.Collection Locked`
-
-## 8. Plomberie freedesktop et applications
-
-**Les cinq cases ci-dessous étaient vides au 2026-09-07 et tout était installé depuis le
-2026-09-04.** Versions et dates relevées par
-`rpm -q --qf '%{installtime:date}  %{version}-%{release}'`, transactions recoupées dans
-`dnf history` (dont l'heure est en **UTC**, deux heures de moins que le journal) :
-
-- [x] `gvfs`, `gcr`, `xdg-desktop-portal-*` — `gvfs-smb` 1.60.2 (2026-09-04 16:52),
-      `xdg-desktop-portal` 1.22.1, `-gtk` 1.15.3, `-hyprland` 1.4.1.
-      **Les trois portails tournent**, vérifié le 2026-09-07 (`pgrep -f xdg-desktop-portal`)
-- [x] `nautilus` 50.3 (2026-09-04 16:03) — installable seul, vérifié (89 exigences, aucun
-      composant de bureau). Nécessaire au moins pour **écrire le mot de passe NAS dans le
-      trousseau**, ce que `gio mount` ne sait pas faire
-- [x] `chromium` 151.0.7922.173 (2026-09-04 15:50) — 21 paquets. Tourne en
-      `--ozone-platform=wayland`, natif
-- [x] `foot` 1.27.0 (2026-09-04 15:24, arrivé avec la transaction Hyprland) — **installé
-      et versionné, mais ce n'est plus le terminal utilisé**, voir §8bis
-- [x] `keepassxc` 2.7.12 (2026-09-04 15:24) — protocole de baseline du lab.
-      **Installé, jamais lancé sur ce poste** : `~/.config/keepassxc/keepassxc.ini` ne
-      contient que `ConfigVersion=2` et deux clés vides de générateur de mots de passe, et
-      aucun processus `keepassxc` ne tourne. Cohérent avec le report de la décision
-      « KeePassXC en fournisseur Secret Service » : le sujet n'est pas entamé
-
-### 8bis. Terminal — kitty, et c'est tranché
-
-**`kitty` 0.47.1, installé le 2026-09-04 à 15:56** (transaction 6, `dnf install kitty -y`,
-6 paquets). Mesuré le 2026-09-07 : ce sont **deux instances de `kitty`** qui tournent dans
-la session, aucune de `foot`.
-
-Le dépôt annonçait « `foot` provisoire, kitty envisagé à court terme » depuis le
-2026-09-04. **Le choix a été fait le jour même et n'a jamais été écrit** — trois jours
-pendant lesquels la procédure décrivait un terminal qui n'était plus utilisé.
-
-- [x] `kitty` installé et en service
-- [ ] **`~/.config/kitty/` est VIDE** — aucun réglage n'a été posé. Le raisonnement du
-      `foot.ini` (`dpi-aware`, échelle Wayland, densité du P2725DE à 2560x1440 sur 600 mm)
-      **ne s'applique donc à rien aujourd'hui** : kitty tourne sur ses défauts. C'est la
-      question du `foot.ini` qui se repose à l'identique, pas son réglage — à trancher à
-      l'usage, puis à versionner en paquet `dotfiles/kitty`
-- [ ] Décider du sort de `foot` : le garder comme terminal de secours (il ne coûte rien et
-      sa config est déjà au dépôt) ou le retirer pour que la liste des paquets reste
-      lisible. Ne pas retirer le paquet `dotfiles/foot` dans tous les cas — il documente
-      un raisonnement, comme `dotfiles/sway`
-
-### 8ter. RustDesk — outil de support, RPM hors dépôt
-
-**C'est l'outil de travail du poste**, pas un accessoire : c'est par lui que se traitent
-les tickets. Fiche complète dans `poste/README.md` ; ici, la séquence.
+### 7.1 Bascule vers le greeter
 
 ```bash
-# Le RPM est GÉNÉRÉ par Julien depuis la console RustDesk de l'entreprise :
-# il embarque l'adresse du serveur et la clé publique de relais dans
-# /usr/share/rustdeskadmin/custom.txt (base64). Il n'est donc pas téléchargeable
-# depuis une URL publique — il se régénère.
-#
-# UNE SEULE COMMANDE : son %post active ET démarre le service lui-même.
-sudo dnf install ~/rustdeskadmin-x86_64.rpm
+sudo systemctl enable greetd
+sudo systemctl set-default graphical.target
 ```
 
-> **Ce `%post` fait cinq choses hors du contrôle de `rpm`, lues avec
-> `rpm -q --scripts rustdeskadmin` :** il copie l'unité dans
-> `/etc/systemd/system/rustdeskadmin.service`, copie **deux** `.desktop` dans
-> `/usr/share/applications/`, crée le lien `/usr/bin/rustdeskadmin` →
-> `/usr/share/rustdeskadmin/rustdeskadmin`, puis enchaîne `systemctl daemon-reload`,
-> `enable` et `start`.
->
-> **Conséquence à connaître : `rpm -qf` ne reconnaît AUCUN de ces quatre fichiers.**
-> `rpm -qf /usr/bin/rustdeskadmin` → « n'appartient à aucun paquet ». Un inventaire fondé
-> sur `rpm -ql` passe donc à côté du lanceur, du binaire dans `$PATH` et de l'unité
-> systemd. Le `%preun` les retire, donc ça reste cohérent — mais tant que le paquet est
-> là, ces fichiers sont invisibles à toute question posée à `rpm`.
->
-> C'est la deuxième fois qu'un RPM hors distribution surprend par son `%post` sur cette
-> machine (le premier était `grub-btrfs`, qui réécrit `grub.cfg`). **Sur un RPM qui ne
-> vient pas de la distro, `rpm -qp --scripts` avant `dnf install` n'est pas une
-> précaution de puriste : c'est la seule façon de savoir ce qui va se passer.**
+Deux commandes suffisent, sans rien écrire : `greetd.service` déclare
+`Alias=display-manager.service` et `graphical.target` porte
+`Wants=display-manager.service`.
 
-- [x] `rustdeskadmin` **1.4.9-0**, installé le 2026-09-07 à 08:57 (7 paquets).
-      Dépôt d'origine `@commandline` — **c'est ainsi qu'un RPM local se signale**, et le
-      seul moyen de le repérer dans un inventaire de paquets
-- [x] `rustdeskadmin.service` `enabled` (`ExecStart=/usr/bin/rustdeskadmin --service`),
-      **activé par le `%post`, pas à la main**. L'unité est **copiée** dans
-      `/etc/systemd/system/` — pas livrée par le paquet, pas dans
-      `/usr/lib/systemd/system/`. Trois processus tournent : `--service` (root, PID 1769),
-      `--server` et `--tray` (session)
-- [x] Effet visible dans la session : un périphérique **`rustdesk-uinput-keyboard`**
-      apparaît dans `hyprctl devices`. C'est normal (injection d'événements pour le
-      contrôle à distance), et c'est aussi la preuve que le service tourne
+⚠ **Vérifier le tty de secours AVANT de redémarrer.** `greetd` ne prend que le **VT 1** ;
+les VT 2 à 6 restent servis à la demande. Repli depuis un tty :
+`systemctl disable --now greetd` puis `systemctl set-default multi-user.target`.
 
-> **Le RPM n'est pas signé** — `rpm -qi` → `Signature : (none)`, `Vendor : rustdeskadmin
-> <info@rustdeskadmin.com>`, `Build Host : build-linx`, construit le 2026-09-01. Ça se
-> constate, ça ne se corrige pas : c'est le mode de distribution de l'outil. Conséquence
-> concrète pour la reproductibilité : **la version exacte ne se retrouve pas dans un
-> dépôt**, elle se régénère depuis la console. Noter la version installée est donc la
-> seule trace utile.
+Au login, choisir **« Hyprland (uwsm-managed) »**, pas « Hyprland » : c'est la seule des
+deux qui active `graphical-session.target`, dont dépend le montage NAS.
 
-> **Aucun port entrant n'a été ouvert dans `firewalld` pour lui**, et il fonctionne :
-> `public` (la zone de `br0`) n'autorise que `dhcpv6-client`, `mdns` et `ssh`. RustDesk
-> sort vers son relais, il n'écoute pas. Vérifier avant de « corriger » un pare-feu qui
-> n'a rien cassé.
+→ `greetd.service` `enabled` **et** `active (running)`
+→ `loginctl` → **une seule** session utilisateur, `Service=greetd`, `TTY=tty1`
+→ `systemctl --user show-environment` contient `WAYLAND_DISPLAY`, `XDG_CURRENT_DESKTOP`,
+  `HYPRLAND_INSTANCE_SIGNATURE`
+→ `systemctl --user is-active graphical-session.target` → `active`
 
-### 8quater. Virtualisation — la pile hôte de la VM Windows
+### 7.2 Réenregistrer le mot de passe SMB — une fois, à la main
 
-La VM elle-même a sa fiche dans `poste/README.md`. Ce qui suit est ce qu'il faut
-**réinstaller sur l'hôte** pour qu'elle démarre.
+⚠ **ORDRE — après Nautilus (§8), et il n'y a pas d'autre voie.**
+
+Monter le partage **depuis Nautilus** et cocher « se souvenir pour toujours ».
+**`gio mount` en ligne de commande ne sait pas écrire dans le trousseau** — seul le
+dialogue GTK le fait ; `gvfsd` sait ensuite y *lire*. C'est l'unique raison pour laquelle
+Nautilus est gardé sur ce poste.
+
+Le trousseau est chiffré par le mot de passe de session et **n'est pas transposable** d'une
+installation à l'autre : `stow` remet l'unité en place, le secret ne revient pas avec.
+
+→ `~/nas` listable, et cherché avec `findmnt -t fuse.gvfsd-fuse` — **pas** avec `df` ni
+  `findmnt -t cifs` : c'est un lien vers un montage gvfs de session, pas un montage CIFS
+→ collection déverrouillée, **sans lire le secret** :
+```bash
+busctl --user get-property org.freedesktop.secrets \
+  /org/freedesktop/secrets/collection/login org.freedesktop.Secret.Collection Locked
+```
+
+> **Ne JAMAIS vérifier ce secret avec `secret-tool search`** : la commande affiche le mot
+> de passe **en clair** sur la sortie standard. Erreur commise le 2026-09-07.
+
+## 8. Applications
 
 ```bash
-sudo dnf install -y qemu-kvm libvirt virt-manager edk2-ovmf swtpm-tools
-sudo usermod -aG libvirt "$USER"        # puis re-login
-sudo systemctl enable --now virtqemud.socket virtnetworkd.socket
+sudo dnf install nautilus chromium kitty gvfs-smb
 ```
 
-- [x] Posé le 2026-09-07 à 09:29 — **228 paquets**, de loin la plus grosse transaction
-      après l'installation elle-même. Versions : `qemu-kvm` 10.2.2, `libvirt` 12.0.0,
-      `virt-manager` 5.1.0, `edk2-ovmf` 20260812, `swtpm-tools` 0.10.2
-- [x] `jzielona` est dans le groupe **`libvirt`** (981) — sans ça, `virsh -c qemu:///system`
-      passe par polkit à chaque appel
-- [x] **`edk2-ovmf` et `swtpm-tools` ne sont pas optionnels pour Windows 11** : l'un fournit
-      `OVMF_CODE_4M.secboot.qcow2` (UEFI + Secure Boot dans l'invité), l'autre le TPM
-      émulé. Sans eux, Windows 11 refuse de démarrer et le message ne dit pas lequel manque
-- [x] **Le sous-volume `/var/lib/libvirt/images` doit exister AVANT la première image** —
-      voir §10 : il est en `+C` (NOCOW) et hors des instantanés. Sous-volume ID 259
+`nautilus` est installable seul (89 exigences, aucun composant de bureau) et **nécessaire
+au moins pour le §7.2**. `kitty` est le terminal retenu ; `foot` est déjà là depuis §4.1 et
+reste inutilisé. Versions relevées : `mesures.md` §8.
 
-**Le pont `br0` — trois profils NetworkManager, et le troisième est le plus important.**
-Refait le 2026-09-07 à 09:36. La VM est sur le réseau de l'employeur en direct, pas
-derrière du NAT :
+→ `pgrep -f xdg-desktop-portal` → les **trois** portails tournent
 
-| Profil | Type | Rôle |
-|---|---|---|
-| `br0` | bridge | porte l'adresse, `stp=false`, `mac-address=E8:CF:83:89:18:D4` (celle de la carte physique) |
-| `br0-port` | ethernet | `enp0s31f6` rattachée au pont (`controller=br0`, `port-type=bridge`) |
-| `Connexion filaire 2` | ethernet | **`autoconnect=false`** — le profil DHCP d'origine sur `enp0s31f6` |
+- [ ] **Configurer kitty.** `~/.config/kitty/` est vide, kitty tourne sur ses défauts. Les
+      questions du `foot.ini` (`dpi-aware`, échelle Wayland, densité du P2725DE) se
+      reposent à l'identique — à trancher à l'usage, puis à versionner en paquet
+      `dotfiles/kitty`.
 
-**La troisième ligne est celle qu'on oublie et qui casse tout.** Si le profil Ethernet
-d'origine garde `autoconnect=true`, il se dispute la carte avec `br0-port` au démarrage,
-de façon non déterministe. Le désactiver n'est pas du ménage, c'est la moitié du travail.
-
-- [x] Reprise de la MAC physique sur le pont : sans ça, le réseau de l'employeur voit
-      une nouvelle adresse matérielle apparaître
-- [x] `virbr0` (réseau `default`, NAT 192.168.122.0/24) est **actif et `autostart`, mais
-      `linkdown`** — aucune VM ne l'utilise. Laissé tel quel : il ne gêne pas, et le
-      retirer casserait la création d'une VM de test au NAT
-
-### 8quinquies. Outils d'administration réseau
-
-Ajoutés le 2026-09-07, en fin de journée, au fil d'un besoin réel :
-
-- [x] `bind-utils` 9.18.50 (11:26) — `dig`, `host` : 5 paquets
-- [x] `nmap` 7.92 (11:40) — 2 paquets
-- [x] `tcpdump` 4.99.6 (11:40) — 1 paquet
-
-**Ce sont des outils d'alternance SRC, pas des dépendances du bureau** : ils appartiennent
-à la même famille que `nvme-cli`, `efibootmgr` ou `cryptsetup`, sauf que ceux-là étaient
-déjà dans l'image (installés à 14:00:2x le 2026-09-04, avec la transaction 1). La
-distinction se lit dans la date d'installation, pas dans la raison `dnf`.
-
-### Flatpak — FAIT le 2026-09-07
-
-**Absent de l'image minimale**, contrairement à Workstation où il était livré et où la
-case « dépôts tiers » du premier démarrage ajoutait Flathub. Ici les trois gestes sont à
-poser à la main :
+### 8bis. Flatpak
 
 ```bash
 sudo dnf install -y flatpak
 # le paquet fournit les dépôts « fedora » et « fedora-testing », PAS Flathub
 sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 sudo flatpak install -y flathub com.mattermost.Desktop com.mikrotik.WinBox
-flatpak list --app --columns=application,version,installation
 ```
 
-- [x] `flatpak` 1.18.2, dépôt `flathub` ajouté en portée **system**
-- [x] `com.mattermost.Desktop` 6.3.0 et `com.mikrotik.WinBox` 4.3, **les deux en `system`**
+Les deux en portée **`system`**, choix assumé : un seul dépôt, une seule portée.
 
-> **Changement assumé par rapport à l'itération 01 :** WinBox y était installé en portée
-> `user`, ce que `poste/README.md` qualifiait d'« incohérence à connaître » (un second
-> dépôt `flathub` au niveau utilisateur, et une application capturée par les instantanés
-> `/home` au lieu de `/`). Les deux sont désormais en `system` : un seul dépôt, une seule
-> portée, et `flatpak list --columns=…,installation` redevient lisible d'un coup d'œil.
+⚠ **ORDRE — se déconnecter/reconnecter après**, sinon les applications sont installées mais
+**invisibles au lanceur**. La cause est réglée par le paquet `uwsm` du §9 :
+`/etc/profile.d/flatpak.sh` ne s'exécute que dans un shell de **login**, et la session
+greetd → uwsm → Hyprland ne source jamais `/etc/profile`.
 
-- [ ] **Après un `dnf install flatpak`, se déconnecter/reconnecter** — voir la section
-      suivante : sans ça les applications sont installées mais **invisibles au lanceur**
-
-### `XDG_DATA_DIRS` : les Flatpaks n'apparaissent pas dans le lanceur — FAIT le 2026-09-07
-
-Symptôme : `flatpak list` montre les applications, `Super+R` ne les propose pas.
-
-**Cause, mesurée sur le processus en session** (`tr '\0' '\n' < /proc/$(pgrep -x Hyprland)/environ`) :
-`XDG_DATA_DIRS=/usr/local/share:/usr/share` — les chemins Flatpak manquent, alors que les
-`.desktop` sont bien dans `/var/lib/flatpak/exports/share/applications/`.
-
-Fedora livre pourtant `/etc/profile.d/flatpak.sh`, qui fait exactement le travail. **Mais
-`profile.d` ne s'exécute que dans un shell de LOGIN**, et la session est lancée par
-greetd → uwsm → Hyprland, qui ne source jamais `/etc/profile`. Le script est là et ne
-tourne pas.
-
-Réponse retenue — le fichier que `man uwsm` prévoit pour ça (section CONFIGURATION,
-« Environment (shell) to be sourced for the graphical session ») :
-
-```bash
-mkdir -p ~/.config/uwsm          # AVANT le stow, sinon tree folding (voir ci-dessous)
-cd ~/linux && stow -n -v -t ~ -d dotfiles uwsm
-stow -v -t ~ -d dotfiles uwsm
-# puis déconnexion / reconnexion — l'environnement de session ne se recharge pas
-```
-
-Le paquet `dotfiles/uwsm/` contient un `env` d'une seule ligne utile, qui **source le
-script de Fedora** plutôt que de coder les chemins en dur — il interroge
-`flatpak --installations` et couvre donc les portées `system` et `user`, même si elles
-changent plus tard.
-
-**Piège Stow, le troisième de la même famille** (après `~/.bashrc.d` et
-`~/.config/systemd`) : `stow -n -v` annonçait
-`LINK: .config/uwsm => ../linux/dotfiles/uwsm/.config/uwsm`, donc tout `~/.config/uwsm/`
-devenait le dépôt — et `uwsm select` y écrit un `default-id`, qui se serait retrouvé
-versionné. Faire exister le dossier avant suffit : la simulation passe alors à
-`LINK: .config/uwsm/env`.
-
-Vérification, sur le processus en session et pas dans un shell quelconque :
-
+→ `flatpak list --app --columns=application,version,installation` → les deux en `system`
+→ sur le processus **en session**, jamais dans un shell quelconque :
 ```bash
 tr '\0' '\n' < /proc/$(pgrep -x Hyprland)/environ | grep XDG_DATA_DIRS
 ```
 
-Obtenu le 2026-09-07 :
-`/home/jzielona/.local/share/flatpak/exports/share:/var/lib/flatpak/exports/share:/usr/local/share:/usr/share`
+### 8ter. RustDesk — une seule commande
 
-## 8sexies. Reliquats — état des lieux du 2026-09-07
-
-Question posée : le poste porte-t-il la pollution du modèle de test (Sway, GNOME, tout ce
-qui a été empilé sur l'itération 01) ? **Non, et c'est l'image minimale qui l'a évité, pas
-un nettoyage.** Rien de tout ça n'a jamais été installé ici. Vérifié :
-
-| Cherché | Résultat |
-|---|---|
-| `sway`, `swaybg`, `swaylock`, `waybar` | **absents** |
-| `gnome-shell`, `mutter`, `gnome-session`, `gdm` | **absents** |
-| `firefox` | **absent** |
-| `/etc/sway/`, `/etc/gdm/`, `/etc/gnome*` | **inexistants** |
-| Paquets orphelins (`dnf repoquery --unneeded`) | **0** |
-
-Les paquets `gnome-*` restants sont **tous des dépendances de Nautilus**, assumées :
-`gnome-desktop3`, `gnome-desktop4`, `gnome-autoar`, `gsettings-desktop-schemas`,
-`nautilus-extensions`. Plus `gnome-keyring` (dépendance faible) et `gnome-keyring-pam`
-(voulu). `wlroots` reste, et c'est **normal** : c'est le compositeur embarqué du greeter
-Noctalia qui en a besoin — aucun paquet ne l'exige, seul le binaire compilé s'y lie.
-
-### Ce qui reste vraiment, par ordre d'importance
-
-**1. La chaîne de compilation du greeter : 100 paquets, 443 Mo, dont 65 `-devel`.**
-C'est le seul reliquat de taille, et c'est un **choix**, pas un oubli. La transaction 8 a
-installé `meson`, `gcc-c++`, `just` et 65 paquets de développement pour compiler le
-greeter — qui est compilé depuis le 2026-09-04. Deux options, à trancher :
-
-- **Les garder** : recompiler le greeter (mise à jour, changement d'écran, nouvelle
-  version de Noctalia) reste possible hors ligne et sans réfléchir.
-- **Les retirer** : `sudo dnf remove` sur la liste de la transaction 8. On regagne 443 Mo
-  et la liste de paquets redevient lisible — mais **la prochaine recompilation redemande
-  les 100 paquets**, donc du réseau et cinq minutes.
-
-443 Mo sur un disque de 236 Go dont 180 sont libres n'est pas un argument. **La vraie
-question est la lisibilité de l'inventaire** : 65 `-devel` sur 101 paquets explicites
-noient les 36 autres. Aucune urgence, mais à décider une fois pour de bon plutôt qu'à
-chaque relecture.
-
-**2. Trois clés `dconf` orphelines, et le piège qu'elles illustrent.**
-`dconf dump /org/gnome/` rend encore :
-
-```
-[login-screen]
-enable-fingerprint-authentication=false
-enable-smartcard-authentication=false
-enable-switchable-authentication=false
+```bash
+sudo dnf install ~/rustdeskadmin-x86_64.rpm
 ```
 
-Ce sont des clés du schéma **`org.gnome.login-screen`, livré par GDM** — qui n'est pas
-installé. Vérifié : aucun fichier de `/usr/share/glib-2.0/schemas/` ne définit ce schéma,
-et `gsettings get org.gnome.login-screen …` répond « Le schéma n'existe pas ».
+Le RPM est **généré** depuis la console RustDesk de l'entreprise : il embarque l'adresse du
+serveur et la clé de relais. Il n'existe à aucune URL publique — il se **régénère**, il ne
+se télécharge pas.
 
-> **Une clé `dconf` peut exister sans son schéma, et personne ne s'en plaint.** `dconf`
-> est une base clé/valeur ; les schémas GSettings ne sont qu'une **description** posée
-> par-dessus. Retirer le paquet qui livre un schéma laisse donc les valeurs en place,
-> illisibles par `gsettings` mais toujours présentes dans la base. Conséquence pour un
-> inventaire : `dconf dump` montre des réglages **qui ne sont plus lus par rien**, et rien
-> ne le signale. Même famille que « un paquet installé n'est pas un paquet utilisé », au
-> niveau des données de configuration.
+⚠ **Ne PAS taper `systemctl enable --now` ensuite : le `%post` l'a déjà fait.** Il copie
+aussi l'unité dans `/etc/systemd/system/`, deux `.desktop` dans `/usr/share/applications/`
+et crée `/usr/bin/rustdeskadmin` — **quatre fichiers que `rpm -qf` ne reconnaîtra jamais.**
 
-Purge sans conséquence : `dconf reset -f /org/gnome/login-screen/`. Le reste de
-`/org/gnome/` est **utile et à garder** : `desktop/interface` porte `color-scheme='prefer-dark'`
-et le thème de curseur, lus par les applications GTK ; `nautilus/*` est écrit par Nautilus.
+> **Sur tout RPM hors distribution : `rpm -qp --scripts` AVANT `dnf install`.** C'est la
+> seule façon de savoir ce qui va se passer. Deuxième fois que ça sert sur cette machine.
 
-**3. Un fichier inerte, déjà connu sous une autre forme.**
-`/etc/X11/xorg.conf.d/00-keyboard.conf` existe (posé par `systemd-localed`, paquet
-`systemd`) et **n'est lu par personne** : son propre en-tête dit « read by systemd-localed
-and Xorg », et `xorg-x11-server-Xorg` n'est pas installé — seul `Xwayland` est là, et il
-ne lit pas ce fichier.
+→ `rustdeskadmin.service` `enabled`, trois processus (`--service` root, `--server`, `--tray`)
+→ `hyprctl devices` → un périphérique `rustdesk-uinput-keyboard` apparaît
+→ **rien à ouvrir dans `firewalld`** : RustDesk sort vers son relais, il n'écoute pas
 
-**Détail qui compte davantage que son inertie : il dit `XkbVariant "oss"`, pas `azerty`.**
-La note de `CLAUDE.md` sur ce piège affirme qu'il dit `fr/azerty` ; c'était vrai sur
-l'itération 01, ce ne l'est pas ici. Donc même le jour où un composant le lirait, il
-donnerait une **autre** disposition que celle configurée dans `hyprland.lua` et le
-`greeter.toml`. À laisser tel quel — `localectl` le régénère — mais à ne pas prendre pour
-une source de vérité du clavier.
+### 8quater. Virtualisation — hôte de la VM Windows
 
-**4. Deux dormants, qui ne sont pas des reliquats mais y ressemblent.**
+```bash
+sudo dnf install -y qemu-kvm libvirt virt-manager edk2-ovmf swtpm-tools
+sudo usermod -aG libvirt "$USER"
+sudo systemctl enable --now virtqemud.socket virtnetworkd.socket
+```
 
-- **`localsearch`** (l'ex-`tracker-miners`, dépendance faible de Nautilus) est installé et
-  **ne tourne pas** : son autostart XDG porte `OnlyShowIn=GNOME;KDE;XFCE;X-IVI;Unity;`,
-  qui exclut Hyprland. Vérifié : service `inactive`, aucun processus, **aucun cache
-  d'index**. Il n'indexe donc pas le home. Même mécanisme que les trois composants
-  `gnome-keyring` filtrés par `OnlyShowIn` — un paquet peut être là et n'être **jamais**
-  démarré.
-- **`~/.dotfiles-backup/hyprland.lua.autogenere`** : le fichier qu'Hyprland avait généré
-  pour lui-même, écarté par `stow`. Gardé volontairement — c'est la référence du format
-  Lua livré par le paquet.
+228 paquets — la plus grosse transaction après l'installation. `edk2-ovmf` et
+`swtpm-tools` **ne sont pas optionnels pour Windows 11** (UEFI Secure Boot + TPM émulé), et
+sans eux le message ne dit pas lequel manque.
 
-### Ce qui n'a pas été vérifié, et pourquoi
+⚠ Le groupe `libvirt` n'est **effectif qu'après une nouvelle session** : ouvrir un autre
+terminal ne suffit pas.
 
-Le SSD USB (itération 01) porte, lui, toute l'accumulation du modèle de test. **Il n'a pas
-été audité** : il va probablement être formaté (décision de Julien, 2026-09-07), donc son
-état n'a pas d'avenir. Ce qui doit en sortir avant le formatage est traité dans
-`journal/01-fedora-44-workstation/README.md`.
+Puis le sous-volume des images, ⚠ **AVANT la première image et AVANT tout instantané** :
+
+```bash
+sudo btrfs subvolume create /var/lib/libvirt/images
+sudo chattr +C /var/lib/libvirt/images
+sudo restorecon -Rv /var/lib/libvirt/images
+```
+
+- **`+C` ne s'applique qu'aux fichiers créés ENSUITE.** Posé sur un dossier déjà peuplé il
+  **ne fait rien** — pas d'erreur, pas d'effet.
+- **Un sous-volume Btrfs neuf est `unlabeled_t`**, pas `var_lib_t` : sans `restorecon`,
+  `qemu` confiné ne peut pas lire l'image, avec un « impossible d'ouvrir le disque » opaque.
+
+→ `lsattr -d /var/lib/libvirt/images` → `C`
+→ `ls -Zd /var/lib/libvirt/images` → `virt_image_t`
+
+### 8quinquies. Le pont réseau `br0` — trois profils
+
+```bash
+sudo nmcli connection add type bridge con-name br0 ifname br0 \
+    ipv4.method auto ipv6.method auto \
+    bridge.stp no \
+    bridge.mac-address <MAC DE LA CARTE PHYSIQUE DE CETTE MACHINE> \
+    connection.autoconnect yes
+
+sudo nmcli connection add type ethernet con-name br0-port ifname enp0s31f6 \
+    controller br0 connection.autoconnect yes
+
+sudo nmcli connection modify "Connexion filaire 2" connection.autoconnect no
+```
+
+**La troisième commande est la moitié du travail, et c'est celle qu'on oublie.** Laissé
+actif, le profil Ethernet d'origine se dispute la carte avec `br0-port` au démarrage, de
+façon non déterministe.
+
+- **`bridge.stp no`** : un pont avec STP actif **émet des BPDU**, ce qui met un port protégé
+  par BPDU guard en `err-disable` — et la remise en service se fait **côté switch**.
+- **`bridge.mac-address`** : sans lui le pont prend la MAC la plus basse de ses ports, donc
+  peut changer quand une VM démarre — et l'hôte change alors d'adresse IP tout seul.
+
+> ✎ **La MAC et le nom d'interface sont propres au MATÉRIEL, pas à la configuration.**
+> `mesures.md` §8quater enregistre `E8:CF:83:89:18:D4` et `enp0s31f6` : ce sont ceux de
+> la carte du poste précédent. Sur une machine neuve, **relever les vrais** :
+> `ip -br link` et `cat /sys/class/net/<iface>/address`. Recopier la valeur enregistrée
+> serait usurper la MAC d'une carte morte.
+
+→ ce que le **noyau applique**, pas ce que `nmcli` déclare :
+```bash
+cat /sys/class/net/br0/address              # = la MAC de la carte
+cat /sys/class/net/br0/bridge/stp_state     # 0
+cat /sys/class/net/br0/bridge/vlan_filtering # 0
+bridge link show                            # carte en « master br0 », état « forwarding »
+```
+`forwarding` immédiat prouve que STP est coupé : avec STP actif, le port passerait par
+`listening` puis `learning`.
+
+### 8sexies. Outils d'administration réseau
+
+```bash
+sudo dnf install bind-utils nmap tcpdump
+```
+
+Outils d'alternance SRC, pas des dépendances du bureau.
 
 ## 9. Dotfiles
 
 ```bash
-sudo dnf install stow
+# 1. Écarter les fichiers par défaut de la distro — sinon stow REFUSE
+mkdir -p ~/.dotfiles-backup
+for f in .bashrc .bash_profile .gitconfig; do
+    [ -f ~/"$f" ] && [ ! -L ~/"$f" ] && mv ~/"$f" ~/.dotfiles-backup/
+done
+
+# 2. Faire exister les dossiers que le tree folding remonterait trop haut
+mkdir -p ~/.config/uwsm
+
+# 3. SIMULER — la simulation nomme le niveau exact de chaque lien
 cd ~/linux/dotfiles
-# écarter d'abord les fichiers par défaut de la distro : stow ne remplace jamais
-# un vrai fichier — c'est une sécurité, pas un bug
-stow -v -t ~ hypr foot          # fait le 2026-09-04
-mkdir -p ~/.config/uwsm         # AVANT, contre le tree folding
-stow -v -t ~ uwsm               # fait le 2026-09-07
-stow -v -t ~ bash git nas desktop
+stow -n -v -t ~ bash git hypr foot nas uwsm
+
+# 4. Poser
+stow -v -t ~ bash git hypr foot nas uwsm
 ```
 
-- [x] `hypr` et `foot` posés (2026-09-04)
-- [x] `uwsm` posé (2026-09-07) — `XDG_DATA_DIRS` pour les Flatpaks
-- [x] `nas` — **posé, mais ça n'avait pas été noté** ; l'unité tourne depuis le 2026-09-04
-- [ ] `bash`, `git`, `desktop` — **toujours pas posés au 2026-09-07** : `~/.bashrc`,
-      `~/.bash_profile` et `~/.gitconfig` sont encore les fichiers par défaut de Fedora et
-      `~/.bashrc.d` n'existe pas. Rien du paquet `bash` du dépôt n'est en service.
-      Re-vérifié par `stow -n -v` le 2026-09-07 : `bash` et `git` **refusent** (conflit sur
-      des vrais fichiers), `desktop` poserait le lien sans conflit
+⚠ **L'étape 1 n'est pas facultative** : c'est elle qui débloque `bash` et `git`. Elle n'a
+jamais été exécutée sur le poste précédent, d'où 4 paquets posés sur 6.
 
-**L'état exact des liens, mesuré le 2026-09-07** — 4 paquets sur 7 :
+⚠ **L'étape 2 non plus.** Sans elle, `stow` pose `~/.config/uwsm → <dépôt>` et le
+`default-id` qu'y écrit `uwsm select` finirait **versionné**. Troisième occurrence du même
+piège après `~/.bashrc.d` et `~/.config/systemd`.
 
-| Paquet | Posé ? | Preuve |
-|---|---|---|
-| `hypr` | oui | `~/.config/hypr/hyprland.lua` → dépôt, contenu identique |
-| `foot` | oui | `~/.config/foot` → dépôt (lien de **dossier**, tree folding) |
-| `nas` | oui | `~/.config/systemd/user/nas-infoadmin.service` → dépôt |
-| `uwsm` | oui | `~/.config/uwsm/env` → dépôt |
-| `bash` | **non** | `~/.bashrc` et `~/.bash_profile` datés du **16 janv. 2026** = l'ISO |
-| `git` | **non** | `~/.gitconfig` écrit à la main : `[user]` seul, 3 lignes |
-| `desktop` | **non** | `~/.local/share/applications/` ne contient qu'un fichier de Claude Code |
+⚠ **L'étape 3 non plus** : `stow -n -v` est le seul contrôle fiable du niveau où le lien
+atterrit.
 
-**Ce que le paquet `bash` non posé coûte concrètement**, pour que ce ne soit pas une ligne
-abstraite : pas d'historique élargi ni horodaté (`HISTSIZE=1000` au lieu de 50000, aucun
-`HISTTIMEFORMAT`), pas de `~/.bashrc.d`, pas d'alias. Sur un poste de lab dont toute la
-méthode repose sur « retrouver ce qu'on a tapé », c'est la perte la plus gênante des trois.
+`-t ~` est obligatoire : sans lui, `stow` vise le **parent** du dossier courant, donc
+`~/linux/`. Le paquet `desktop` n'est pas posé (son unique entrée n'a plus d'objet) et
+`sway` ne sert qu'au lab.
 
-**Et `desktop` n'a rien à poser d'utile aujourd'hui** : son unique entrée
-`vm-win11.desktop` lançait la VM via `virt-manager` — or la VM tourne et se retrouve par
-le lanceur Noctalia. À reprendre quand on saura ce qu'on veut y mettre, plutôt qu'à poser
-pour cocher une case.
+→ `ls -l` sur les cibles des six paquets — **un `[ ]` peut vouloir dire « pas fait » ou
+  « fait, pas noté », et seule la machine tranche** :
+  `~/.bashrc`, `~/.bash_profile`, `~/.bashrc.d`, `~/.gitconfig`, `~/.config/git/ignore`,
+  `~/.config/hypr/hyprland.lua`, `~/.config/foot`,
+  `~/.config/systemd/user/nas-infoadmin.service`, `~/.config/uwsm/env`
+  (certains sont des liens de **dossier** — tree folding : `~/.bashrc.d` et `~/.config/foot`
+  pointent sur le dépôt en entier, donc **jamais de secret dedans**)
 
-### Deux fichiers de configuration hors paquet, trouvés le 2026-09-07
+Puis **déconnexion / reconnexion** : l'environnement de session ne se recharge pas.
 
-- `~/.config/git/ignore` contient `**/.claude/settings.local.json`. C'est un vrai geste,
-  utile et non versionné : à **intégrer au paquet `git`** (`dotfiles/git/.config/git/ignore`),
-  pas à laisser dans un coin du home.
-- `~/.config/autostart/mattermost-desktop.desktop` a été créé **par Mattermost lui-même**
-  au premier lancement (`Exec=/app/main/mattermost-desktop`). Rien à versionner : il se
-  recréera. À savoir pour ne pas le prendre pour une configuration maison.
+## 10. Instantanés
 
-> **Un `[ ]` peut vouloir dire « pas fait » ou « fait, pas noté ».** Constaté le
-> 2026-09-07 : `nas` était déployé et l'unité active, mais la case était vide. La seule
-> façon de trancher est de regarder la machine — `ls -l` sur les cibles, pas la procédure.
+```bash
+sudo dnf install snapper
+sudo snapper -c root create-config /          # ✎ INVENTÉ — commande non attestée
+sudo snapper -c home create-config /home      # ✎ INVENTÉ
+```
 
-## 10. Instantanés — FAIT le 2026-09-04, complété le 2026-09-07
+Puis reporter les réglages dans `/etc/snapper/configs/root` **et** `/etc/snapper/configs/home`
+(identiques) :
 
-- [x] `snapper`, configurations `root` et `home` — 0.13.0, dépôt Fedora (2026-09-04 17:06).
-      Réglages relevés le 2026-09-07, identiques pour les deux configs :
-      `TIMELINE_LIMIT_DAILY=7`, tous les autres paliers à `0`, `NUMBER_LIMIT=10`,
-      `SPACE_LIMIT=0.5`, `FREE_LIMIT=0.2`, `ALLOW_USERS="jzielona"`, `SYNC_ACL="yes"`.
-      **Seule la rétention quotidienne est active** : pas d'horaire, pas d'hebdomadaire.
-      Sur un poste allumé en journée, ça donne un instantané par jour ouvré et une
-      profondeur d'une semaine — état constaté : `root` 1, 7, 8, 9, 10, 11 ; `home` 1, 7,
-      8, 9. `ALLOW_USERS` explique pourquoi `/.snapshots` est listable sans `sudo`.
-- [x] **Convertir `/var/lib/libvirt/images` en sous-volume AVANT tout instantané** —
-      sous-volume ID 259, `+C` posé à vide, `restorecon` → `virt_image_t` (2026-09-04)
-- [x] `snapper-timeline.timer` et `snapper-cleanup.timer` — les deux `enabled` + `active`.
-      Attention, `timeline` a `UnitFilePreset=disabled` : installer `snapper` ne suffit pas
-- [x] **`grub-btrfs` — hors dépôt Fedora, posé le 2026-09-07 depuis un COPR.**
+```
+TIMELINE_CREATE=yes      TIMELINE_CLEANUP=yes     TIMELINE_MIN_AGE=1800
+TIMELINE_LIMIT_HOURLY=0  TIMELINE_LIMIT_DAILY=7   (weekly/monthly/yearly = 0)
+NUMBER_CLEANUP=yes       NUMBER_LIMIT=10          NUMBER_LIMIT_IMPORTANT=5
+SPACE_LIMIT=0.5          FREE_LIMIT=0.2
+ALLOW_USERS="jzielona"   SYNC_ACL="yes"
+```
 
-      ```bash
-      # sauvegarde AVANT : le %post du RPM lance grub2-mkconfig tout seul
-      sudo snapper -c root create -d "avant grub-btrfs"
-      sudo cp -a /boot/grub2/grub.cfg /root/grub.cfg.avant-grub-btrfs
+```bash
+sudo systemctl enable --now snapper-timeline.timer snapper-cleanup.timer
+```
 
-      sudo dnf copr enable pego-copr/grub-btrfs
-      sudo dnf install grub-btrfs          # tire inotify-tools
-      sudo systemctl enable --now grub-btrfsd
-      ```
+⚠ `snapper-timeline.timer` a `UnitFilePreset=disabled` : **installer `snapper` ne suffit
+pas** à avoir des instantanés automatiques.
 
-      **Origine et version :** COPR `pego-copr/grub-btrfs`, paquet
-      `grub-btrfs-4.14-1.fc44.noarch`, script en version `master-2026-05-31T15:55:08+00:00`.
-      Clé OpenPGP `3EEC594E5659BB518F800A200E5CA0BCBECCC126`.
-      **Ne pas prendre `kylegospo/grub-btrfs`** : ses chroots incluent `fedora-44` mais le
-      paquet est un instantané git de 2022 en release `.fc38`.
+→ `systemctl is-enabled snapper-timeline.timer snapper-cleanup.timer` — **pas** la sortie
+  de `enable`, qui n'a annoncé qu'un lien sur deux le 2026-09-04
+→ exclusion de la VM, et c'est cette mesure qui la prouve, pas l'existence du sous-volume :
+  `ls -a /.snapshots/1/snapshot/var/lib/libvirt/images/` → `.` et `..` seulement
+→ `snapper -c root list` répond **sans `sudo`** (effet de `ALLOW_USERS` + `SYNC_ACL`)
 
-      **Aucune configuration à écrire** — le `config` livré détecte Fedora, l'unité
-      surveille déjà `/.snapshots`. Vérifié avant installation avec `rpm -qlp`, `rpm -qRp`
-      et `rpm -qp --scripts` sur le RPM téléchargé.
+### 10bis. `grub-btrfs` — sauvegarde AVANT
 
-- [x] **Vérifier que ça marche vraiment, en DEUX mesures** (2026-09-07) — la documentation
-      dit que le `/boot` séparé est géré, elle ne prouve pas que ça marche sur cette machine :
+```bash
+# ⚠ ORDRE : le %post du RPM lance grub2-mkconfig tout seul et réécrit grub.cfg
+sudo snapper -c root create -d "avant grub-btrfs"
+sudo cp -a /boot/grub2/grub.cfg /root/grub.cfg.avant-grub-btrfs
 
-      ```bash
-      sudo sh -c 'grep -c menuentry /boot/grub2/grub-btrfs.cfg'          # attendu : > 0
-      sudo sh -c 'grep -n "41_snapshots" /boot/grub2/grub.cfg'           # attendu : un configfile
-      ```
+sudo dnf copr enable pego-copr/grub-btrfs
+sudo dnf install grub-btrfs          # tire inotify-tools
+sudo systemctl enable --now grub-btrfsd
+```
 
-      La seconde est la moins évidente et la plus importante : sans elle, des entrées
-      peuvent exister dans un fichier qu'aucun `configfile` ne lit. Résultat obtenu :
-      11 entrées, et `grub.cfg:266-274` les source bien.
+**COPR `pego-copr/grub-btrfs`**, paquet `grub-btrfs-4.14-1.fc44.noarch`.
+⚠ **Ne pas prendre `kylegospo/grub-btrfs`** : ses chroots incluent `fedora-44` mais le
+paquet est un instantané git de 2022 en release `.fc38`. Le nom d'un chroot ne dit rien de
+l'âge du paquet.
 
-      **Forme exacte d'une entrée générée, relevée le 2026-09-07** — c'est elle qui prouve
-      que le `/boot` séparé est géré :
+**Aucune configuration à écrire** : le `config` livré détecte Fedora tout seul et l'unité
+surveille déjà `/.snapshots`.
 
-      ```
-      search --no-floppy --fs-uuid --set=root 4a4ba7f7-…     <- l'ext4 /boot VIVANTE
-      linux "/vmlinuz-7.1.13-200.fc44.x86_64" root=UUID=39959ad8-… \
-            rd.luks.uuid=luks-680cb146-… rhgb quiet \
-            rootflags=compress=zstd:1,x-systemd.device-timeout=0,subvol="root/.snapshots/10/snapshot"
-      ```
+→ **deux mesures, et la seconde est la plus importante** :
+```bash
+sudo sh -c 'grep -c menuentry /boot/grub2/grub-btrfs.cfg'   # attendu : > 0
+sudo sh -c 'grep -n "41_snapshots" /boot/grub2/grub.cfg'    # attendu : un configfile
+```
+Sans la seconde, des entrées peuvent exister dans un fichier qu'aucun `configfile` ne lit —
+indiscernable de l'extérieur d'une installation qui marche.
 
-      Le noyau vient de la partition `/boot` en service (chemin relatif à elle), la racine
-      du sous-volume de l'instantané. **Deux formes coexistent et il faut le savoir :**
-      l'entrée BLS vivante porte `rootflags=subvol=root` tout court, le `grub-btrfs.cfg`
-      généré reconstruit la ligne depuis `GRUB_CMDLINE_LINUX` + les options de `fstab`.
-      Chercher le même motif dans les deux fichiers ne donne rien.
+Le `sh -c` n'est pas décoratif : `/boot/grub2/` est en `root`, le glob serait développé par
+le shell **appelant** et `grep` recevrait la chaîne littérale.
 
-- [x] **`grub-btrfsd` ne surveille QUE `/.snapshots`** — vérifié le 2026-09-07 dans
-      l'unité : `ExecStart=/usr/bin/grub-btrfsd --syslog /.snapshots`, et le processus
-      `inotifywait` associé ne regarde que ce dossier. **Les instantanés de `/home`
-      n'apparaîtront jamais au menu GRUB**, ce qui est cohérent : on ne démarre pas sur un
-      `/home`. À ne pas prendre pour un oubli de configuration.
-      L'unité est installée dans **`/etc/systemd/system/`** par le RPM du COPR, pas dans
-      `/usr/lib/systemd/system/` — donc modifiable sans surcharge, mais aussi survivante à
-      une désinstallation.
+- [ ] **Répéter à froid la porte de sortie manuelle**, pas le jour où ça casse. Au menu
+      GRUB, touche `e`, remplacer `subvol=root` par **`subvol=root/.snapshots/<N>/snapshot`**
+      (le préfixe `root/` compte : `/` est monté en `subvol=/root`). **Le démarrage sera
+      dégradé** — `/var` et `/var/log` sont dans l'instantané, donc en lecture seule.
+      Objectif : obtenir un shell suffisant pour `snapper rollback`. **Pas** une session
+      graphique. Raisonnement complet dans `poste/README.md`.
 
-- [ ] **Aucune sauvegarde de `grub.cfg` n'existe sur `/boot`** — vérifié le 2026-09-07 :
-      `/boot/grub2/` ne contient que `grub.cfg` (réécrit par le `%post` du RPM le
-      2026-09-07 à 08:59) et `grub-btrfs.cfg`. La copie de sécurité prise avant
-      l'installation était mise dans `/root/grub.cfg.avant-grub-btrfs` — à confirmer
-      qu'elle y est encore, sinon la précaution documentée plus haut n'a plus d'objet
+## 11. Reprise de la VM Windows
 
-- [ ] Répéter **à froid** la porte de sortie manuelle, pas le jour où ça casse. Mesuré sur
-      l'entrée vivante le 2026-09-07 (`sudo grubby --info=ALL`) :
+```bash
+sudo cp --sparse=always /chemin/sauvegarde/win11.qcow2 /var/lib/libvirt/images/
+sudo cp -a /chemin/sauvegarde/win11_VARS.qcow2 /var/lib/libvirt/qemu/nvram/
+sudo restorecon -Rv /var/lib/libvirt/images/
+sudo virsh -c qemu:///system define /chemin/sauvegarde/win11.xml
+```
 
-      ```
-      args="ro rootflags=subvol=root rd.luks.uuid=luks-680cb146-… rhgb quiet"
-      ```
+⚠ **`cp --sparse=always` n'est pas une option de confort.** L'image est un fichier
+**creux** : sans ça la copie occupe sa taille **apparente** (101 Go au lieu de 46 réels),
+sans erreur et sans avertissement.
 
-      Au menu GRUB, touche `e`, puis remplacer `subvol=root` par
-      **`subvol=root/.snapshots/<N>/snapshot`**.
-      *Le chemin a été corrigé le 2026-09-07* — il portait `.snapshots/<N>/snapshot`, sans
-      le préfixe `root/`, et n'aurait pas démarré. Démenti dans la fiche « Instantanés
-      Btrfs » de `poste/README.md`.
+⚠ **`mv` conserverait l'étiquette SELinux d'origine** et `qemu`, confiné, ne pourrait pas
+lire le fichier — symptôme opaque. D'où `cp` + `restorecon`.
 
-      **À quoi s'attendre, documenté le 2026-09-07 — ne pas chercher une panne qui n'en
-      est pas une.** Le démarrage sera **dégradé** : `/var` et `/var/log` sont dans le
-      sous-volume `root`, donc dans l'instantané, donc en lecture seule. Le projet exige
-      `/var` en sous-volume séparé pour un démarrage propre (avertissement en tête de
-      `41_snapshots-btrfs`), sa parade overlayfs demande **dracut ≥ 109** alors que la
-      machine est en **108**, et l'issue #324 décrit ce cas exact toujours **non résolu**.
-      **Objectif du test : obtenir un shell suffisant pour lancer `snapper rollback`.** Pas
-      une session graphique
+→ la preuve que la copie creuse a marché, et c'est la seule après coup :
+  `du -sh` (≈46 Go) **différent** de `du -sbh` (≈101 Go)
+→ `ls -Z` → `svirt_image_t` avec des catégories MCS
+→ `sudo virsh -c qemu:///system list` — **jamais `virsh` sans `-c`**, qui vise
+  `qemu:///session` et répond vide alors que la VM tourne
+→ `sudo virsh -c qemu:///system qemu-agent-command win11 '{"execute":"guest-ping"}'`
+  → `{"return":{}}`
 
-## 11. Reprise depuis l'ancien disque — FAITE le 2026-09-07, et volontairement partielle
+Si la sauvegarde manque, la VM se reconstruit de zéro : fiche complète dans
+`poste/README.md` (chipset Q35 obligatoire, firmware `secboot` irréversible, TPM émulé,
+pilote `viostor`, jointure au domaine).
 
-- [x] **VM Windows reprise et en service.** Mesuré le 2026-09-07 : le domaine `win11`
-      tourne, l'agent invité répond (`guest-info` → version **110.2.3**), le disque est
-      `/var/lib/libvirt/images/win11.qcow2` et le NVRAM
-      `/var/lib/libvirt/qemu/nvram/win11_VARS.qcow2` (561 ko) est bien là.
+## 12. Vérifications de fin
 
-      | Mesure | Valeur |
-      |---|---|
-      | Occupation **réelle** (`du -sh`) | **46 Go** |
-      | Taille **apparente** (`du -sbh`) | **101 Go** |
-      | Attribut | `+C` (NOCOW) sur le fichier **et** sur le sous-volume |
-      | Étiquette SELinux | `svirt_image_t:s0:c159,c991` |
+```bash
+sudo reboot
+```
 
-      **L'écart 46/101 est la preuve que la copie creuse a marché.** Sans
-      `cp --sparse=always`, le fichier occuperait ses 101 Go apparents — sans erreur, sans
-      avertissement. C'est la seule façon de vérifier après coup : comparer `du -sh` et
-      `du -sbh`. Le fichier a grossi depuis l'ancien disque (31 Go réels en septembre), ce
-      qui est normal, Windows ayant tourné.
+Après le redémarrage :
 
-      L'étiquette SELinux avec les catégories MCS (`c159,c991`) confirme que
-      `restorecon` — ou libvirt lui-même au démarrage du domaine — a fait son travail :
-      un `mv` aurait laissé l'étiquette d'origine et `qemu`, confiné, n'aurait pas pu lire
-      le fichier.
+- [ ] greeter affiché, **mot de passe saisi correctement du premier coup** — c'est la seule
+      preuve qui vaille que l'AZERTY du greeter fonctionne
+- [ ] trousseau déverrouillé (`Locked = false`, §7.2) et `~/nas` monté
+- [ ] les trois portails tournent — **et à éprouver à l'usage** : capture d'écran et
+      sélecteur de fichiers. Trois processus qui tournent ne prouvent pas qu'un portail répond
+- [ ] `git ls-remote` aboutit dans un vrai terminal
+- [ ] veille / reprise — jamais éprouvée sur ce matériel
+- [ ] première capture d'état : `./bin/snapshot.sh --poste` → `installation/etats/<date>/`.
+      **Jamais `--baseline`** : une baseline mesurerait l'image ISO, pas la distribution
 
-- [x] **Rien d'autre n'est repris, intentionnellement.** Décision de Julien le 2026-09-07 :
-      la VM était le seul élément dont il avait réellement besoin, le reste de l'ancien
-      disque étant du parasite. Écrit ici pour que ça ne soit pas relu plus tard comme une
-      étape oubliée : **l'étape est close, pas en attente.**
-      (La base KeePassXC et les clés relèvent de la gestion des secrets, hors périmètre du
-      dépôt — voir `CLAUDE.md`.)
+## Ce qui reste ouvert après la procédure
 
-- [x] Ces fichiers étaient sur `sda3`, sous-volume `root`, et demandaient `sudo`
+Les cases ci-dessous ne sont **pas** des étapes ratées : ce sont les points que le poste
+précédent n'avait pas tranchés, reportés tels quels pour ne pas les perdre.
 
-> **L'ancien disque est encore monté, en lecture seule et hors `fstab`.** Vérifié le
-> 2026-09-07 : `/mnt/ancien` (`sda3[/root]`) et `/mnt/ancien-home` (`sda3[/home]`), tous
-> deux en `ro`. Ces montages ne sont dans aucun fichier de configuration — ils ont été
-> posés à la main pour la reprise et **ne survivront pas au prochain redémarrage**. Le
-> `ro` est une bonne précaution : le disque porte l'itération 01, qui doit rester intacte.
-> Reste à décider s'ils doivent être démontés maintenant que la reprise est finie.
-
-## 12. Vérifications de fin — passées le 2026-09-07, sauf trois
-
-- [x] **Redémarrage complet** : dernier boot le 2026-09-07 à 10:27, greeter affiché,
-      session ouverte via greetd sur tty1. **LUKS déverrouillé à la phrase de passe, pas
-      par le TPM** — l'enrôlement reste la seule case importante de §1
-- [x] **Trousseau déverrouillé, `~/nas` monté** — mesures en §7
-- [x] Portails : les **trois** tournent (`xdg-desktop-portal`, `-gtk`, `-hyprland`)
-- [ ] Portails : vérifier à l'**usage** la capture d'écran et le sélecteur de fichiers.
-      Trois processus qui tournent ne prouvent pas qu'un portail répond — même famille que
-      « un paquet installé n'est pas un paquet utilisé »
-- [ ] Agent SSH fonctionnel, `git ls-remote` aboutit **dans un vrai terminal**
-- [ ] Veille / reprise
-- [x] **`bin/snapshot.sh --poste` — première capture faite le 2026-09-07**, dans
-      `installation/etats/2026-09-07/`.
-
-      > **Le script ne savait pas capturer ce poste.** Il n'écrivait que dans
-      > `journal/<itération>/`, et le poste de référence **n'est pas une itération** : la
-      > case ci-dessus était donc infaisable telle quelle. Corrigé le 2026-09-07 par
-      > l'option `--poste`, qui écrit dans `installation/etats/<date>/` et **n'écrit jamais
-      > de baseline** — une baseline ici mesurerait l'image ISO, pas la distribution.
-      > L'écart affiché est celui avec la **capture précédente**, la question utile sur ce
-      > poste n'étant pas « qu'ai-je ajouté à la distro » mais « qu'ai-je changé depuis la
-      > dernière fois ». Trois mesures ont aussi été ajoutées à `system.md`, absentes et
-      > structurantes ici : version du compositeur, nombre de volumes LUKS, état de Secure
-      > Boot et du TPM2.
-
-- [ ] Définir un **nom de machine**. `hostnamectl` → `Static hostname: (unset)`,
-      `/etc/hostname` absent, le `fedora` affiché partout est le nom **transitoire** par
-      défaut. Sans conséquence technique connue ici, mais deux effets réels : le nom
-      apparaît dans les journaux et sur le réseau, et un poste d'entreprise identifié
-      « fedora » n'est pas identifié
+- [ ] **Enrôler le TPM2 sur LUKS** (§1) — la plus visible au quotidien
+- [ ] **Relever et recopier `/etc/greetd/config.toml`** (§6.2)
+- [ ] **Configurer kitty** (§8)
+- [ ] **Nommer la machine** — `hostnamectl` → `(unset)` ; le `fedora` affiché est le nom
+      transitoire par défaut. Deux effets réels : le nom apparaît dans les journaux et sur
+      le réseau, et un poste d'entreprise identifié « fedora » n'est pas identifié
+- [ ] **Répéter à froid la porte de sortie GRUB** (§10bis)
+- [ ] **Trancher le sort des 100 paquets de compilation du greeter** (65 `-devel`) : les
+      garder pour recompiler hors ligne, ou les retirer pour que l'inventaire reste lisible
+- [ ] **Écrire le fuseau et la disposition console réellement choisis** (§1)

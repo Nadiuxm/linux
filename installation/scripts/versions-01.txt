@@ -1,5 +1,10 @@
 # Relevé du 2026-09-04 — bureau Hyprland sur Fedora 44 minimale
 # COPR : dtutila/hyprland
+#
+# Relevé DATÉ, gardé tel quel : c'est la photo des versions du 2026-09-04.
+# Le script qui l'a produit (01-bureau-hyprland.sh) a été supprimé le 2026-09-07,
+# son contenu utile étant repris dans procedure.md §4. Ne pas chercher à le
+# régénérer : la séquence courante est celle de la procédure.
 
 ## Paquets installés
 hyprland-0.56.2-3.fc44.x86_64

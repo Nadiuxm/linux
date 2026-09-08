@@ -26,8 +26,8 @@ manuelle ni script de synchronisation à maintenir. Et `stow -D` défait tout pr
 | `bash` | `.bashrc`, `.bash_profile`, `.bashrc.d/` | Rendu portable : gère `/etc/bashrc` (Fedora/RHEL) **et** `/etc/bash.bashrc` (Debian/Ubuntu). Historique élargi et horodaté. |
 | `git` | `.gitconfig`, `.config/git/ignore` | Identité, `main` par défaut, quelques alias. **Pas de `core.editor`** : la ligne `editor = vim` a été retirée le 2026-09-07, `vim` n'existant pas sur une image minimale (`vim-minimal` fournit `vi`) — git suit `$VISUAL`/`$EDITOR`/`vi`, ce qui est portable. `.config/git/ignore` porte les exclusions globales, rapatriées du poste le 2026-09-07. |
 | `sway` | `.config/sway/config` | WM tuilant Wayland, **tuilage seul** — le shell est à Noctalia. Config **possédée**, plus héritée : depuis le 2026-09-01 elle n'inclut plus `/etc/sway/config`, seulement `/etc/sway/config.d/*` (la ligne vitale, qui charge `sway-systemd`). Contient aussi la disposition `fr/azerty`, que Sway ne récupère nulle part ailleurs, et les liaisons en `bindcode`. |
-| `nas` | `.config/systemd/user/nas-infoadmin.service` | Montage automatique du partage SMB au login, sous GNOME **et** Sway. Crée aussi le lien `~/nas`. Le mot de passe n'est **pas** dans ce fichier — voir ci-dessous. |
-| `desktop` | `.local/share/applications/*.desktop` | Entrées de lanceur maison, visibles dans le lanceur Noctalia (`Super+d`). Une seule à ce jour : la VM Windows d'administration. |
+| `nas` | `.config/systemd/user/nas-infoadmin.service` | Montage automatique du partage SMB au login. Crée aussi le lien `~/nas`. **Exige `graphical-session.target`, donc une session lancée par `uwsm`** — la mention « sous GNOME et Sway » qui figurait ici était périmée depuis le 2026-09-04 : le fichier de l'unité lui-même dit qu'avec « Hyprland » tout court la target reste inactive et l'unité ne démarre jamais. Le mot de passe n'est **pas** dans ce fichier — voir ci-dessous. |
+| `desktop` | `.local/share/applications/*.desktop` | Entrées de lanceur maison, visibles dans le lanceur Noctalia. **Sans objet aujourd'hui, et non posé** : son unique entrée lance la VM via `virt-manager`, or la VM se retrouve par le lanceur Noctalia (`installation/mesures.md` §9). Paquet gardé comme emplacement, à reprendre quand on saura quoi y mettre — pas à poser pour cocher une case. |
 | `hypr` | `.config/hypr/hyprland.lua` | Compositeur, **tuilage seul** — le shell est à Noctalia. **En Lua, pas en `.conf`** : hyprlang est déprécié depuis Hyprland 0.55. Porte la disposition `fr/azerty`, les trois écrans et les liaisons `noctalia msg …`. Les espaces sont liés aux **symboles de niveau 1** de la rangée AZERTY (`ampersand`, `eacute`…) et non à `code:NN`, qui échoue silencieusement dans la config Lua. Remplace `sway` sur le poste de référence ; `sway` est gardé pour le lab. |
 | `uwsm` | `.config/uwsm/env` | **Environnement de la session graphique**, sourcé par `uwsm` (`man uwsm`). Il source `/etc/profile.d/flatpak.sh` pour `XDG_DATA_DIRS` — sans quoi aucune application Flatpak n'apparaît dans le lanceur. Raison de fond : `profile.d` ne s'exécute que dans un shell de **login**, et une session lancée par greetd → uwsm → Hyprland ne source jamais `/etc/profile`. **Exige `mkdir -p ~/.config/uwsm` AVANT le `stow`** (voir les limites). |
 | `foot` | `.config/foot/foot.ini` | Terminal Wayland. Corrige le défaut `size=8`, illisible à `scale=1`, que le zoom de foot ne persiste pas. **Ajouté au dépôt le 2026-09-04, après avoir failli être perdu** : il existait depuis le 2026-09-01 sans jamais avoir été commité. **Ce n'est plus le terminal du poste de référence** : kitty a pris la place le 2026-09-04. Paquet gardé — il documente un raisonnement (`dpi-aware`, échelle Wayland, densité du P2725DE) qui reste **la question à traiter pour kitty**, dont la config est vide. |
@@ -69,20 +69,21 @@ stow -v -t ~ bash git hypr foot nas uwsm
 > niveau le lien atterrirait — c'est le seul contrôle fiable.
 
 > **Choisir les paquets selon la machine.** `hypr` (poste de référence) et `sway` (lab)
-> sont **exclusifs** : ce sont deux compositeurs. `nas`, `desktop`, `foot` et `uwsm` n'ont
-> de sens que sur une machine avec session graphique. Sur une machine sans bureau,
+> sont **exclusifs** : ce sont deux compositeurs. `nas`, `foot` et `uwsm` n'ont de sens que
+> sur une machine avec session graphique. Sur une machine sans bureau,
 > `stow -v -t ~ bash git` suffit.
 
 ### État réel des liens sur le poste de référence — 2026-09-07
 
-**Quatre paquets sur sept sont posés.** Vérifié par `stow -n -v` et par les liens :
+**Quatre paquets sur six sont posés** (la cible est à six depuis le 2026-09-07 : `desktop`
+en est sorti, son unique entrée n'a plus d'objet). Vérifié par `stow -n -v` et par les liens :
 
 | Paquet | Posé ? | Pourquoi pas |
 |---|---|---|
 | `hypr`, `foot`, `nas`, `uwsm` | **oui** | — |
 | `bash` | non | conflit : `~/.bashrc` et `~/.bash_profile` sont les fichiers de l'ISO |
 | `git` | non | conflit : `~/.gitconfig` a été écrit à la main (`[user]` seul) |
-| `desktop` | non | poserait sans conflit, mais son unique entrée n'a plus d'objet |
+| *hors cible* : `desktop` | non | poserait sans conflit, mais son unique entrée n'a plus d'objet ; `sway` ne sert qu'au lab |
 
 L'étape 3 ci-dessus (écarter les fichiers de la distro) est exactement ce qui débloque
 `bash` et `git`. Elle n'a jamais été exécutée sur ce poste — **`stow` ne remplace jamais
@@ -140,13 +141,13 @@ Une copie laissée dans `$HOME` et l'on ne sait plus laquelle des deux fait foi.
   sur le poste de référence, trouvés le 2026-09-07 :
   - `/var/lib/noctalia-greeter/greeter.toml` — configuration du greeter, `greetd:greetd`,
     écrite à la main et livrée par aucun paquet. Recopiée intégralement dans
-    `installation/procedure.md` : c'est la seule des trois destinations qui puisse
+    `installation/procedure.md` §6.3 : c'est la seule des trois destinations qui puisse
     l'accueillir.
   - `/etc/tmpfiles.d/noctalia-greeter.conf` — même situation, même traitement.
 
   La leçon générale : **`stow` couvre le home, pas le poste.** Un geste posé dans `/etc`
-  ou `/var` n'a qu'une destination possible, la procédure — et rien ne le rappelle au
-  moment où on le pose.
+  ou `/var` n'a qu'une destination possible, `installation/procedure.md` — et rien ne le
+  rappelle au moment où on le pose.
 - **Noctalia écrit dans `XDG_STATE_HOME`, pas dans `.config`.** Ses réglages sont dans
   `~/.local/state/noctalia/settings.toml`, à côté de son historique de notifications, de
   son presse-papiers chiffré, de ses compteurs d'usage et de son cache de palettes

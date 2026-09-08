@@ -1,8 +1,12 @@
 # Poste de référence — cadrage
 
 > **Ce document est une note de décision, pas un mode opératoire.** Il dit *ce qui a
-> été choisi et pourquoi*. La séquence rejouable est dans `procedure.md`, le récit
-> daté de la construction dans `journal.md`.
+> été choisi et pourquoi*. Les gestes sont dans `procedure.md`, les mesures et versions
+> dans `mesures.md`, le récit daté de la construction dans `journal.md`.
+>
+> Les mentions de Sway et de GDM qui subsistent ici sont le **récit d'une décision datée**
+> (pourquoi Hyprland a remplacé Sway, pourquoi les lignes PAM de GDM ont été portées dans
+> greetd), pas une description du poste. Convention posée le 2026-09-07.
 >
 > Ouvert le 2026-09-04, au lendemain de l'installation.
 
@@ -26,12 +30,18 @@ Tout geste posé sur ce poste doit atterrir dans **exactement un** des trois :
 
 | Destination | Contenu |
 |---|---|
-| `installation/procedure.md` | la séquence rejouable, dans l'ordre : paquets, COPR, commits, lignes PAM, enrôlement TPM |
+| `installation/procedure.md` | **le geste** : la commande, dans l'ordre, avec ce qui casse si on l'inverse |
 | `dotfiles/` | ce que `stow` restaure |
 | `poste/` | l'inventaire vivant, une fiche par outil |
 
 **Un geste qui n'entre dans aucun des trois sera perdu.** C'est le critère à appliquer au
 fil de la construction, pas à la fin.
+
+> **`mesures.md` n'est PAS une quatrième destination**, et la distinction compte. Un geste
+> va dans `procedure.md` ; ce que sa mesure a appris va dans `mesures.md`. Le découpage du
+> 2026-09-08 vient précisément de ce que les deux étaient mélangés : le fichier accumulait
+> des constats très complets **sous lesquels des gestes manquaient**, et personne ne le
+> voyait en le relisant — seulement en le rejouant.
 
 ## Les deux disques — les rôles se sont inversés
 

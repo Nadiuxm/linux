@@ -97,8 +97,8 @@ Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a
 |---|---|
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
 | `poste/` | Inventaire **vivant** des outils de travail, indépendant de la distro. |
-| `installation/` | **Le poste de référence** : cadrage, procédure rejouable, journal de construction. |
-| `dotfiles/` | Paquets **GNU Stow**. Poste de référence, *cible* : `stow -v -t ~ bash git hypr foot nas desktop uwsm`. **État réel au 2026-09-07 : 4 sur 7 seulement** — `hypr`, `foot`, `nas`, `uwsm` sont posés ; `bash` et `git` sont **refusés** (conflit avec les fichiers de l'ISO, jamais écartés) et `desktop` n'a plus d'objet. Ne pas lire cette ligne comme un état. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). |
+| `installation/` | **Le poste de référence.** Quatre fichiers aux rôles disjoints, découpés le 2026-09-08 : `procedure.md` = **les gestes** (seule source de ce qu'on tape) · `mesures.md` = les constats, versions et ce qu'ils apprennent · `README.md` = les décisions · `journal.md` = le récit daté. Les numéros de section de `procedure.md` et `mesures.md` se correspondent. |
+| `dotfiles/` | Paquets **GNU Stow**. Poste de référence, *cible* : `stow -v -t ~ bash git hypr foot nas uwsm` (**six** paquets — `desktop` en est sorti le 2026-09-07, son unique entrée n'a plus d'objet). **État réel au 2026-09-07 : 4 sur 6** — `hypr`, `foot`, `nas`, `uwsm` sont posés ; `bash` et `git` sont **refusés** (conflit avec les fichiers de l'ISO, jamais écartés). Ne pas lire cette ligne comme un état. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
 Itération 01 : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland) —
@@ -116,6 +116,15 @@ mois est envisagée, donc « installation finale » est le mauvais mot. Tout ges
 atterrir dans **exactement un** de ces trois endroits — `installation/procedure.md`,
 `dotfiles/`, ou `poste/` — sinon il sera perdu. Détail et raisons dans
 `installation/README.md`.
+
+> **Corollaire appris le 2026-09-08, en rejouant la réinstallation sur papier : écrire un
+> CONSTAT n'est pas écrire un GESTE.** L'ancien `procedure.md` portait des mesures très
+> complètes — versions, sorties de commandes, tableaux — et il manquait dessous des gestes
+> sans lesquels la machine ne démarre pas (`mesa-dri-drivers`) ou le NAS ne monte pas
+> (réenregistrer le mot de passe SMB). **Aucune relecture ne le montrait ; seul le fait de
+> dérouler le fichier comme un mode opératoire l'a montré.** D'où le découpage, et d'où le
+> test à appliquer à `procedure.md` : *un lecteur qui ne lit que les blocs de code
+> obtient-il la machine ?*
 
 **Compositeur : Hyprland remplace Sway sur le poste de référence** (décision du
 2026-09-04), pour les animations, coins arrondis et flou que wlroots ne fournit pas. La
@@ -137,24 +146,31 @@ Cinq fiches au 2026-09-07 : **VM Windows d'administration**, **RustDesk**, **Mat
 **instantanés Btrfs (snapper)** et **WinBox**. Les deux outils **bloquants** — sans
 lesquels le travail ne se fait pas depuis ce poste — sont la VM Windows et RustDesk.
 
-**Second axe ouvert le 2026-09-01 : environnements de bureau.** Sway installé
-(transaction 8) en plus de GNOME, hors protocole de baseline mais après sa capture,
-donc sans la polluer. GNOME reste la session par défaut. Cadrage détaillé dans le
-`README.md` de l'itération 01. Si l'axe grossit (KDE, Xfce), lui donner son dossier.
+**Second axe ouvert le 2026-09-01 : environnements de bureau.** Sway + Noctalia par-dessus
+GNOME, sur l'itération 01. **Cet axe ne concerne QUE le lab, sur le SSD USB** — il n'y a ni
+`sway`, ni `gnome-shell`, ni `gdm` sur le poste de référence, et il n'y en a jamais eu
+(image minimale, vérifié le 2026-09-07). Cadrage détaillé dans le `README.md` de
+l'itération 01, qui reste sa source. Si l'axe grossit (KDE, Xfce), lui donner son dossier.
 
-**Noctalia depuis le 2026-09-01** (transaction 10) : shell Wayland complet — barre,
-lanceur, notifications, fond d'écran, OSD, verrouillage, menu de session, 112 commandes
-IPC (`noctalia msg --help`). En version **beta**, risque accepté : ce n'est pas le
-compositeur, s'il tombe Sway continue de tuiler. Le grief contre GNOME étant esthétique
-et non technique, c'est bien l'interface qui est évaluée ici.
+**Noctalia — le seul composant de cet axe qui ait survécu à la bascule**, et il est passé
+du lab au poste : shell Wayland complet (barre, lanceur, notifications, fond d'écran, OSD,
+verrouillage, menu de session, IPC `noctalia msg --help`), aujourd'hui en **5.0.0~beta.10**
+sur le poste, livré en binaire natif. Version **beta**, risque accepté : ce n'est pas le
+compositeur, s'il tombe Hyprland continue de tuiler. Le grief contre GNOME étant esthétique
+et non technique, c'est bien l'interface qui était évaluée.
 
-**Partage assumé depuis le 2026-09-01 (fin de journée) : Sway ne fait que du TUILAGE,
-Noctalia fait tout le shell.** La config Sway n'inclut donc plus `/etc/sway/config` —
-elle est **possédée**, pas héritée (voir les pièges). Conséquence : une mise à jour du
-paquet `sway` ne se propage plus dans le fichier versionné.
-Attention à ne pas mal lire ce partage : **les raccourcis restent dans Sway** et
-appellent `noctalia msg …`. Noctalia n'a aucun système de raccourcis et ne peut pas en
-avoir — sous Wayland, seul le compositeur voit le clavier.
+**Le partage compositeur / shell est la vraie leçon de cet axe, et il s'est transposé
+tel quel :** le compositeur ne fait que du **tuilage**, Noctalia fait **tout le shell**.
+Corollaire à ne pas mal lire : **les raccourcis restent dans le compositeur** et appellent
+`noctalia msg …`. Noctalia n'a aucun système de raccourcis et ne peut pas en avoir — sous
+Wayland, seul le compositeur voit le clavier.
+
+> **Ce qui était écrit ici jusqu'au 2026-09-07 décrivait Sway au présent** (« GNOME reste
+> la session par défaut », « la config Sway n'inclut plus `/etc/sway/config` », « s'il tombe
+> Sway continue de tuiler »), dans le fichier de contexte lu au début de chaque session.
+> Trois paragraphes de l'itération 01 présentés comme l'état de la machine. La leçon a été
+> gardée, l'état a été corrigé. Le détail Sway — config *possédée* et non héritée, et ce
+> que ça coûtait en `unbindsym` — reste dans les pièges plus bas et dans `dotfiles/sway/`.
 
 ## Comment travailler avec Julien
 
@@ -177,6 +193,13 @@ jour même, tant que le détail est frais.
 
 ## Pièges déjà rencontrés — ne pas refaire l'erreur
 
+> **Convention de lecture, posée le 2026-09-07.** Beaucoup de ces pièges citent **Sway,
+> GNOME ou GDM** : c'est là qu'ils ont été payés, sur l'itération 01. **Ce sont des
+> exemples, pas l'état de la machine** — le poste de référence n'a ni Sway, ni GNOME Shell,
+> ni GDM. Ce qui compte dans chaque entrée est le **mécanisme**, qui se transpose ;
+> l'outil cité ne fait que dater l'apprentissage. Corollaire pour l'écriture : un piège peut
+> nommer Sway ; une description d'état, jamais.
+
 - **Un dépôt activé ≠ un paquet installé.** Les 4 dépôts tiers de Fedora appartiennent
   au paquet `fedora-workstation-repositories` livré dans l'image ; la case « dépôts
   tiers » du premier démarrage les active. Vérifier avec `rpm -qf` (ou `dpkg -S`) à
@@ -193,11 +216,20 @@ jour même, tant que le détail est frais.
   demande de réécrire l'historique côté distant.
 - **`~/.bashrc.d` est un lien vers le dépôt** (tree folding de Stow). Tout fichier
   déposé dedans sera versionné : jamais de token ni de secret là-dedans.
-- **Un fichier de conf dans `/etc` n'est pas lu par tout le monde.** `00-keyboard.conf`
-  dit `fr/azerty` mais n'est lu que par **Xorg** ; GNOME lit `gsettings` ; Sway et les
-  compositeurs wlroots ne lisent ni l'un ni l'autre et retombent sur **US QWERTY**.
+- **Un fichier de conf dans `/etc` n'est pas lu par tout le monde.**
+  `/etc/X11/xorg.conf.d/00-keyboard.conf` n'est lu que par **Xorg** (son propre en-tête le
+  dit) ; GNOME lit `gsettings` ; les compositeurs Wayland — wlroots, Hyprland — ne lisent ni
+  l'un ni l'autre et retombent sur **US QWERTY**. D'où une disposition à déclarer dans
+  *chaque* compositeur : `hyprland.lua`, le `greeter.toml`, et la config Sway au lab.
   Avant de conclure qu'un réglage est « fait au niveau système », vérifier *qui* le lit.
   À refaire sur chaque distro où un compositeur Wayland est testé.
+  **Et cette note affirmait que le fichier dit `fr/azerty` : FAUX sur le poste, corrigé le
+  2026-09-07.** Il y dit `XkbVariant "oss"`. C'était vrai sur l'itération 01, ça ne l'est
+  pas ici — donc même le jour où un composant le lirait, il donnerait une **autre**
+  disposition que celle configurée partout ailleurs. Le fichier est en outre **inerte** :
+  `xorg-x11-server-Xorg` n'est pas installé, seul `Xwayland` est là et ne le lit pas. À
+  laisser tel quel (`localectl` le régénère), mais **jamais comme source de vérité du
+  clavier** — et ça reste la preuve qu'une note de piège se re-teste.
 - **Sway ne sait pas *désactiver* une directive, seulement en poser une autre par-dessus.**
   Tant que le fichier versionné incluait `/etc/sway/config`, il héritait d'un bureau
   complet dont on ne voulait pas et se remplissait de contournements : 22 `unbindsym`,
@@ -374,21 +406,24 @@ jour même, tant que le détail est frais.
   (`key: SUPER + SHIFT + code:49`) avec `keycode: 0`. Compter 71 liaisons enregistrées
   n'aurait rien dit — c'est leur forme qui parlait. Même famille que « une commande qui
   réussit n'est pas une commande qui fait ce qu'on croit ».
-  *Réponse retenue, transposable — et sa justification était FAUSSE, corrigée le
-  2026-09-07 :* cette note affirmait que `input:resolve_binds_by_sym` vaut **`true`** par
-  défaut. Mesuré : `hyprctl getoption input:resolve_binds_by_sym` → **`bool: false
-  set: false`**. Le geste retenu est bon, la raison écrite était l'inverse de la vraie —
-  et c'est justement parce que l'option vaut **`false`** que lier les symboles marche :
-  Hyprland traduit alors le keysym écrit dans la config en **code de touche** via le keymap
-  courant, donc `eacute` désigne la touche physique `AE02` quel que soit le niveau où le
-  symbole se trouve. D'où la cohabitation de `$mod+eacute` et `$mod+SHIFT+2`.
-  **Une note de piège se re-teste — celle-ci était fausse depuis le jour où elle a été
-  écrite, et elle a « marché » pendant trois jours.** Un geste qui fonctionne ne valide pas
-  l'explication qu'on en donne. Lier les **symboles réels** que produisent les touches. Sur AZERTY, la rangée du
-  haut donne au niveau 1 `& é " ' ( - è _ ç à` (`ampersand`, `eacute`, `quotedbl`,
-  `apostrophe`, `parenleft`, `minus`, `egrave`, `underscore`, `ccedilla`, `agrave`) et au
-  niveau 2 le chiffre. « Aller à l'espace N » se lie donc sur le symbole, « y envoyer la
-  fenêtre » sur `SHIFT + chiffre` : **la même touche physique, lue à ses deux niveaux.**
+  **Réponse retenue : lier les SYMBOLES RÉELS que produisent les touches, pas `code:NN`.**
+  Sur AZERTY, la rangée du haut donne au niveau 1 `& é " ' ( - è _ ç à` (`ampersand`,
+  `eacute`, `quotedbl`, `apostrophe`, `parenleft`, `minus`, `egrave`, `underscore`,
+  `ccedilla`, `agrave`) et au niveau 2 le chiffre. « Aller à l'espace N » se lie donc sur le
+  symbole, « y envoyer la fenêtre » sur `SHIFT + chiffre` : **la même touche physique, lue à
+  ses deux niveaux.**
+
+  *Pourquoi ça marche — et cette explication a été écrite à l'envers pendant trois jours.*
+  Mesuré le 2026-09-07 : `hyprctl getoption input:resolve_binds_by_sym` → **`bool: false
+  set: false`**. C'est parce que l'option vaut **`false`** qu'on peut lier les symboles :
+  Hyprland traduit alors le keysym de la config en **code de touche** via le keymap courant,
+  donc `eacute` désigne la touche physique `AE02` quel que soit le niveau où le symbole se
+  trouve — d'où la cohabitation de `$mod+eacute` et `$mod+SHIFT+2`. Cette note affirmait
+  l'inverse (`true` par défaut). **Le geste était bon, la raison était fausse depuis le jour
+  où elle a été écrite, et elle a « marché » trois jours** : un geste qui fonctionne ne
+  valide pas l'explication qu'on en donne, et une explication fausse se paie le jour où on
+  veut transposer le raisonnement ailleurs. Une note de piège se re-teste, y compris quand
+  elle n'a jamais échoué.
 
 - **Une commande d'inventaire ne doit jamais pouvoir interrompre un script.** `rpm -q`
   renvoie un code d'erreur pour tout paquet **absent**. Sous `set -euo pipefail`, un
@@ -646,33 +681,35 @@ cocher, pas une invitation à rouvrir le débat.
 
 ## Points ouverts
 
-> **Trois points ci-dessous ne concernent QUE le lab, pas le poste de référence.**
-> Vérifié le 2026-09-07 : sur le poste, `sway`, `swaybg`, `waybar`, `gnome-shell`, `gdm` et
-> `firefox` sont **tous absents** — l'image minimale ne les a jamais installés. Les points
-> « `swaybg` résiduel », « ressenti Sway à froid » et « `waybar` inutilisée » portent donc
-> sur l'itération 01, sur le SSD USB, où ils restent mesurables. À ne pas rouvrir en
-> regardant le poste : il n'y a rien à y voir.
+> **Les trois points Sway de cette liste sont CLOS SANS VERDICT depuis le 2026-09-07.**
+> Ils ne concernaient que le lab — `sway`, `swaybg`, `waybar`, `gnome-shell`, `gdm` et
+> `firefox` sont **tous absents** du poste et n'y ont jamais été installés. Ils n'étaient
+> mesurables que sur le SSD USB, dont le **formatage est annoncé** : le jour où il part,
+> ils deviennent immesurables pour toujours. Les porter encore, c'est garder des cases que
+> personne ne pourra jamais cocher. Détail de la clôture juste en dessous.
 
-- **L'axe « bureaux » porte sur l'interface, pas sur la pile logicielle.** Ce que Julien
-  reproche à GNOME est esthétique et ergonomique ; les utilitaires GNOME
-  (`gnome-keyring`, `gvfs`, Nautilus, l'agent SSH) ne posent aucun problème et sont
-  assumés. « Sway par-dessus les utilitaires GNOME » est donc la **configuration cible**,
-  pas un artefact de test — ne pas présenter cette dépendance comme un biais.
-  Ce qui reste utile à en tirer : sur une distro qui ne fournit pas ces utilitaires aussi
-  facilement, le coût d'installation sera à noter comme n'importe quelle autre friction.
-- **Un `swaybg` résiduel après la bascule — à confirmer d'un coup d'œil.** La config ne
-  contient plus aucune directive `bg`, mais après `swaymsg reload` un processus `swaybg`
-  reste lancé par Sway, cette fois **sans aucun argument** (ni `-i` ni `-c`) — l'ancien
-  portait `-o * -c #000000`. Reste à voir s'il peint quoi que ce soit : si le fond
-  d'écran Noctalia est bien visible, c'est un processus inerte et le sujet est clos ;
-  s'il y a du noir, il faudra comprendre pourquoi Sway le lance sans configuration.
-  Se règle en regardant le bureau, pas en lisant du code.
-- **Ressenti Sway à froid** : noter dans quelques jours si l'usage quotidien est plus
-  rapide qu'avec GNOME, ou s'il y a repli vers GNOME dès qu'il y a urgence. C'est ça
-  qui tranchera l'axe, pas la liste des raccourcis.
-- **`waybar` est installée mais inutilisée** (tirée par le groupe `swaywm`). Depuis que
-  Noctalia fournit la barre et que le bloc `bar { }` n'est plus hérité, elle n'a plus de
-  rôle. À laisser dormir, ou à retirer si la baseline doit rester lisible.
+- **CLOS sans verdict le 2026-09-07 — les trois points Sway du lab.** Écrit pour qu'on ne
+  croie pas plus tard qu'ils avaient été tranchés :
+  - *`swaybg` résiduel* — après `swaymsg reload`, un `swaybg` restait lancé par Sway sans
+    aucun argument, alors que la config n'avait plus de directive `bg`. **Jamais regardé.**
+    Il suffisait d'un coup d'œil au bureau (fond Noctalia visible = processus inerte). La
+    leçon, elle, est acquise et vaut ailleurs : deux composants sur la même couche
+    layer-shell, c'est l'ordre de **création** qui décide — voir les pièges.
+  - *Ressenti Sway à froid* — **abandon avant mesure**, déjà consigné dans
+    `installation/README.md`. Sway a été remplacé par Hyprland le 2026-09-04 pour les
+    animations, les coins arrondis et le flou, que wlroots ne fournit pas. On ne saura donc
+    jamais si Sway au quotidien était plus rapide que GNOME : la question n'a pas été
+    perdue, elle n'a pas été posée assez longtemps.
+  - *`waybar` inutilisée* — installée par le groupe `swaywm`, sans rôle depuis que Noctalia
+    fournit la barre. Rien à décider : le paquet part avec le disque.
+- **L'axe « bureaux » portait sur l'interface, pas sur la pile logicielle** — et ça reste
+  vrai pour la suite. Ce que Julien reproche à GNOME est esthétique et ergonomique ; les
+  utilitaires GNOME (`gnome-keyring`, `gvfs`, Nautilus) ne posent aucun problème et sont
+  assumés. « Un WM tuilant par-dessus les utilitaires freedesktop » est la **configuration
+  retenue**, pas un artefact de test — ne pas présenter cette dépendance comme un biais.
+  Ce qui reste utile à en tirer pour les prochaines distros : sur une distro qui ne fournit
+  pas ces utilitaires aussi facilement, le coût d'installation sera à noter comme n'importe
+  quelle autre friction.
 - **`bin/snapshot.sh` écrasait la baseline — corrigé le 2026-09-03.** Il écrivait sans
   condition dans `baseline/`, alors que ce dossier est la photo figée qui sert de
   référence. Le point ouvert « snapshot à relancer » invitait donc à détruire la

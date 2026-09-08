@@ -8,6 +8,197 @@ Ce journal est celui de la **construction du poste de travail**, distinct de
 
 ---
 
+## 2026-09-08 — `procedure.md` découpé : un registre de constats n'est pas un mode opératoire
+
+L'ancien `procedure.md` s'annonçait « la **séquence**, dans l'ordre, avec les versions
+exactes ». C'était faux depuis un moment, et le mot juste est celui-ci : **c'était un
+registre de constats.** On pouvait y vérifier le poste bien mieux qu'on ne pouvait le
+construire.
+
+### Le diagnostic ne vient pas d'une relecture
+
+Il vient d'avoir **déroulé le fichier comme un mode opératoire**, sur papier, en
+n'exécutant rien. Le résultat, sur 1 169 lignes très correctement mesurées :
+
+| Ce qui manquait | Effet le jour de la réinstallation |
+|---|---|
+| `mesa-dri-drivers` | **Hyprland ne démarre pas du tout**, et le symptôme ne le désigne pas |
+| réenregistrer le mot de passe SMB | `nas-infoadmin.service` échoue, le symptôme accuse le NAS |
+| le bloc `nmcli` du pont | à aller chercher dans `poste/README.md` |
+| `btrfs subvolume create` + `chattr +C` | idem, et l'ordre est irrattrapable |
+| `snapper create-config` | les réglages étaient là, le geste non |
+| `/etc/greetd/config.toml` | nulle part — toujours pas comblé, mais **marqué** |
+
+**Aucune relecture n'aurait montré ça.** Un fichier qui contient la mesure d'une étape
+*a l'air* de contenir l'étape. C'est la leçon de méthode de la journée, et elle est
+générale : **écrire un constat n'est pas écrire un geste**, et les deux se ressemblent
+assez pour qu'on ne voie pas la différence dans son propre texte.
+
+### Le découpage retenu, et pourquoi les noms sont dans ce sens
+
+| Fichier | Contenu | Lignes |
+|---|---|---|
+| `procedure.md` | **les gestes**, à l'impératif, seule source de ce qu'on tape | ~700 |
+| `mesures.md` | les constats, versions, tableaux relevés, ce qu'ils apprennent | ~1 160 |
+
+**`procedure.md` garde son nom parce que c'est lui que la règle des trois destinations
+désigne.** Mettre la séquence dans un fichier neuf et laisser les constats sous le nom
+« procedure » aurait fait pointer la règle vers le mauvais fichier — et une règle qui
+désigne le mauvais endroit est pire qu'une règle absente.
+
+**Les numéros de section se correspondent** (§7 ici documente §7 là-bas). C'est la seule
+chose à maintenir entre les deux fichiers, et c'est volontairement la plus bête possible.
+
+### Le test que `procedure.md` doit passer
+
+> *Un lecteur qui ne lit que les blocs de code obtient-il la machine ?*
+
+Il est écrit en tête du fichier. Trois conventions en découlent :
+`→` pour la vérification qui dit que l'étape a marché, `⚠ ORDRE` pour une étape dont la
+position est contrainte **avec ce qui casse si on l'inverse**, et `✎ INVENTÉ` pour un geste
+reconstitué et non attesté — il y en a trois, dont le fuseau horaire et les
+`snapper create-config`. **Marquer ce qu'on a deviné vaut mieux que de le lisser.**
+
+### Une étape 0 qui n'existait pas
+
+Les prérequis externes — ISO, phrase de passe, **clé SSH du dépôt**, RPM RustDesk à
+régénérer, sauvegarde de la VM, mot de passe SMB, renseignements réseau de l'employeur —
+sont maintenant une étape, en tête. Ils étaient dispersés ou implicites, et le blocage se
+découvrait sinon **à l'étape 2, machine déjà formatée** : sans la clé `gitlinux`, pas de
+dépôt, donc pas de procédure. La dépendance la plus grave du dépôt était invisible dans le
+dépôt.
+
+### Trois duplications supprimées au passage, et ce n'est pas du ménage cosmétique
+
+Le `greeter.toml`, le `tmpfiles.d` du greeter et le bloc `~/.ssh/config` existaient
+**en double** après le découpage. Deux copies d'un fichier de configuration dans deux
+documents, c'est **deux vérités possibles** le jour où l'une est modifiée — exactement ce
+qui a justifié de supprimer le script mort la veille. Le contenu vit dans `procedure.md`,
+`mesures.md` garde ce qu'il faut **savoir** à son sujet.
+
+### Les citations de ligne ont été converties en citations de section
+
+Neuf `procedure.md:NNN-NNN` écrits la veille pointaient, après découpage, sur du vide.
+Ils sont devenus `mesures.md §N`. **Une citation par numéro de ligne dans un document
+vivant est fausse dès la prochaine édition** — je les avais introduites moi-même la veille,
+et elles n'ont pas tenu vingt-quatre heures. Le dépôt cite par section ailleurs
+(`§8quater`, `§6`) : c'était la bonne pratique, elle est maintenant la seule.
+
+### Ce que ce découpage ne règle pas
+
+Il ne comble pas les trous, il les **rend visibles** : `procedure.md` porte désormais sept
+cases ouvertes en fin de fichier, dont l'enrôlement TPM2 et le `config.toml` du greeter.
+C'est le progrès réel — une liste de restes qui décrit vraiment les restes, au lieu
+d'orienter vers ce qui est déjà fait.
+
+---
+
+## 2026-09-07 (très fin de journée) — ménage : l'axe mort déclaré au présent
+
+L'audit de l'entrée suivante mesurait une chose : **puis-je rebâtir la machine ?** Il en
+manquait une autre, soulevée par Julien le soir même — **le dépôt décrit-il la machine qui
+existe ?** Ce sont deux défaillances distinctes, et la seconde était plus grosse en volume.
+
+### Le déclencheur, et il était juste
+
+> « la simple citation de gdm ou de sway ça n'a plus rien à faire là »
+
+Compté : **48 mentions de Sway dans `CLAUDE.md`**, 16 dans `poste/README.md`, 8 de GDM dans
+`poste/README.md`. Le premier réflexe — repartir d'un dépôt vierge — a été écarté sur un
+argument chiffré : les défauts non signalés se comptaient sur les doigts d'une main, contre
+**70 pièges, 7 entrées de journal datées et 35 commits** qui ne se régénèrent pas. Et
+trier « les bonnes choses » demande justement de savoir ce que les 6 800 lignes ont appris,
+c'est-à-dire l'archéologie que `poste/README.md` a été écrit pour éviter.
+
+**Mais le tri lui-même était légitime, et il était décidable en trois `grep`.**
+
+### Ce qui distingue une mention légitime d'une mention morte
+
+C'est la seule chose à retenir de ce ménage, parce que c'est elle qui empêche la rechute :
+
+| Une mention de Sway / GDM est | … et donc |
+|---|---|
+| dans `journal/01-*` | **légitime** — c'en est le sujet, itération close |
+| dans une entrée **datée** de journal | **légitime** — la date fait la valeur |
+| dans un **piège**, comme exemple du mécanisme | **légitime** — l'outil ne fait que dater l'apprentissage |
+| dans une **description d'état** au présent | **morte** — c'est ça qu'on purge |
+
+D'où la règle écrite en tête de la section des pièges de `CLAUDE.md` : **un piège peut
+nommer Sway ; une description d'état, jamais.**
+
+### La cause, et elle n'est pas de la négligence
+
+`poste/README.md` s'annonce « inventaire **vivant** ». Il contenait trois choses :
+l'inventaire vivant, l'archive de l'itération 01, et une note de décision périmée de
+148 lignes — celle où vivaient **6 des 8 mentions de GDM**. **Aucune règle n'en éjectait
+jamais rien.** Même mode de défaillance que le retard de trois jours : pas un défaut de
+rigueur, un défaut de **règle**. D'où la règle ajoutée en tête du fichier — une fiche
+décrit le poste actuel, ce qui décrit un état passé va en archive datée.
+
+### Les huit endroits, et le pire des huit
+
+Le pire n'était pas une prose vieillie mais une affirmation **doublement fausse** présentée
+comme un acquis : la fiche VM listait la règle de placement Sway sous « **Versionné dans le
+dépôt — revient seule avec `stow`** ». Or `sway` n'est pas posé sur ce poste, **et** il n'y
+a aucune règle équivalente : `hyprland.lua` ne contient aucune règle de fenêtre. Quelqu'un
+qui rebâtit le poste aurait coché cette ligne et attendu un comportement qui n'existe pas.
+
+Deux autres méritent d'être nommées parce qu'elles étaient **dans du code destiné à être
+posé** : le commentaire de `10-aliases.sh` (paquet `bash`, celui qu'il reste à stower) et
+celui de `vm-win11.desktop` invoquaient tous deux la règle `assign` de Sway.
+
+### Le code mort : un script qui contredisait la procédure
+
+`installation/scripts/01-bureau-hyprland.sh` a été **supprimé**. Il installait `foot` au
+lieu de `kitty`, omettait `hyprland-guiutils`, annonçait que le trousseau et le NAS ne
+marcheraient pas, et faisait lancer Hyprland **à la main depuis un tty** — ce qui est
+exactement ce qui a produit les deux sessions Hyprland simultanées du 2026-09-04. Il
+n'était référencé par aucun document.
+
+**Ce qui le rendait dangereux n'est pas d'être faux, c'est d'être une SECONDE SOURCE.**
+Deux fichiers décrivant la même séquence, dont un invisible et périmé : le dépôt connaît
+déjà cette famille de problème sous une autre forme (« deux composants qui peignent la même
+couche »). Son unique contenu irremplaçable — `mesa-dri-drivers`, sans quoi Hyprland ne
+démarre pas du tout — a été repris dans `procedure.md` §4.0 **avant** la suppression. Le
+relevé `versions-01.txt` reste : c'est une photo datée, pas du code.
+
+> **Leçon de méthode, la seule vraiment neuve de la journée.** Un script d'installation
+> non référencé par la procédure n'est pas un doublon inoffensif : c'est un **piège à
+> retardement**, parce qu'il a l'air exécutable et qu'il ne l'est plus. Un fichier
+> exécutable qui n'est cité nulle part est soit à câbler, soit à supprimer — jamais à
+> laisser dormir. Même famille que « un paquet installé n'est pas un paquet utilisé »,
+> appliquée au dépôt lui-même.
+
+### Deux trous bloquants comblés au passage
+
+Trouvés en rejouant la procédure **sur papier** — et c'est la méthode qui compte, aucun des
+deux n'était visible en relisant :
+
+1. **`mesa-dri-drivers` n'était pas dans la procédure.** Sans lui Hyprland ne démarre pas,
+   et le symptôme ne le désigne pas.
+2. **Le réenregistrement du mot de passe SMB n'y était pas non plus.** Il vivait dans
+   `dotfiles/README.md`, au titre des limites de `stow`. Sans lui,
+   `nas-infoadmin.service` échoue au premier login d'une machine neuve, et le symptôme
+   accuse le NAS ou l'unité, pas le trousseau.
+
+Et un troisième, **laissé ouvert et marqué comme tel** : le contenu de
+`/etc/greetd/config.toml` n'est nulle part. C'est le seul fichier de la chaîne du greeter
+dans ce cas — l'audit du matin avait rapatrié le `greeter.toml` et le `tmpfiles.d`, et raté
+celui-là. Écrit en clair dans la procédure plutôt que comblé de mémoire : le relever coûte
+une minute sur la machine, l'inventer coûterait un greeter en écran texte.
+
+### Trois points ouverts clos sans verdict
+
+Les trois points Sway du lab — `swaybg` résiduel, ressenti à froid, `waybar` inutilisée.
+Raison : le SSD USB **va être formaté**, donc ils ne sont plus mesurables. Les garder,
+c'était garder des cases que personne ne pourrait jamais cocher. Le précédent existait et
+il était bon : « ressenti Sway à froid » avait déjà été clos comme ça le 2026-09-04.
+
+**Ce qui compte est d'écrire la clôture, pas de la faire.** Sans ça, dans six mois, on ne
+saurait pas si Sway avait été jugé ou seulement traversé.
+
+---
+
 ## 2026-09-07 (fin de journée) — audit complet : le dépôt avait trois jours de retard
 
 Le poste a été inventorié de bout en bout, puis le dépôt réécrit **en prenant la machine

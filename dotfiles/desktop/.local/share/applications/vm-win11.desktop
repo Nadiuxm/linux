@@ -7,9 +7,11 @@ Comment=Démarre la VM win11 si elle est arrêtée, puis ouvre sa console
 # erreur est donc jetée. « exec » remplace le shell par virt-manager pour ne
 # pas laisser un sh orphelin.
 #
-# Aucune règle Sway n'est nécessaire : la fenêtre de console porte l'app_id
-# « virt-manager », déjà attrapée par le bloc « Placement des applications »
-# de ~/.config/sway/config, qui l'envoie sur l'espace 6 (DP-1) et l'y focalise.
+# Aucune règle de placement n'existe sur le poste de référence : hyprland.lua
+# ne contient aucune règle de fenêtre, la console s'ouvre donc sur l'espace qui
+# a le focus. Ce commentaire renvoyait à ~/.config/sway/config jusqu'au
+# 2026-09-07 — un fichier qui n'existe pas sur ce poste (paquet sway non posé,
+# lab uniquement). Voir poste/README.md, fiche VM, « Placement de la fenêtre ».
 #
 # Pas de chemin absolu ni de script dans ~/.local/bin : un .desktop lancé par
 # le shell graphique ne passe pas par .bashrc, donc ~/.local/bin peut ne pas

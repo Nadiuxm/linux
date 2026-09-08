@@ -38,8 +38,9 @@
 > - Les frictions **non écrites** du modèle de test, s'il en reste.
 >
 > **Et ce que le formatage emporte, qui n'est pas dans le dépôt :** le poste de secours
-> amorçable. Après ça, la machine redevient unique — le `README.md` racine l'affirme
-> encore comme un acquis, et ce ne sera plus vrai.
+> amorçable. Après ça, la machine redevient unique. *Le `README.md` racine présentait ce
+> secours comme un acquis ; c'est corrigé — il le donne maintenant pour un état
+> transitoire.*
 >
 > **Deux issues honnêtes, aucune n'étant « laisser en cours ».**
 >
