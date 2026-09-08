@@ -8,6 +8,61 @@ Ce journal est celui de la **construction du poste de travail**, distinct de
 
 ---
 
+## 2026-09-08 — Les six paquets Stow posés, et un lien manuel qui bloquait tout
+
+Le dépôt annonçait « 4 sur 6 » depuis le 2026-09-07, `bash` et `git` refusés pour conflit
+avec les fichiers de l'ISO. C'était juste, et ça a duré quatre jours.
+
+**Ce qui a rendu le diagnostic confus avant de le régler.** Le symptôme rapporté était
+« rien du dépôt dotfiles n'est déployé, `~/.config/hypr` est un fichier réel ». La mesure
+dit autre chose : `~/.config/hypr` est un **dossier** réel — Hyprland y écrit ses propres
+fichiers — et `hyprland.lua` dedans est bien un **lien** vers le dépôt. C'est le
+comportement normal de Stow quand le dossier cible existe déjà : il descend et lie la
+feuille. Preuve à l'usage le même jour : éditer `dotfiles/hypr/…/hyprland.lua` a changé les
+liaisons du compositeur vivant après un `hyprctl reload`.
+
+> **Un paquet Stow peut être posé sans qu'aucun dossier ne soit un lien.** Chercher un lien
+> au niveau du dossier fait conclure « non déployé » alors que la feuille est liée. Se
+> mesure cible par cible (`readlink`), pas par l'allure de `~/.config`.
+
+**Le vrai blocage, et il n'était pas dans les quatre conflits attendus.** `stow -n -v bash
+git` a répondu, en plus des quatre `cannot stow … over existing target` :
+
+```
+* existing target is not owned by stow: .bashrc.d
+All operations aborted.
+```
+
+`~/.bashrc.d` avait été lié à la main vers le dépôt, en **absolu**. Stow ne reconnaît comme
+siens que les liens **relatifs** qu'il crée : un lien pourtant correct, qui chargeait bien
+les fragments, faisait **abandonner les deux paquets entiers**. Remède : retirer le lien
+(pas sa cible) et laisser Stow le refaire.
+
+**Et les fichiers écartés n'étaient pas « ceux de la distro ».** Comparés avant de bouger :
+`.bashrc` et `.bash_profile` étaient bien le squelette de l'ISO (16 janvier), mais
+`.gitconfig` et `.config/git/ignore` étaient des versions **du 2026-09-04**, soit
+antérieures à celles du dépôt (enrichies le 2026-09-07). Le dépôt était surensemble dans
+les quatre cas, `[user] name/email` compris — sans quoi le piège « vérifier
+`git config user.email` avant le premier commit » se rejouait. Écartés dans
+`~/sauvegarde-dotfiles-2026-09-08/`, hors du dépôt.
+
+Vérifié dans un **bash neuf**, pas seulement par `readlink` : `~/.local/bin` toujours dans
+le `PATH` — sans quoi `claude` lui-même disparaissait —, `HISTTIMEFORMAT` et `histappend`
+actifs, alias `ll` chargé, `PROMPT_COMMAND` = `history -a; printf …` (le titre de terminal
+de la distro a survécu), `git config` répond `main`.
+
+### Ce qui reste
+
+- **`~/.bashrc.d/20-historique.sh` est devenu redondant, et son en-tête le dit.** Il a été
+  écrit *parce que* le `.bashrc` du dépôt n'était pas déployé ; maintenant qu'il l'est, les
+  deux posent les mêmes valeurs et seule la ligne `history -a` du fragment est unique. À
+  réduire à cette ligne, ou à remonter dans le `.bashrc` en supprimant le fragment. Non
+  tranché — mais à trancher, sinon c'est une duplication qui vieillira mal.
+- La sauvegarde `~/sauvegarde-dotfiles-2026-09-08/` n'a plus d'usage une fois le
+  déploiement éprouvé quelques jours.
+
+---
+
 ## 2026-09-08 — Captures d'écran : le paquet qui manquait n'existait pas, et deux dépendances invisibles
 
 Point de départ : « il n'y a pas de paquet pour faire une capture d'écran sur ce poste ».

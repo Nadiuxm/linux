@@ -73,21 +73,41 @@ stow -v -t ~ bash git hypr foot nas uwsm
 > sur une machine avec session graphique. Sur une machine sans bureau,
 > `stow -v -t ~ bash git` suffit.
 
-### État réel des liens sur le poste de référence — 2026-09-07
+### État réel des liens sur le poste de référence — 2026-09-08
 
-**Quatre paquets sur six sont posés** (la cible est à six depuis le 2026-09-07 : `desktop`
-en est sorti, son unique entrée n'a plus d'objet). Vérifié par `stow -n -v` et par les liens :
+**Les six paquets de la cible sont posés.** Vérifié par `readlink` sur chaque cible, pas
+par la commande qu'on a tapée :
 
-| Paquet | Posé ? | Pourquoi pas |
+| Paquet | Cible | Forme du lien |
 |---|---|---|
-| `hypr`, `foot`, `nas`, `uwsm` | **oui** | — |
-| `bash` | non | conflit : `~/.bashrc` et `~/.bash_profile` sont les fichiers de l'ISO |
-| `git` | non | conflit : `~/.gitconfig` a été écrit à la main (`[user]` seul) |
-| *hors cible* : `desktop` | non | poserait sans conflit, mais son unique entrée n'a plus d'objet ; `sway` ne sert qu'au lab |
+| `bash` | `~/.bashrc`, `~/.bash_profile`, `~/.bashrc.d` | posé le 2026-09-08 |
+| `git` | `~/.gitconfig`, `~/.config/git/ignore` | posé le 2026-09-08 |
+| `hypr` | `~/.config/hypr/hyprland.lua` | **feuille** : `~/.config/hypr` reste un dossier réel, Hyprland y écrit ses propres fichiers |
+| `foot` | `~/.config/foot` | dossier folded |
+| `nas` | `~/.config/systemd/user/nas-infoadmin.service` | feuille |
+| `uwsm` | `~/.config/uwsm/env` | feuille |
+| *hors cible* : `desktop`, `sway` | — | non posés : l'entrée de `desktop` n'a plus d'objet, `sway` ne sert qu'au lab |
 
-L'étape 3 ci-dessus (écarter les fichiers de la distro) est exactement ce qui débloque
-`bash` et `git`. Elle n'a jamais été exécutée sur ce poste — **`stow` ne remplace jamais
-un vrai fichier, et c'est une sécurité, pas un bug.**
+**Ce qui bloquait pendant quatre jours, et ce que ça apprend.** `bash` et `git` étaient
+refusés depuis le 2026-09-04 : `stow` ne remplace jamais un vrai fichier. Les quatre
+fichiers en cause étaient le squelette de l'ISO (`.bashrc`, `.bash_profile`, datés du
+16 janvier) ou des versions **antérieures** à celles du dépôt (`.gitconfig` et
+`.config/git/ignore` du 2026-09-04, contre les versions enrichies du 2026-09-07). Écartés
+dans `~/sauvegarde-dotfiles-2026-09-08/`, hors du dépôt.
+
+> **Un lien posé à la main au bon endroit n'est pas un lien reconnu par Stow.**
+> `~/.bashrc.d` avait été lié à la main vers le dépôt — en **absolu**. `stow -n -v` a
+> répondu `existing target is not owned by stow: .bashrc.d` et **abandonné tout le
+> paquet** : Stow ne reconnaît comme siens que les liens **relatifs** qu'il crée. Le
+> remède est de retirer le lien manuel (pas sa cible) et de laisser Stow le refaire.
+> Même famille que « une commande qui réussit n'est pas une commande qui fait ce qu'on
+> croit » : le lien fonctionnait parfaitement, et empêchait pourtant le déploiement.
+
+**Point ouvert laissé par ce déploiement.** `~/.bashrc.d/20-historique.sh` a été écrit
+*parce que* le `.bashrc` du dépôt n'était pas déployé — c'est écrit dans son en-tête.
+Maintenant qu'il l'est, les deux fichiers posent les mêmes valeurs d'historique et seule
+la ligne `history -a` du fragment est unique. À réduire à cette ligne, ou à remonter dans
+le `.bashrc` en supprimant le fragment. Non tranché.
 
 ## Usage courant
 

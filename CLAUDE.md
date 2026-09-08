@@ -98,7 +98,7 @@ Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
 | `poste/` | Inventaire **vivant** des outils de travail, indépendant de la distro. |
 | `installation/` | **Le poste de référence.** Quatre fichiers aux rôles disjoints, découpés le 2026-09-08 : `procedure.md` = **les gestes** (seule source de ce qu'on tape) · `mesures.md` = les constats, versions et ce qu'ils apprennent · `README.md` = les décisions · `journal.md` = le récit daté. Les numéros de section de `procedure.md` et `mesures.md` se correspondent. |
-| `dotfiles/` | Paquets **GNU Stow**. Poste de référence, *cible* : `stow -v -t ~ bash git hypr foot nas uwsm` (**six** paquets — `desktop` en est sorti le 2026-09-07, son unique entrée n'a plus d'objet). **État réel au 2026-09-07 : 4 sur 6** — `hypr`, `foot`, `nas`, `uwsm` sont posés ; `bash` et `git` sont **refusés** (conflit avec les fichiers de l'ISO, jamais écartés). Ne pas lire cette ligne comme un état. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). |
+| `dotfiles/` | Paquets **GNU Stow**. Poste de référence, *cible* : `stow -v -t ~ bash git hypr foot nas uwsm` (**six** paquets — `desktop` en est sorti le 2026-09-07, son unique entrée n'a plus d'objet). **État réel au 2026-09-08 : 6 sur 6** — `bash` et `git` ont été débloqués ce jour-là en écartant les fichiers de l'ISO dans `~/sauvegarde-dotfiles-2026-09-08/` (ils étaient refusés depuis le 2026-09-04). Ne pas lire cette ligne comme un état : elle se re-mesure par `readlink` sur les cibles, pas par la commande qu'on a tapée. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
 Itération 01 : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland) —
@@ -588,6 +588,14 @@ jour même, tant que le détail est frais.
   Corollaire de mesure : lire la variable sur le **processus en session**
   (`tr '\0' '\n' < /proc/$(pgrep -x Hyprland)/environ`), jamais dans le shell d'un agent —
   les deux environnements ne se ressemblent pas.
+
+- **Un lien posé à la main au bon endroit n'est pas un lien reconnu par Stow — et il bloque
+  tout le paquet.** Le 2026-09-08, `~/.bashrc.d` pointait vers le dépôt, en **absolu**.
+  `stow -n -v bash git` a répondu `existing target is not owned by stow: .bashrc.d` puis
+  `All operations aborted` : Stow ne reconnaît comme siens que les liens **relatifs** qu'il
+  crée. Le lien fonctionnait parfaitement et empêchait pourtant le déploiement — retirer le
+  lien (pas sa cible) et laisser Stow le refaire. Même famille que « une commande qui
+  réussit n'est pas une commande qui fait ce qu'on croit ».
 
 - **Le tree folding de Stow frappe partout où le dossier cible n'existe pas encore.**
   Troisième occurrence le 2026-09-07, après `~/.bashrc.d` et `~/.config/systemd` :

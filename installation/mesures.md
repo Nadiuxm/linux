@@ -950,34 +950,42 @@ cd ~/linux/dotfiles
 stow -v -t ~ hypr foot          # fait le 2026-09-04
 mkdir -p ~/.config/uwsm         # AVANT, contre le tree folding
 stow -v -t ~ uwsm               # fait le 2026-09-07
-stow -v -t ~ bash git nas desktop
+# écarter les fichiers de l'ISO AVANT — sinon stow abandonne les deux paquets
+mkdir -p ~/sauvegarde-dotfiles-<date>
+mv ~/.bashrc ~/.bash_profile ~/.gitconfig ~/sauvegarde-dotfiles-<date>/
+mv ~/.config/git/ignore ~/sauvegarde-dotfiles-<date>/git-ignore
+stow -n -v -t ~ bash git        # simulation : doit être muette
+stow    -v -t ~ bash git        # fait le 2026-09-08
 ```
 
 - [x] `hypr` et `foot` posés (2026-09-04)
 - [x] `uwsm` posé (2026-09-07) — `XDG_DATA_DIRS` pour les Flatpaks
 - [x] `nas` — **posé, mais ça n'avait pas été noté** ; l'unité tourne depuis le 2026-09-04
-- [ ] `bash`, `git`, `desktop` — **toujours pas posés au 2026-09-07** : `~/.bashrc`,
-      `~/.bash_profile` et `~/.gitconfig` sont encore les fichiers par défaut de Fedora et
-      `~/.bashrc.d` n'existe pas. Rien du paquet `bash` du dépôt n'est en service.
-      Re-vérifié par `stow -n -v` le 2026-09-07 : `bash` et `git` **refusent** (conflit sur
-      des vrais fichiers), `desktop` poserait le lien sans conflit
+- [x] `bash` et `git` posés (2026-09-08), après quatre jours de refus
+- [ ] `desktop` — poserait sans conflit, mais son unique entrée n'a plus d'objet
 
-**L'état exact des liens, mesuré le 2026-09-07** — 4 paquets sur 7 :
+**L'état exact des liens, mesuré le 2026-09-08** — les 6 paquets de la cible sont posés :
 
 | Paquet | Posé ? | Preuve |
 |---|---|---|
-| `hypr` | oui | `~/.config/hypr/hyprland.lua` → dépôt, contenu identique |
+| `hypr` | oui | `~/.config/hypr/hyprland.lua` → dépôt (feuille : le dossier reste réel, Hyprland y écrit) |
 | `foot` | oui | `~/.config/foot` → dépôt (lien de **dossier**, tree folding) |
 | `nas` | oui | `~/.config/systemd/user/nas-infoadmin.service` → dépôt |
 | `uwsm` | oui | `~/.config/uwsm/env` → dépôt |
-| `bash` | **non** | `~/.bashrc` et `~/.bash_profile` datés du **16 janv. 2026** = l'ISO |
-| `git` | **non** | `~/.gitconfig` écrit à la main : `[user]` seul, 3 lignes |
-| `desktop` | **non** | `~/.local/share/applications/` ne contient qu'un fichier de Claude Code |
+| `bash` | oui | `~/.bashrc`, `~/.bash_profile`, `~/.bashrc.d` → dépôt (2026-09-08) |
+| `git` | oui | `~/.gitconfig`, `~/.config/git/ignore` → dépôt (2026-09-08) |
+| `desktop` | **non** | hors cible depuis le 2026-09-07 : son entrée n'a plus d'objet |
 
-**Ce que le paquet `bash` non posé coûte concrètement**, pour que ce ne soit pas une ligne
-abstraite : pas d'historique élargi ni horodaté (`HISTSIZE=1000` au lieu de 50000, aucun
-`HISTTIMEFORMAT`), pas de `~/.bashrc.d`, pas d'alias. Sur un poste de lab dont toute la
-méthode repose sur « retrouver ce qu'on a tapé », c'est la perte la plus gênante des trois.
+**Vérifié dans un bash neuf, pas seulement par `readlink`** : `~/.local/bin` toujours dans
+le `PATH` (sinon `claude` disparaissait), `HISTTIMEFORMAT='%F %T '`, `histappend` actif,
+alias `ll` chargé, et `PROMPT_COMMAND` = `history -a; printf …` — le titre de terminal posé
+par la distro a survécu. `git config` répond `main` et l'adresse inchangée.
+
+> **Deux pièges payés au passage, détaillés dans `dotfiles/README.md`.** Un lien posé à la
+> main vers le dépôt en **absolu** (`~/.bashrc.d`) n'est pas reconnu par Stow et fait
+> **abandonner tout le paquet**. Et les fichiers écartés n'étaient pas seulement « ceux de
+> la distro » : `.gitconfig` et `.config/git/ignore` étaient des versions **antérieures**
+> de ceux du dépôt — à comparer avant d'écarter, pas à supposer.
 
 **Et `desktop` n'a rien à poser d'utile aujourd'hui** : son unique entrée
 `vm-win11.desktop` lançait la VM via `virt-manager` — or la VM tourne et se retrouve par
@@ -986,9 +994,10 @@ pour cocher une case.
 
 ### Deux fichiers de configuration hors paquet, trouvés le 2026-09-07
 
-- `~/.config/git/ignore` contient `**/.claude/settings.local.json`. C'est un vrai geste,
-  utile et non versionné : à **intégrer au paquet `git`** (`dotfiles/git/.config/git/ignore`),
-  pas à laisser dans un coin du home.
+- `~/.config/git/ignore` contient `**/.claude/settings.local.json`. C'était un vrai geste,
+  utile et non versionné. **Réglé** : rapatrié dans `dotfiles/git/.config/git/ignore` le
+  2026-09-07, puis effectivement déployé par `stow git` le 2026-09-08 — le fichier du home
+  était resté la version du 2026-09-04, plus pauvre que celle du dépôt.
 - `~/.config/autostart/mattermost-desktop.desktop` a été créé **par Mattermost lui-même**
   au premier lancement (`Exec=/app/main/mattermost-desktop`). Rien à versionner : il se
   recréera. À savoir pour ne pas le prendre pour une configuration maison.
