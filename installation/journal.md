@@ -8,6 +8,106 @@ Ce journal est celui de la **construction du poste de travail**, distinct de
 
 ---
 
+## 2026-09-08 — Captures d'écran : le paquet qui manquait n'existait pas, et deux dépendances invisibles
+
+Point de départ : « il n'y a pas de paquet pour faire une capture d'écran sur ce poste ».
+La moitié de la phrase était vraie — ni `grim`, ni `slurp`, ni `swappy`, ni `flameshot` ne
+sont installés — et la conclusion était fausse.
+
+**Noctalia capture lui-même.** Le binaire parle `zwlr_screencopy_manager_v1` (symboles dans
+`/usr/bin/noctalia`), les raccourcis existaient depuis le 2026-09-04 dans `hyprland.lua`, et
+trois PNG datés du 2026-09-04 dormaient dans `~/Pictures`. La ligne
+`hl.permission(".../grim", "screencopy", …)` de la config est restée **commentée** depuis le
+premier jour : elle n'a jamais eu d'objet.
+
+> **Une fonction absente n'est pas un paquet manquant.** Quand le shell intègre la
+> fonction, la liste des paquets ne la montre pas — et chercher le paquet habituel fait
+> conclure à l'inverse de la réalité. Même famille que « un paquet installé n'est pas un
+> paquet utilisé », pris par l'autre bout.
+
+### La touche Impr écran du K650 n'émet rien — mesuré, pas déduit
+
+Le symptôme (« Noctalia ne reconnaît pas la touche ») désignait le compositeur. Trois
+mesures l'ont innocenté :
+
+- `hyprctl binds` donnait `key: Print`, `modmask: 0` / `1` — la forme **courte**, donc un
+  bind correctement analysé (un bind inerte conserve la chaîne entière) ;
+- `keycodes/evdev` : `<PRSC> = 107`, et `symbols/pc` : `key <PRSC> {[ Print, Sys_Req ],
+  type="PC_ALT_LEVEL2"}`, **que `symbols/fr` ne surcharge pas** — sur AZERTY `Print` est au
+  niveau 1, son niveau 2 s'atteint avec **Alt**. Le piège de la rangée des chiffres ne
+  s'applique donc pas ici, contrairement au réflexe ;
+- `sudo libinput debug-events --show-keycodes` sur les **15** périphériques : appui sur la
+  touche à l'icône d'imprimante → **aucun événement**, sur aucune interface.
+
+> **Pour séparer « le bind est faux » de « la touche n'existe pas », mesurer en amont du
+> compositeur.** `libinput` lit l'evdev avant que Hyprland ne voie quoi que ce soit : une
+> trace vide y prouve que le noyau n'a rien reçu, et clôt le débat sans toucher à la config.
+> Écouter **tous** les périphériques (sans `--device`) évite en plus de deviner lequel.
+
+Cause probable, et elle vaut pour tout le clavier : le récepteur **Bolt `046d:c548`** est
+piloté par **`hid-generic`** (journal noyau : `hid-generic 0003:046D:C548.0002`), et `c548`
+**n'est pas dans les alias de `hid_logitech_dj`**. Sans le pilote Logitech, les touches
+programmables HID++ du K650 ne sont traduites par personne. Récupérable avec `solaar`
+(1.1.20 dans les dépôts Fedora, non installé) — non fait, parce que non nécessaire.
+
+> **Erreur commise en cours de route, et corrigée :** avoir présenté « le périphérique
+> déclare `KEY_SYSRQ` dans son bitmap » comme la preuve que la touche existe. Un récepteur
+> annonce un descripteur de clavier **générique**, indépendant de l'appareil apparié : ce
+> bitmap ne dit rien du clavier physique. Même famille que « une commande locale rapporte un
+> réglage, jamais un rôle ».
+
+**Décision, prise plutôt que contournée :** les deux liaisons `Print` sont **retirées** de
+`hyprland.lua` et remplacées par des combinaisons que le clavier émet réellement —
+`SUPER + SHIFT + P` pour la région, `SUPER + CTRL + SHIFT + P` pour l'écran entier. Le
+commentaire du fichier porte la mesure, pour qu'on ne réécrive pas `Print` dans six mois.
+À noter au passage : un `SHIFT + P` **nu** aurait capté la lettre P majuscule dans toutes
+les applications — sous Wayland un raccourci sans modificateur de bureau vole la touche.
+
+### Le collage : ce n'était ni le terminal, ni Noctalia
+
+Symptôme suivant : la capture ne se collait pas dans le terminal, et le soupçon portait sur
+`kitty`. La copie, elle, avait bien lieu — mesurée par recoupement de tailles :
+
+| Élément | Horodatage | Taille |
+|---|---|---|
+| `~/Pictures/screenshot_20260908_123746-region.png` | 12:37:46 | 115 033 o |
+| `~/.local/state/noctalia/clipboard/entries/1788863866523-82.enc` | 12:37:46 | 115 087 o |
+
+Même image, même seconde : `copy_to_clipboard = true` fonctionne, Noctalia a bien pris la
+sélection. Le vrai mécanisme est ailleurs : **un terminal ne transporte jamais une image**,
+`Ctrl+V` n'envoie que du texte. Claude Code intercepte donc la frappe et va lire la
+sélection **lui-même**, en appelant `xclip` ou `wl-paste` — visible dans les chaînes de son
+binaire :
+
+```
+xclip -selection clipboard -t TARGETS -o | grep -E "image/(png|jpeg|…)" || wl-paste -l | grep -E "image/(png|…)"
+xclip … || wl-paste --type image/png > <fichier temporaire>
+```
+
+Aucun des deux n'était installé. `wl-clipboard-2.2.1` posé le 2026-09-08 à 12:43:56 — le
+collage fonctionne depuis.
+
+> **Un binaire installé hors gestionnaire de paquets n'a personne pour tirer ses
+> dépendances, et l'échec est MUET.** Claude Code vit dans `~/.local/share/claude/versions/`,
+> aucun RPM ne le décrit : sa dépendance à `wl-paste`/`xclip` n'apparaît dans aucune liste
+> qu'on lit, et son absence ne produit ni erreur ni avertissement — juste un collage qui ne
+> fait rien. Même famille que le piège SELinux sur `/usr/local` : ce qui est posé à la main
+> n'a personne derrière lui.
+
+### Ce qui reste
+
+- **Annotation des captures — non tranché.** Pour un ticket, il manque de quoi entourer,
+  flécher et surtout **flouter** un mot de passe ou un nom de client. `swappy` 1.5.1 est
+  dans les dépôts Fedora et Noctalia prévoit le crochet (`pipe_to_command = true`,
+  `pipe_command = "swappy -f -"`). `satty`, souvent recommandé, n'est **pas** packagé dans
+  Fedora 44. À décider à l'usage.
+- **Pas de mode « fenêtre »** : `screenshot-fullscreen` accepte `pick` et `all`, plus la
+  région. Sur trois écrans, un raccourci `all` serait le complément logique.
+- La touche du K650 reste morte. `solaar` la ressusciterait ; ça n'a d'intérêt que si le
+  raccourci actuel déplaît à l'usage.
+
+---
+
 ## 2026-09-08 — `procedure.md` découpé : un registre de constats n'est pas un mode opératoire
 
 L'ancien `procedure.md` s'annonçait « la **séquence**, dans l'ordre, avec les versions

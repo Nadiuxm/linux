@@ -745,6 +745,35 @@ Ajoutés le 2026-09-07, en fin de journée, au fil d'un besoin réel :
 déjà dans l'image (installés à 14:00:2x le 2026-09-04, avec la transaction 1). La
 distinction se lit dans la date d'installation, pas dans la raison `dnf`.
 
+### 8septies. Captures d'écran et presse-papiers — FAIT le 2026-09-08
+
+**Aucun outil de capture n'est installé, et il n'en faut pas** : Noctalia capture lui-même,
+en `zwlr_screencopy_manager_v1`. Chercher `grim`/`slurp` fait conclure à l'inverse — voir
+l'entrée de journal du 2026-09-08.
+
+Un seul paquet à poser, et il n'a rien à voir avec la capture :
+
+```bash
+sudo dnf install -y wl-clipboard   # 2.2.1, posé le 2026-09-08 à 12:43:56
+```
+
+- [x] `wl-clipboard` — **dépendance non déclarée de Claude Code**. Un terminal ne transporte
+      pas d'image : Claude Code lit la sélection Wayland lui-même en appelant `wl-paste` (ou
+      `xclip`). Sans lui, coller une capture dans la conversation ne fait **rien**, sans
+      message d'erreur. Aucun RPM ne le réclame — Claude Code vit dans `~/.local/share`.
+      Donne aussi `wl-paste --list-types`, la mesure qui dit ce que la sélection propose.
+- [x] Raccourcis dans `dotfiles/hypr/` : `SUPER + SHIFT + P` région,
+      `SUPER + CTRL + SHIFT + P` écran entier. **Pas `Print`** : sur le K650 apparié au
+      récepteur Bolt, cette touche n'émet rien au niveau noyau (mesuré à `libinput`).
+- [ ] **Annotation — non tranché.** Pour flouter un mot de passe avant d'envoyer une capture
+      dans un ticket : `swappy` (dans Fedora) branché par `pipe_to_command = true` +
+      `pipe_command = "swappy -f -"` dans les réglages Noctalia. `satty` n'est pas packagé
+      dans Fedora 44.
+
+Réglages Noctalia laissés **aux défauts** (aucune section `[shell.screenshot]` dans
+`settings.toml`) : enregistrement dans `~/Pictures`, copie dans le presse-papiers, écran
+figé pendant la sélection, curseur exclu.
+
 ### Flatpak — FAIT le 2026-09-07
 
 **Absent de l'image minimale**, contrairement à Workstation où il était livré et où la

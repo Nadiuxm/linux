@@ -516,8 +516,13 @@ hl.bind("XF86AudioPause", hl.dsp.exec_cmd("noctalia msg media toggle"),   { lock
 -- AJOUT — aucune capture d'écran dans les défauts d'Hyprland.
 -- « screenshot-fullscreen » prend l'écran focalisé ; il accepte aussi « pick »
 -- (choix interactif de l'écran) et « all » (toutes les sorties).
-hl.bind("Print",         hl.dsp.exec_cmd("noctalia msg screenshot-fullscreen"))
-hl.bind("SHIFT + Print", hl.dsp.exec_cmd("noctalia msg screenshot-region"))
+--
+-- PAS SUR « Print » — mesuré le 2026-09-08 : sur le Logitech K650 apparié au
+-- récepteur Bolt, la touche à l'icône d'imprimante n'émet RIEN au niveau noyau
+-- (`libinput debug-events` sur les 15 périphériques : aucun événement). Le bind
+-- était donc correct et inatteignable. Voir le journal du poste.
+hl.bind(mainMod .. " + SHIFT + P",         hl.dsp.exec_cmd("noctalia msg screenshot-region"))
+hl.bind(mainMod .. " + CTRL + SHIFT + P",  hl.dsp.exec_cmd("noctalia msg screenshot-fullscreen"))
 
 -- AJOUT — presse-papiers : Noctalia garde un historique, sans quoi il n'y en a
 -- aucun sous Hyprland.

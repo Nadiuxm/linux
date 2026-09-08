@@ -668,6 +668,33 @@ jour même, tant que le détail est frais.
   moment où on le pose.** Le contrôle ne peut donc pas être « y ai-je pensé », il doit être
   périodique : confronter le dépôt à la machine.
 
+- **Une fonction absente n'est pas un paquet manquant.** Le 2026-09-08, l'absence de `grim`,
+  `slurp`, `swappy` et `flameshot` a fait conclure qu'il n'y avait pas de capture d'écran sur
+  ce poste. Noctalia la fait **lui-même** (`zwlr_screencopy_manager_v1`), les raccourcis
+  existaient depuis quatre jours et trois captures dormaient dans `~/Pictures`. Quand le
+  shell intègre une fonction, la liste des paquets ne la montre pas. Même famille que « un
+  paquet installé n'est pas un paquet utilisé », pris par l'autre bout.
+
+- **Pour un raccourci qui ne marche pas, mesurer EN AMONT du compositeur.** Le 2026-09-08, la
+  touche Impr écran du K650 était soupçonnée d'être un problème AZERTY. `libinput
+  debug-events --show-keycodes` **sans `--device`** (donc sur les 15 périphériques) : aucun
+  événement — le noyau ne reçoit rien, le bind était juste et inatteignable. Cause : le
+  récepteur Bolt `046d:c548` tourne sous `hid-generic`, `c548` n'étant pas dans les alias de
+  `hid_logitech_dj` ; les touches HID++ ne sont traduites par personne. Deux corollaires :
+  `Print` est au **niveau 1** sur AZERTY (`symbols/pc`, non surchargé par `symbols/fr`), donc
+  le piège de la rangée des chiffres ne s'y applique pas ; et le **bitmap `KEY` d'un
+  récepteur est générique**, il ne dit rien du clavier apparié — l'avoir pris pour une preuve
+  était une erreur, corrigée le jour même.
+
+- **Un binaire posé hors gestionnaire de paquets n'a personne pour tirer ses dépendances, et
+  l'échec est MUET.** Le 2026-09-08, coller une capture dans Claude Code ne faisait rien : la
+  copie était bonne (entrée de 115 087 o dans l'historique Noctalia, PNG de 115 033 o, même
+  seconde), mais **un terminal ne transporte jamais une image** — Claude Code lit la sélection
+  lui-même en appelant `xclip` ou `wl-paste`, aucun des deux installé. Ni erreur, ni
+  avertissement. `wl-clipboard` est donc une dépendance **du poste**, qu'aucun RPM ne réclame.
+  Même famille que le piège SELinux sur `/usr/local` : ce qui est installé à la main n'a
+  personne derrière lui.
+
 ## Hors périmètre — ne pas relancer le sujet
 
 **La gestion et la sauvegarde des secrets** (clé SSH du dépôt, base KeePassXC) est
