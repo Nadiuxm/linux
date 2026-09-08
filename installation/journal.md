@@ -53,11 +53,13 @@ de la distro a survécu), `git config` répond `main`.
 
 ### Ce qui reste
 
-- **`~/.bashrc.d/20-historique.sh` est devenu redondant, et son en-tête le dit.** Il a été
-  écrit *parce que* le `.bashrc` du dépôt n'était pas déployé ; maintenant qu'il l'est, les
-  deux posent les mêmes valeurs et seule la ligne `history -a` du fragment est unique. À
-  réduire à cette ligne, ou à remonter dans le `.bashrc` en supprimant le fragment. Non
-  tranché — mais à trancher, sinon c'est une duplication qui vieillira mal.
+- **La duplication créée par le déploiement a été refermée le même jour.**
+  `~/.bashrc.d/20-historique.sh` avait été écrit *parce que* le `.bashrc` du dépôt n'était
+  pas déployé. Une fois le paquet posé, les deux posaient les mêmes valeurs : la ligne
+  `history -a` est remontée dans le `.bashrc` et le fragment est supprimé. Intéressant en
+  soi — **un contournement peut survivre à la cause qui le justifiait**, et son en-tête
+  était le seul endroit qui disait quand le retirer. Une note qui énonce sa propre
+  condition de péremption vaut mieux qu'une note qui décrit seulement son geste.
 - La sauvegarde `~/sauvegarde-dotfiles-2026-09-08/` n'a plus d'usage une fois le
   déploiement éprouvé quelques jours.
 

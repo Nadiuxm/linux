@@ -33,6 +33,17 @@ HISTTIMEFORMAT='%F %T '       # horodatage : quand ai-je cassé la machine ?
 shopt -s histappend           # append au lieu d'écraser (plusieurs terminaux)
 shopt -s checkwinsize
 
+# Sans ceci, bash n'écrit l'historique qu'à la FERMETURE du terminal : un shell
+# resté ouvert toute la journée ne laisse aucune trace avant le soir, ce qui rend
+# le signal inutile pour une entrée de journal écrite le jour même. `history -a`
+# à chaque invite vide le tampon immédiatement.
+# Ajouté DEVANT le PROMPT_COMMAND existant, sans l'écraser : sur Fedora, /etc/bashrc
+# y a déjà mis le titre de terminal. Le garde-fou rend l'ajout idempotent.
+case "${PROMPT_COMMAND:-}" in
+    *'history -a'*) ;;
+    *) PROMPT_COMMAND="history -a${PROMPT_COMMAND:+; $PROMPT_COMMAND}" ;;
+esac
+
 # --- Fragments locaux : ~/.bashrc.d/*.sh ---
 if [ -d "$HOME/.bashrc.d" ]; then
     for _rc in "$HOME"/.bashrc.d/*.sh; do

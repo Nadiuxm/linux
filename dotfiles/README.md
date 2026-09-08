@@ -103,11 +103,17 @@ dans `~/sauvegarde-dotfiles-2026-09-08/`, hors du dépôt.
 > Même famille que « une commande qui réussit n'est pas une commande qui fait ce qu'on
 > croit » : le lien fonctionnait parfaitement, et empêchait pourtant le déploiement.
 
-**Point ouvert laissé par ce déploiement.** `~/.bashrc.d/20-historique.sh` a été écrit
-*parce que* le `.bashrc` du dépôt n'était pas déployé — c'est écrit dans son en-tête.
-Maintenant qu'il l'est, les deux fichiers posent les mêmes valeurs d'historique et seule
-la ligne `history -a` du fragment est unique. À réduire à cette ligne, ou à remonter dans
-le `.bashrc` en supprimant le fragment. Non tranché.
+**Duplication née du déploiement, et refermée le même jour.**
+`~/.bashrc.d/20-historique.sh` avait été écrit *parce que* le `.bashrc` du dépôt n'était
+pas déployé — c'était dans son en-tête. Une fois le paquet posé, les deux fichiers posaient
+les mêmes valeurs d'historique et seule la ligne `history -a` du fragment était unique :
+elle a été **remontée dans le `.bashrc`** et le fragment supprimé. `~/.bashrc.d/` ne garde
+que `10-aliases.sh`.
+
+`history -a` est ajouté **devant** le `PROMPT_COMMAND` existant, jamais à sa place : sur
+Fedora, `/etc/bashrc` y a déjà mis le titre de terminal, et le `.bashrc` du dépôt source
+`/etc/bashrc` avant. Un garde-fou (`case … *'history -a'*`) rend l'ajout idempotent.
+Vérifié dans un bash de login neuf : `PROMPT_COMMAND` = `history -a; printf "\033]0;…"`.
 
 ## Usage courant
 
