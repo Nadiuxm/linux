@@ -142,9 +142,13 @@ de la baseline d'une nouvelle itération. Il se déroule de haut en bas après u
 réinstallation, et alimente la procédure de bascule.
 Une fiche par outil, toujours la même structure : rôle, obtention, portabilité, ce
 qu'aucun `stow` ne restaurera, ce qu'il faut sauvegarder, ce qui est versionné.
-Cinq fiches au 2026-09-07 : **VM Windows d'administration**, **RustDesk**, **Mattermost**,
-**instantanés Btrfs (snapper)** et **WinBox**. Les deux outils **bloquants** — sans
-lesquels le travail ne se fait pas depuis ce poste — sont la VM Windows et RustDesk.
+Six fiches au 2026-09-09 : **VM Windows d'administration**, **RustDesk**, **Mattermost**,
+**instantanés Btrfs (snapper)**, **WinBox** et **3CX**. Les deux outils **bloquants** — sans
+lesquels le travail ne se fait pas depuis ce poste — restent la VM Windows et RustDesk ;
+le 3CX est **secondaire** (un repli existe : mobile, poste physique). Le 3CX est aussi le
+seul outil du fichier **sans installation de paquet** : 3CX n'a jamais publié de client
+Linux et son app desktop est morte en janvier 2026, la voie supportée est le client web en
+**PWA**, installé depuis Chromium. Rien à versionner, rien à sauvegarder.
 
 **Second axe ouvert le 2026-09-01 : environnements de bureau.** Sway + Noctalia par-dessus
 GNOME, sur l'itération 01. **Cet axe ne concerne QUE le lab, sur le SSD USB** — il n'y a ni

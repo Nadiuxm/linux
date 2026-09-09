@@ -1287,6 +1287,97 @@ accès à des équipements réseau.
 
 ---
 
+## 3CX — téléphonie de l'entreprise, en PWA
+
+> **Statut au 2026-09-09 : PAS ENCORE INSTALLÉ.** Décision d'ajouter le 3CX à la
+> configuration requise du poste, prise ce jour. L'installation demande une interaction
+> dans le navigateur, elle ne se scripte pas — voir « À refaire à la main ».
+
+### Rôle
+
+La téléphonie du poste. **Outil secondaire**, à la différence de la VM Windows et de
+RustDesk : un repli existe (mobile, poste physique), donc son absence après une bascule
+gêne sans bloquer. Il se place en fin d'ordre de remontée en charge.
+
+### Obtention
+
+**Il n'y a rien à installer au sens du gestionnaire de paquets, et c'est le point
+important.** 3CX n'a **jamais** publié de client desktop Linux, et l'application Electron
+qui existait pour Windows et macOS est morte : retirée en version 20, puis bloquée côté
+serveur entre mi et fin janvier 2026. La voie supportée pour tout ce qui n'est pas Windows
+est le **client web**, que 3CX distribue comme **PWA**.
+
+L'installation se fait donc depuis Chromium — bouton d'installation dans la barre
+d'adresse, ou menu ⋮ → « Installer 3CX… ». Chromium écrit alors :
+
+- un `chrome-<id>-Default.desktop` dans `~/.local/share/applications/` ;
+- un profil sous `~/.config/chromium/Default/Web Applications/`.
+
+**Prérequis, côté serveur et non côté poste : FQDN et certificat SSL valide.** L'instance
+de l'entreprise est **hébergée dans le cloud 3CX**, donc le certificat est fourni d'office
+et la condition est satisfaite sans rien faire. À savoir tout de même pour le jour où une
+instance on-premise serait en jeu : il faudrait alors un split DNS et un certificat valide,
+sans quoi la PWA n'est pas installable.
+
+> **Ne pas installer un `.deb`, un AppImage ou une archive « 3CX Desktop » trouvés en
+> ligne.** Outre qu'ils ne se connecteront plus, l'app desktop 3CX est le vecteur d'une
+> compromission de chaîne d'approvisionnement connue — un binaire signé et trojanisé
+> diffusé par le canal officiel. Un artefact hors circuit n'a aucune raison d'être plus sûr
+> aujourd'hui.
+
+### Portabilité
+
+**La meilleure de ce fichier, et c'est le seul outil dont ce soit vrai.** Rien ne dépend de
+la distribution, du gestionnaire de paquets, du bureau ni du matériel : il faut un
+navigateur Chromium ou Chrome, point. Sur une distro qui n'en fournit pas dans ses dépôts,
+le coût se mesure sur le navigateur, pas sur le 3CX. Aucune friction n'est donc imputable à
+cet outil dans la comparaison des distributions.
+
+### Ce qui a été mesuré le 2026-09-09, avant installation
+
+Trois vérifications faites sur le poste pour savoir si la PWA s'y intégrerait, plutôt que
+de le supposer :
+
+- **Le lanceur la verra.** `~/.local/share/applications/` — là où Chromium écrit le
+  `.desktop` — est bien dans le périmètre de scan : `XDG_DATA_HOME` est exporté à la
+  session, et le compte tombe juste, **14 entrées visibles sur le disque pour 14 annoncées
+  par Noctalia** (`[desktop_entry] refreshed desktop entries: 14 apps`).
+- **Les notifications ont un backend.** `org.freedesktop.portal.Notification` figure parmi
+  les 22 interfaces servies par `xdg-desktop-portal` sur ce poste — contrairement à
+  `Secret`, absent faute de backend (voir les pièges du `CLAUDE.md`).
+- **Le verrouillage ne devrait pas tomber en pleine conversation.** Noctalia écoute
+  `org.freedesktop.ScreenSaver` (`listening on org.freedesktop.ScreenSaver (2 object
+  path(s))`), interface par laquelle Chromium inhibe l'inactivité pendant un appel. Le
+  verrouillage du poste est à 300 s et l'extinction des écrans à 600 s
+  (`dotfiles/noctalia/.config/noctalia/idle.toml`). **À confirmer sur un appel réel** :
+  qu'un composant écoute l'interface ne prouve pas que l'inhibition aboutit.
+
+### À refaire à la main après une bascule
+
+**Tout, et ce n'est pas grand-chose** — mais aucun `stow` ne le restaurera, parce que ni
+`~/.local/share/applications/` ni `~/.config/chromium/` ne sont versionnés :
+
+1. Installer Chromium si la distro ne l'a pas déjà.
+2. Ouvrir le client web de l'instance, s'authentifier.
+3. Installer la PWA depuis la barre d'adresse.
+4. Décider du démarrage automatique. **Point à mesurer, pas à supposer :** l'option écrit
+   dans `~/.config/autostart/`, et sous `uwsm` ces entrées deviennent des
+   `app-*@autostart.service` **filtrées** par `XDG_CURRENT_DESKTOP` — c'est ce qui avait
+   empêché les unités `gnome-keyring` de tourner. Une entrée générée par Chromium n'a
+   normalement pas de `OnlyShowIn`, donc ça devrait passer, mais ça se vérifie par
+   `ExecMainStartTimestamp` et non par la présence de l'unité (« une unité chargée n'est
+   pas une unité exécutée »).
+5. Vérifier micro et caméra au premier appel. Le micro passe par PipeWire sans portail, la
+   caméra par `portal.Camera`, qui est servi. Rien de bloquant attendu, rien de mesuré.
+
+### Versionné dans le dépôt
+
+**Rien, et il n'y a rien à y mettre.** La configuration vit dans le compte 3CX, côté
+serveur ; la PWA n'est qu'un raccourci vers une URL. C'est la contrepartie de sa
+portabilité : rien à sauvegarder, rien à restaurer, tout à refaire en quatre gestes.
+
+---
+
 ## Archives — ce qui a quitté ce fichier
 
 - **« Cible pour l'installation finale », note du 2026-09-03** →
