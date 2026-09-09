@@ -1,8 +1,9 @@
 # Alias du lab — volontairement minimal et portable.
 
-alias ll='ls -lah'
+alias ll='ls -larth'
 alias ..='cd ..'
 alias grep='grep --color=auto'
+alias flushdns='sudo resolvectl flush-caches'
 
 # Journal : ouvrir l'itération en cours
 alias lab='cd ~/linux'
