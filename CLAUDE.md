@@ -98,7 +98,7 @@ Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
 | `poste/` | Inventaire **vivant** des outils de travail, indépendant de la distro. |
 | `installation/` | **Le poste de référence.** Quatre fichiers aux rôles disjoints, découpés le 2026-09-08 : `procedure.md` = **les gestes** (seule source de ce qu'on tape) · `mesures.md` = les constats, versions et ce qu'ils apprennent · `README.md` = les décisions · `journal.md` = le récit daté. Les numéros de section de `procedure.md` et `mesures.md` se correspondent. |
-| `dotfiles/` | Paquets **GNU Stow**. Poste de référence, *cible* : `stow -v -t ~ bash git hypr foot nas uwsm` (**six** paquets — `desktop` en est sorti le 2026-09-07, son unique entrée n'a plus d'objet). **État réel au 2026-09-08 : 6 sur 6** — `bash` et `git` ont été débloqués ce jour-là en écartant les fichiers de l'ISO dans `~/sauvegarde-dotfiles-2026-09-08/` (ils étaient refusés depuis le 2026-09-04). Ne pas lire cette ligne comme un état : elle se re-mesure par `readlink` sur les cibles, pas par la commande qu'on a tapée. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). |
+| `dotfiles/` | Paquets **GNU Stow**. Poste de référence, *cible* : `stow -v -t ~ bash git hypr foot nas uwsm noctalia` (**sept** paquets — `desktop` en est sorti le 2026-09-07, son unique entrée n'a plus d'objet ; `noctalia` est entré le 2026-09-09, et `code` a été supprimé le même jour avec VS Code). **État réel au 2026-09-09 : 6 sur 7** — `noctalia` (un fichier, `idle.toml`) est versionné mais **pas encore déployé**, `~/.config/noctalia/` est vide ; `bash` et `git` avaient été débloqués le 2026-09-08 en écartant les fichiers de l'ISO dans `~/sauvegarde-dotfiles-2026-09-08/` (ils étaient refusés depuis le 2026-09-04). Ne pas lire cette ligne comme un état : elle se re-mesure par `readlink` sur les cibles, pas par la commande qu'on a tapée. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
 
 Itération 01 : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland) —
@@ -703,6 +703,41 @@ jour même, tant que le détail est frais.
   Même famille que le piège SELinux sur `/usr/local` : ce qui est installé à la main n'a
   personne derrière lui.
 
+- **Un portail absent n'est pas un repli en clair — et c'est le compositeur qui décide
+  quel portail est servi.** Le 2026-09-09, l'`argv.json` de VS Code (paquet Stow `code`,
+  depuis supprimé) justifiait `"password-store": "gnome-libsecret"` ainsi : Chromium devine
+  son magasin d'après `XDG_CURRENT_DESKTOP`, la détection échoue sous Hyprland, il retombe
+  sur `basic` — clé codée en dur, donc du clair. **La prémisse est à moitié vraie et la
+  conclusion est fausse.** Ce qui échoue sous Hyprland est le **portail** :
+  `~/.config/chromium/Local State` porte
+  `os_crypt = {portal: {prev_desktop: "Hyprland", prev_init_success: false}}`, et
+  `org.freedesktop.portal.Secret` est absent des 22 interfaces servies par
+  `xdg-desktop-portal`. Cause :
+  `/usr/share/xdg-desktop-portal/hyprland-portals.conf` impose `default=hyprland;gtk`, et
+  aucun des deux n'implémente `Secret` — alors que l'implémentation est **présente et
+  activable** (`gnome-keyring.portal` +
+  `/usr/share/dbus-1/services/org.freedesktop.impl.portal.Secret.service`). **Un `.portal`
+  installé n'est pas un portail servi**, c'est le `portals.conf` qui tranche — même famille
+  que « un paquet installé n'est pas un paquet utilisé ». **Et le repli n'était pas
+  `basic` :** pas d'`encrypted_key` dans `Local State` (sa signature), et le trousseau
+  `login` contient `Chromium Safe Storage`. Chromium 151 a échoué sur le portail **puis
+  réussi sur `gnome-libsecret`**. La note lisait la trace d'un échec et en déduisait l'état
+  final : **un composant peut échouer sur un chemin et réussir sur le suivant.** Le
+  `password-store` explicite ne servait qu'à VS Code, dont l'Electron embarque un Chromium
+  plus ancien qui, lui, devine encore. Mesure sans exposer de secret : `os_crypt` dans
+  `Local State`, puis les **libellés** via `busctl --user get-property … Items` et
+  `… Item Label` — **jamais `secret-tool search`**.
+
+- **Un avertissement de dépréciation n'est pas un échec.** Le 2026-09-09,
+  `sudo rpm -e gpg-pubkey-<empreinte>` a répondu `attention : erasing gpg-pubkey packages
+  is deprecated; use rpmkeys --delete <empreinte>` — **et avait supprimé la clé**. Le
+  `rpmkeys --delete` lancé ensuite a répondu `key not found`, ce qui se lit spontanément
+  comme « l'outil recommandé ne trouve pas la clé » alors que ça veut dire « il ne reste
+  rien à supprimer ». Seule la mesure de l'**effet** tranche, par les deux outils :
+  `rpm -qa gpg-pubkey --qf '%{summary}\n'` et `rpmkeys --list`. Même famille que « une
+  commande qui réussit n'est pas une commande qui fait ce qu'on croit », prise par l'autre
+  bout : ici la commande annonçait un problème et avait réussi.
+
 ## Hors périmètre — ne pas relancer le sujet
 
 **La gestion et la sauvegarde des secrets** (clé SSH du dépôt, base KeePassXC) est
@@ -770,14 +805,45 @@ cocher, pas une invitation à rouvrir le débat.
   plus de rigueur au moment du geste — ça a été tenté et ça n'a pas tenu trois jours —
   c'est une **confrontation périodique du dépôt à la machine**, du type de celle du
   2026-09-07. Compte rendu dans `installation/journal.md`.
-- **KeePassXC à la place de `gnome-keyring` comme fournisseur Secret Service.**
-  Demandé par Julien le 2026-09-03, **instruit et testé le 2026-09-04**.
+- **ARRÊTÉ PAR DÉCISION, jusqu'à nouvel ordre — KeePassXC à la place de `gnome-keyring`
+  comme fournisseur Secret Service.** Demandé par Julien le 2026-09-03, **instruit et testé
+  le 2026-09-04**, **arrêté par Julien** : `gnome-keyring` est le fournisseur **retenu** du
+  poste. Ce n'est ni un oubli, ni une tâche en retard — **ne pas relancer le sujet** sans
+  qu'il le rouvre. Tout ce qui suit est conservé comme cadrage, au cas où il le rouvre ;
+  rien là-dedans n'est une action à mener.
 
   > **FAISABILITÉ PROUVÉE le 2026-09-04** — la chaîne entrée KeePassXC → FdoSecrets →
-  > `libsecret` → `gvfsd` → montage SMB fonctionne, `gnome-keyring` absent de la machine.
-  > **Compte rendu détaillé, attributs exacts et pièges : entrée de journal du 2026-09-04.**
-  > Ce qui reste : l'ordonnancement au login, non testé. La discussion ci-dessous garde sa
-  > valeur de cadrage, mais elle n'est plus l'état de l'art — le journal l'est.
+  > `libsecret` → `gvfsd` → montage SMB fonctionne, `gnome-keyring` alors écarté de la
+  > machine. **Compte rendu détaillé, attributs exacts et pièges : entrée de journal du
+  > 2026-09-04.** La discussion ci-dessous garde sa valeur de cadrage, mais elle n'est plus
+  > l'état de l'art — le journal l'est.
+  >
+  > **ÉTAT RÉEL MESURÉ LE 2026-09-09.** Cette note affirmait « `gnome-keyring` absent de la
+  > machine » — **c'était vrai le 2026-09-04 et c'est faux depuis.** `gnome-keyring-50.0`
+  > est installé, deux processus tournent : celui de PAM (`--daemonize --login`) **détient**
+  > `org.freedesktop.secrets`, collection `login` **déverrouillée** (`Locked → false`) ;
+  > l'autre est l'implémentation du portail Secret, activée par D-Bus. Côté KeePassXC :
+  > aucun `~/.config/keepassxc/keepassxc.ini`, `FdoSecrets` jamais activé, processus
+  > absent. **Ce n'est pas un retard, c'est l'état voulu** — voir le titre.
+  >
+  > **La mesure du 2026-09-09 avait d'abord été écrite comme une dérive** (« la bascule
+  > n'a jamais été faite »), avant que Julien ne rappelle que c'est une décision. Le dépôt
+  > portait toute la trace du *travail* KeePassXC et **aucune trace de son arrêt** : la
+  > seule lecture possible était « en cours et en retard ». **Un état non écrit se lit
+  > comme un oubli, jamais comme un choix**, et aucune mesure ne peut faire la différence
+  > — la machine ne porte pas l'intention. Même famille que les trois points Sway « clos
+  > sans verdict ». Compte rendu : entrée de journal du 2026-09-09.
+  >
+  > **Un point technique subsiste, et lui n'est pas une décision :** `gnome-keyring` est
+  > arrivé en **`reason=Weak Dependency`** (même piège que `uwsm` — dans aucune liste qu'on
+  > lit). Un fournisseur **retenu** qui ne tient qu'à une dépendance faible peut disparaître
+  > à un `dnf autoremove` ou à un changement amont. À rendre explicite
+  > (`sudo dnf install gnome-keyring`) et à inscrire dans `installation/procedure.md`,
+  > sinon une réinstallation ne le remettra pas.
+  >
+  > Noter aussi que le trousseau contient une entrée `Noctalia encrypted storage key` :
+  > **Noctalia dépend lui aussi du Secret Service.** Sans effet ici, à ressortir seulement
+  > si le sujet est rouvert.
 
   **Ce dont il s'agit, et ce dont il ne s'agit PAS.** Il s'agit de savoir *quel composant
   implémente l'API D-Bus `org.freedesktop.secrets`* pour le bureau. Ce n'est **pas** une

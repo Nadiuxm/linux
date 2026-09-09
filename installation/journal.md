@@ -8,6 +8,152 @@ Ce journal est celui de la **construction du poste de travail**, distinct de
 
 ---
 
+## 2026-09-09 — VS Code désinstallé, et une déduction sur les secrets démentie par la machine
+
+**Le geste.** Retrait de VS Code, motivé par le durcissement du serveur SSH : les seules
+extensions installées étaient `remote-ssh`, `remote-ssh-edit` et `remote-explorer`.
+
+```
+sudo dnf remove code            # 1 Gio, emporte socat (dépendance devenue inutilisée)
+sudo rm /etc/yum.repos.d/vscode.repo
+sudo rpm -e gpg-pubkey-bc528686b50d79e339d3721ceb3e94adbe1229cf-5631588c
+sudo dnf clean all
+rm -rf ~/.config/Code ~/.vscode
+```
+
+**Deux vérifications qui ont servi avant de supprimer.** Le `%post` du paquet contient un
+bloc « Register yum repository » **entièrement commenté** (`TODO: #229`) : `vscode.repo`
+avait donc été écrit à la main, ce que confirmait `rpm -qf` (« n'appartient à aucun
+paquet »). Conséquence pratique : `dnf remove` ne l'aurait pas emporté, et rien ne le
+recrée. À l'inverse les deux `code*.desktop` appartenaient bien au paquet et sont partis
+avec lui. C'est le piège des scriptlets pris dans le bon sens — pour une fois le `%post`
+ne posait **rien** hors de la base rpm, mais il fallait le lire pour le savoir.
+
+`socat` est parti en « dépendance inutilisée ». C'est un outil réseau utile en admin : à
+réinstaller explicitement si on le veut, il passera alors en `reason=User` au lieu de
+traîner comme dépendance d'un paquet supprimé.
+
+### Ce que la vérification a appris — un avertissement qui ressemble à un échec
+
+`rpm -e gpg-pubkey-…` a répondu `attention : erasing gpg-pubkey packages is deprecated;
+use rpmkeys --delete <empreinte>` — **et avait supprimé la clé**. Le `rpmkeys --delete`
+lancé ensuite a répondu `key not found`, ce qui se lit spontanément comme « la commande
+recommandée ne trouve pas la clé » alors que ça veut dire « il ne reste rien à supprimer ».
+Seule la mesure de l'**effet** tranche, et par les deux outils :
+
+```
+rpm -qa gpg-pubkey --qf '%{summary}\n' | grep -i microsoft   # → rien
+rpmkeys --list | grep -i microsoft                            # → rien
+```
+
+### La vraie trouvaille : `argv.json` disait quelque chose de faux
+
+Le paquet Stow `dotfiles/code/` portait un `argv.json` commenté, dont la justification de
+`"password-store": "gnome-libsecret"` affirmait : *Chromium devine son magasin de secrets
+d'après `XDG_CURRENT_DESKTOP`, sous Hyprland la détection échoue et il retombe sur `basic`
+— un fichier obscurci par une clé codée en dur, donc du clair.* Avant de supprimer le
+paquet, la note a été mesurée sur Chromium pour être reversée dans le dépôt. **Une moitié
+est vraie, l'autre est fausse, et la fausse est la conclusion.**
+
+Ce qui échoue sous Hyprland n'est pas la détection, c'est le **portail** :
+
+```
+$ python3 -c "import json;print(json.load(open('~/.config/chromium/Local State'))['os_crypt'])"
+{'portal': {'prev_desktop': 'Hyprland', 'prev_init_success': False}}
+```
+
+Et de fait `org.freedesktop.portal.Secret` est absent des **22** interfaces servies par
+`xdg-desktop-portal`. La cause est un fichier livré par le compositeur :
+`/usr/share/xdg-desktop-portal/hyprland-portals.conf` impose `default=hyprland;gtk`, et
+aucun de ces deux backends n'implémente `Secret`. Pourtant l'implémentation **existe** sur
+le disque et est activable par D-Bus — `gnome-keyring` la fournit via
+`/usr/share/xdg-desktop-portal/portals/gnome-keyring.portal` et
+`/usr/share/dbus-1/services/org.freedesktop.impl.portal.Secret.service`. Un `.portal`
+installé n'est donc pas un portail servi : c'est le `portals.conf` qui tranche.
+
+**Mais le repli n'est pas `basic`.** Aucune `encrypted_key` dans `Local State` — c'est la
+signature du magasin `basic`, et elle est absente. Et le trousseau `login` contient bien
+`Chromium Safe Storage`. Chromium 151 a donc échoué sur le portail, **puis réussi sur
+`gnome-libsecret`** : la clé est dans le trousseau, rien en clair sur disque. Le
+`password-store` explicite n'était nécessaire que pour **VS Code**, dont l'Electron
+embarque un Chromium plus ancien qui, lui, devine encore d'après `XDG_CURRENT_DESKTOP`.
+
+> **Ce qu'il faut retenir : la note lisait la trace d'un échec et en déduisait l'état
+> final.** `prev_init_success: False` est vrai et n'a pas la conséquence annoncée, parce
+> qu'un composant peut échouer sur un chemin et réussir sur le suivant. Lire l'état final,
+> pas la trace de l'échec.
+
+Méthode de mesure, sans exposer de secret : `os_crypt` dans `Local State`, puis les
+**libellés** des entrées du trousseau via `busctl --user get-property … Items` puis
+`… Item Label`. **Jamais `secret-tool search`**, qui affiche les secrets en clair (piège
+déjà payé le 2026-09-07).
+
+### Une note périmée, et une décision que le dépôt n'avait pas enregistrée
+
+La mesure a trouvé deux écarts, et **il ne faut pas les confondre** : l'un est une note qui
+a vieilli, l'autre est un choix assumé que personne n'avait écrit.
+
+- **Note périmée.** L'affirmation « `gnome-keyring` absent de la machine » du point ouvert
+  KeePassXC était **vraie le 2026-09-04**, jour du test, et a vieilli sans que rien ne le
+  signale. `gnome-keyring-50.0` est installé, deux processus tournent : celui de PAM
+  (`--daemonize --login`) détient `org.freedesktop.secrets` et la collection `login` est
+  **déverrouillée** (`Locked → false`) ; l'autre est l'implémentation du portail Secret,
+  activée par D-Bus.
+
+- **Décision, pas oubli — et c'est la correction qui compte.** L'absence de bascule
+  (aucun `~/.config/keepassxc/keepassxc.ini`, `FdoSecrets` jamais activé, `keepassxc` qui
+  ne tourne pas) avait d'abord été consignée ici comme une dérive « la mise en service n'a
+  pas eu lieu ». **Faux : Julien a arrêté le projet KeePassXC-comme-fournisseur, et
+  `gnome-keyring` est le fournisseur retenu, jusqu'à nouvel ordre.** L'annonce est
+  antérieure à ce jour ; sa date exacte n'est nulle part dans le dépôt, donc la décision
+  est consignée à la date où elle est enfin écrite.
+
+> **La leçon est plus intéressante que la mesure.** Un état non écrit se lit comme un
+> oubli, jamais comme un choix — et une mesure ne peut pas faire la différence, parce que
+> la machine ne porte pas l'intention. Le dépôt avait toute la trace du *travail* KeePassXC
+> (recherche, faisabilité prouvée, matériel TPM vérifié) et **aucune trace de son arrêt** :
+> la seule lecture possible était « c'est en cours et en retard ». Même famille que les
+> trois points Sway « clos sans verdict » — on les avait écrits précisément pour qu'on ne
+> croie pas plus tard qu'ils avaient été tranchés. **Une décision d'arrêt s'écrit avec
+> autant de soin qu'une décision de faire**, sinon elle sera reprise pour une négligence,
+> par un lecteur ou par un agent.
+
+**Un point technique reste, et lui n'est pas une décision.** `gnome-keyring` est arrivé en
+**`reason=Weak Dependency`** — dans aucune liste qu'on lit, exactement le piège déjà payé
+sur `uwsm`. Or c'est désormais le fournisseur **retenu** du poste : un composant assumé qui
+ne tient qu'à une dépendance faible peut disparaître à un `dnf autoremove` ou à un
+changement amont, sans que rien ne le réclame. À rendre explicite
+(`sudo dnf install gnome-keyring`, qui le passe en `reason=User`) et à inscrire dans
+`installation/procedure.md` — sinon une réinstallation ne le remettra pas.
+
+### Deux observations non expliquées, notées pour ne pas les perdre
+
+- Le trousseau `login` contient **deux** entrées `Chromium Safe Storage` (items 2 et 6),
+  plus un `Chrome Safe Storage Control`. Doublon non diagnostiqué.
+- Une entrée `Noctalia encrypted storage key` : **Noctalia dépend lui aussi du Secret
+  Service**. Sans effet tant que `gnome-keyring` reste le fournisseur ; à ressortir si le
+  sujet est un jour rouvert, car le périmètre ne serait plus le seul NAS et le navigateur.
+
+### Côté dépôt
+
+- `dotfiles/code/` supprimé : le paquet n'a plus d'objet, et sa seule note de valeur était
+  fausse. Elle est reversée ici et dans les pièges.
+- `dotfiles/noctalia/` (un fichier, `idle.toml`) **conservé** : il avait été confondu avec
+  l'état de Noctalia, qu'on avait écarté à juste titre. Ce sont deux dossiers différents —
+  `~/.local/state/noctalia/` est réécrit en permanence et contient un `clipboard/` en
+  `drwx------`, tandis que `~/.config/noctalia/` est la couche déclarative, écrite à la
+  main. Constat au passage : **`idle.toml` n'était pas déployé** (`~/.config/noctalia/`
+  vide, `stow noctalia` jamais lancé), donc le verrouillage à 5 min et l'extinction à
+  10 min qu'il décrit ne s'appliquaient pas — les défauts de Noctalia tournaient à la
+  place. Un fichier de conf écrit, commenté, commité et inerte, comme le
+  `00-keyboard.conf`.
+
+### Temps passé
+
+<!-- TODO : à compléter. -->
+
+---
+
 ## 2026-09-08 — Les six paquets Stow posés, et un lien manuel qui bloquait tout
 
 Le dépôt annonçait « 4 sur 6 » depuis le 2026-09-07, `bash` et `git` refusés pour conflit
