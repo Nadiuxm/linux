@@ -97,6 +97,31 @@ Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a
 > il en couvre deux. Tout l'historique est descendu d'un cran dans **`uc/`** (le poste fixe,
 > Dell Pro Slim), et **`portable/`** a été créé **vide** pour le second poste.
 >
+> **AVANT TOUTE INTERVENTION : relever le MODÈLE de la machine, systématiquement.** Deux
+> machines, deux dossiers, et **rien dans l'invite ne dit laquelle** — le hostname encore
+> moins que le reste : `Static hostname:` est **vide** sur le poste fixe, et le `fedora`
+> affiché n'est qu'un nom transitoire par défaut, que le second poste peut porter à
+> l'identique. Un seul geste, à poser en début de session :
+>
+> ```bash
+> hostnamectl        # Hardware Model + Chassis ; `status` est la commande implicite
+> ```
+>
+> (`man hostnamectl`, section COMMANDS, entrée `status` : « Show system hostname and
+> related information. If no command is specified, this is the implied default ».
+> Sans systemd : `cat /sys/class/dmi/id/product_name`.)
+>
+> - `Hardware Model: Dell Pro Slim QCS1250` + `Chassis: desktop` → **le poste fixe**, on
+>   travaille dans **`uc/`**, et la convention de lecture ci-dessous s'applique.
+> - Tout autre modèle, ou `Chassis: laptop` → **le second poste**, donc **`portable/`** —
+>   où il n'y a rien à écrire tant que son contenu n'est pas tranché (voir plus bas).
+>
+> **Le piège qui va avec : vérifier OÙ la commande s'exécute.** Le second poste est
+> joignable en SSH (`10.11.65.4`) ; un `hostnamectl` lancé dans une session SSH décrit la
+> machine **distante**, un `hostnamectl` lancé ici décrit celle-ci — et on peut éditer les
+> fichiers de l'une en mesurant l'autre. Même famille que « une commande locale rapporte un
+> réglage, jamais un rôle » : lire *qui* exécute, et *où*.
+>
 > **Convention de lecture, qui vaut pour TOUT ce fichier et pour tout le contenu de `uc/` :**
 > les chemins cités s'entendent **relatifs à `uc/`**. `installation/procedure.md` désigne
 > `uc/installation/procedure.md`. Les fichiers n'ont pas été préfixés — c'eût été des
