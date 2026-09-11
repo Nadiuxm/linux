@@ -588,6 +588,67 @@ Il ne manque que la ligne `password … use_authtok`, absente aussi de `system-a
       > et le symptôme désigne le NAS ou l'unité — pas le trousseau. C'est le second trou
       > bloquant trouvé en rejouant la procédure sur papier.
 
+### 7.3 Certificat racine de la PKI — FAIT le 2026-09-11
+
+**Le poste n'avait aucune ancre d'entreprise jusqu'au 2026-09-11** :
+`/etc/pki/ca-trust/source/anchors/` était **vide**, et le dépôt ne mentionnait le mot
+« certificat » qu'à propos du 3CX. Sept jours de poste sans la PKI maison — ça ne s'était
+pas vu parce que rien de ce qui avait été fait jusque-là ne touchait un service interne
+en HTTPS.
+
+**Ce que le certificat est**, lu avec `certtool` (paquet `gnutls-utils`, déjà présent —
+**le binaire `openssl` n'est PAS installé sur ce poste**, seule la bibliothèque l'est) :
+
+| Champ | Valeur |
+|---|---|
+| Sujet = émetteur | `CN=Tours-Evenements Root CA` — auto-signée, c'est bien la racine |
+| Clé / signature | RSA **4096**, SHA-256 |
+| Validité | 2026-06-11 → **2041-06-11** |
+| Contraintes | `CA:TRUE`, **sans `pathlen`** → elle peut signer des sous-CA |
+| Extension `1.3.6.1.4.1.311.21.1` | « CA Version » — c'est une PKI **AD CS** |
+
+**Le dossier du NAS contient trois fichiers mais DEUX objets.** `te-root-ca.pem` et
+`Tours-Evenements Root CA.crt` sont le **même certificat** : le base64 du PEM, décodé et
+comparé octet à octet au DER, est identique. Prendre le `.pem` — même contenu, mais
+lisible et comparable.
+
+**La `.crl` ne se pose pas sur le poste, et ce n'est pas un oubli.** Le magasin de
+confiance ne consomme aucune CRL locale : OpenSSL et GnuTLS ne la vérifient pas par
+défaut, NSS et Chromium ne liront jamais un fichier déposé à la main. C'est un objet de
+serveur, publié en HTTP par la PKI. Écrit ici pour que personne n'invente ce geste dans
+six mois en voyant le fichier à côté du certificat.
+
+**Ce que `update-ca-trust` couvre, mesuré et non déduit.** L'ancre est ressortie dans
+**les trois** bundles extraits — `extracted/pem/tls-ca-bundle.pem`,
+`extracted/openssl/ca-bundle.trust.crt` et `extracted/edk2/cacerts.bin`. Et NSS suit,
+parce que sur ce poste `/usr/lib64/libnssckbi.so` → `/etc/alternatives/…` →
+`/usr/lib64/pkcs11/p11-kit-trust.so` (paquet `p11-kit-trust`) : la bibliothèque que NSS
+charge pour ses racines **est** le magasin système. Un seul geste couvre donc `curl`,
+`git` et Chromium. Il n'y a **pas** de base NSS utilisateur sur ce poste
+(`~/.pki/nssdb` absent), donc rien à importer par profil et `nss-tools` reste inutile.
+
+> **LE PIÈGE DE CETTE ÉTAPE — un magasin de confiance n'est relu qu'au DÉMARRAGE du
+> processus.** Le 2026-09-11, la pose était parfaite — `trust list` montrait l'ancre, les
+> trois bundles la contenaient — et Chromium continuait de refuser le certificat. Cause
+> mesurée, pas devinée : `ps -o lstart` donnait un navigateur **lancé le 2026-09-09 à
+> 07:59**, soit deux jours avant la pose du 2026-09-11 à 12:28. Il avait chargé ses
+> racines au démarrage et ne les relit jamais à chaud. Fermer Chromium **entièrement**
+> — la PWA 3CX comprise, elle partage le processus navigateur — puis relancer : le
+> certificat est reconnu.
+>
+> Ce qu'il faut en retenir dépasse le navigateur : **la vérification système et la
+> vérification applicative mesurent deux choses différentes**, et la première peut être
+> verte pendant des heures alors que la seconde est rouge. Même famille que « recharger
+> une config ≠ repartir d'un état neuf » : le magasin décrit un état appliqué à la
+> lecture, pas une règle que les processus vivants iraient relire.
+>
+> Ce qui a failli se passer à la place : imputer l'échec au **Chrome Root Store** de
+> Chromium 151 — magasin racine propre au navigateur, dont il est vrai qu'il change la
+> donne sur Linux — et partir installer `nss-tools` pour peupler `~/.pki/nssdb`. Le
+> raisonnement était plausible, récent, et il aurait ajouté une dépendance et une étape
+> de procédure dont ce poste n'a **aucun besoin**. C'est `ps -o lstart` qui a tranché,
+> en une commande. Même famille que « un mécanisme plausible n'est pas une contrainte ».
+
 ## 8. Plomberie freedesktop et applications
 
 **Les cinq cases ci-dessous étaient vides au 2026-09-07 et tout était installé depuis le

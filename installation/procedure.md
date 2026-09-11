@@ -397,6 +397,45 @@ busctl --user get-property org.freedesktop.secrets \
 > **Ne JAMAIS vérifier ce secret avec `secret-tool search`** : la commande affiche le mot
 > de passe **en clair** sur la sortie standard. Erreur commise le 2026-09-07.
 
+### 7.3 Certificat racine de la PKI de l'entreprise
+
+⚠ **ORDRE — après §7.2 : le fichier est sur le NAS, il faut le partage monté.**
+
+**On ne travaille jamais depuis le montage** : copie locale, pose, vérification, effacement
+de la copie. Le fichier à prendre est `te-root-ca.pem` ; le `.crt` du même dossier est le
+**même certificat** en DER, et la `.crl` ne se pose pas (voir `mesures.md` §7.3).
+
+```bash
+# 1. Copie locale
+tmp=$(mktemp -d)
+cp "$HOME/nas/Global TE/Certificats/tours-evenements.local/PKI-Export/te-root-ca.pem" "$tmp/"
+
+# 2. Pose dans le magasin système
+#    install et NON cp : la copie hérite du 0700 du montage CIFS, or le fichier doit
+#    être lisible par tous dans /etc/pki
+sudo install -m 0644 -o root -g root "$tmp/te-root-ca.pem" \
+     /etc/pki/ca-trust/source/anchors/te-root-ca.pem
+sudo update-ca-trust
+
+# 3. Vérifier AVANT de nettoyer — sinon la source part sans qu'on sache si la pose a pris
+trust list --filter=ca-anchors | grep -A3 'Tours-Evenements'
+
+# 4. Nettoyage
+rm -rf "$tmp"
+```
+
+→ l'ancre est listée par le `trust list` ci-dessus
+→ elle est **propagée aux bundles**, ce que `trust list` ne dit pas :
+```bash
+grep -c 'Tours-Evenements' /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+```
+→ un service interne en HTTPS, en ligne de commande (`0` = chaîne validée) :
+```bash
+curl -sS -o /dev/null -w '%{http_code}  %{ssl_verify_result}\n' https://<service interne>
+```
+→ le même service dans Chromium, **le navigateur ayant été relancé** — un processus déjà
+  lancé ne relit jamais le magasin, c'est le piège de cette étape (`mesures.md` §7.3)
+
 ## 8. Applications
 
 ```bash

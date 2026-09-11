@@ -742,6 +742,22 @@ jour même, tant que le détail est frais.
   commande qui réussit n'est pas une commande qui fait ce qu'on croit », prise par l'autre
   bout : ici la commande annonçait un problème et avait réussi.
 
+- **Un magasin de confiance n'est relu qu'au DÉMARRAGE du processus.** Le 2026-09-11, le
+  certificat racine de la PKI a été posé dans `/etc/pki/ca-trust/source/anchors/` :
+  `trust list` montrait l'ancre, les **trois** bundles extraits la contenaient — et Chromium
+  refusait toujours. Il n'y avait aucune erreur : `ps -o lstart` donnait un navigateur lancé
+  **deux jours plus tôt**, qui avait chargé ses racines à son démarrage. Relancer a suffi.
+  **La vérification système et la vérification applicative mesurent deux choses
+  différentes**, et la première peut être verte pendant des heures pendant que la seconde
+  est rouge, sans qu'aucune ne mente. Ce qui a failli être fait à la place : imputer l'échec
+  au **Chrome Root Store** de Chromium 151 — mécanisme réel, récent, plausible — et ajouter
+  `nss-tools` plus une base `~/.pki/nssdb` dont ce poste n'a aucun besoin. Un horodatage a
+  tranché ce qu'un raisonnement rendait compliqué. Même famille que « recharger une config ≠
+  repartir d'un état neuf » et « un mécanisme plausible n'est pas une contrainte ».
+  *Corollaire pour les certificats :* une CRL déposée à la main n'est lue par **personne**
+  côté poste (ni OpenSSL, ni GnuTLS, ni NSS) — c'est un objet de serveur, et l'absence de
+  geste se documente, sinon le fichier posé à côté du certificat en appellera un.
+
 ## Hors périmètre — ne pas relancer le sujet
 
 **La gestion et la sauvegarde des secrets** (clé SSH du dépôt, base KeePassXC) est

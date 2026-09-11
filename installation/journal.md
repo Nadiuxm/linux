@@ -8,6 +8,77 @@ Ce journal est celui de la **construction du poste de travail**, distinct de
 
 ---
 
+## 2026-09-11 — Le certificat racine de la PKI : un trou trouvé par l'usage, pas par un audit
+
+Julien : « autre chose qu'on n'a pas fait et dont j'ai besoin lors d'une installation, c'est
+l'installation du certificat root de ma PKI dans mon Fedora ». Mesure immédiate :
+`/etc/pki/ca-trust/source/anchors/` **vide**, et le mot « certificat » n'apparaissait dans
+tout le dépôt qu'à propos du 3CX, côté serveur. Le poste vivait depuis sept jours sans
+l'ancre de l'entreprise.
+
+**Ce que ça apprend sur la méthode, et c'est le vrai sujet de la journée.** L'audit complet
+du 2026-09-07 avait épluché la machine et trouvé neuf cases faites non notées, cinq
+affirmations fausses, trois configurations sans destination. Il n'a pas trouvé **ceci** —
+et il ne pouvait pas : confronter le dépôt à la machine ne révèle que ce qui **est** sur la
+machine. Un besoin jamais satisfait ne laisse aucune trace à comparer. Il n'y a pas de
+commande qui liste ce qui manque.
+
+Le manque n'a d'ailleurs pas été trouvé par une relecture mais par **l'usage** : il ne se
+voyait pas parce que rien de ce qui avait été fait jusque-là ne touchait un service interne
+en HTTPS. Corollaire à garder : la confrontation périodique reste la parade au dépôt qui
+prend du retard sur la machine, mais elle est **aveugle au travail jamais commencé**. Pour
+celui-là, la seule source est Julien et son usage réel — ce qui vaut argument pour continuer
+à faire remonter ces « au fait, il manque… » plutôt que d'attendre le prochain audit.
+
+### Deux fichiers pour un objet, et un troisième qui ne sert à rien ici
+
+Le dossier d'export du NAS contient trois fichiers. `te-root-ca.pem` et
+`Tours-Evenements Root CA.crt` sont le **même certificat** — décoder le base64 du PEM et
+comparer au DER octet à octet le prouve en une commande, plutôt que de le supposer d'après
+les tailles. Le troisième, la `.crl`, n'a **rien à faire sur un poste** : aucun consommateur
+local ne lit une CRL déposée à la main. Le noter explicitement dans `mesures.md` est le vrai
+travail ici — un fichier posé à côté d'un certificat *appelle* un geste, et l'absence de
+geste ne se documente que si on l'écrit.
+
+Certificat lui-même : RSA 4096, SHA-256, auto-signé, valide jusqu'en 2041, `CA:TRUE` sans
+`pathlen`, et une extension `1.3.6.1.4.1.311.21.1` qui signe une PKI **AD CS**. Lu avec
+`certtool` : **le binaire `openssl` n'est pas installé sur ce poste**, seule la
+bibliothèque l'est. Bon à savoir avant d'écrire une procédure qui en dépendrait.
+
+### La pose était verte et l'application rouge — pendant deux jours d'écart
+
+La séquence a marché du premier coup : copie locale (Julien ne travaille jamais depuis le
+montage NAS — copie, pose, effacement), `install -m 0644` plutôt que `cp` parce que la copie
+hérite du `0700` du montage CIFS, puis `update-ca-trust`. L'ancre est ressortie dans
+`trust list` **et** dans les trois bundles extraits.
+
+Et Chromium refusait toujours. Réflexe évité de justesse : Chromium 151 a son **Chrome Root
+Store**, magasin racine propre au navigateur, sujet réel et récent sur Linux — il y avait un
+mécanisme plausible tout prêt, et il menait à installer `nss-tools` et à peupler
+`~/.pki/nssdb`, soit une dépendance et une étape de procédure en plus. La mesure a coûté une
+commande : `ps -o lstart` sur le processus donnait un navigateur **lancé le 9 septembre à
+07:59**, quand le certificat a été posé le 11 à **12:28**. Deux jours d'écart. Un magasin de
+confiance n'est relu qu'au **démarrage** du processus ; relancer Chromium a suffi.
+
+> **La leçon n'est pas « penser à relancer le navigateur ».** C'est que **la vérification
+> système et la vérification applicative mesurent deux choses différentes**, et que la
+> première peut être verte pendant des heures alors que la seconde est rouge — sans qu'aucune
+> des deux mente. `trust list` disait vrai, Chromium aussi. Même famille que « recharger une
+> config ≠ repartir d'un état neuf », et que « un mécanisme plausible n'est pas une
+> contrainte » : le mécanisme séduisant était le mauvais, et c'est l'horodatage bête qui a
+> tranché.
+
+### Reste ouvert
+
+- **La vérification de bout en bout est écrite avec un `<service interne>` en attente.**
+  Tant qu'une URL interne réelle n'y est pas, la procédure n'a pas de test qui prouve que la
+  chaîne est validée — seulement la preuve que l'ancre est dans le magasin. À compléter au
+  premier service interne touché.
+- **La PKI peut signer des sous-CA** (`CA:TRUE` sans `pathlen`) et l'export n'en contient
+  aucune. Si un jour un service interne présente une chaîne passant par une intermédiaire,
+  c'est le **serveur** qui doit la servir ; à vérifier le jour où un certificat est refusé
+  alors que la racine est en place.
+
 ## 2026-09-09 — VS Code désinstallé, et une déduction sur les secrets démentie par la machine
 
 **Le geste.** Retrait de VS Code, motivé par le durcissement du serveur SSH : les seules
