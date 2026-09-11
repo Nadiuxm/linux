@@ -1,0 +1,23 @@
+[Unit]
+Description=Montage GVFS du partage NAS infoadmin
+# Trois conditions, toutes vérifiées le 2026-09-04 sur le poste de référence :
+#   1. gvfs a besoin du bus de session   -> unité --user, jamais fstab
+#      (un montage système ne peut pas interroger un trousseau de session)
+#   2. le trousseau doit être DÉVERROUILLÉ -> greetd + pam_gnome_keyring
+#      (plus de GDM sur ce poste ; les 3 lignes sont dans /etc/pam.d/greetd)
+#   3. graphical-session.target doit exister -> session lancée par UWSM
+#      « Hyprland (uwsm-managed) ». Avec « Hyprland » tout court la target
+#      reste inactive et cette unité ne démarre jamais.
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Aucun secret ici : le mot de passe vient de gnome-keyring, via gvfsd.
+ExecStart=/usr/bin/gio mount smb://pdc-nas-info.te-mgmt.io/infoadmin
+ExecStartPost=/usr/bin/ln -sfn /run/user/%U/gvfs/smb-share:server=pdc-nas-info.te-mgmt.io,share=infoadmin %h/nas
+ExecStop=-/usr/bin/gio mount -u smb://pdc-nas-info.te-mgmt.io/infoadmin
+
+[Install]
+WantedBy=graphical-session.target

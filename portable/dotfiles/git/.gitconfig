@@ -1,0 +1,20 @@
+[user]
+	name = jzielona
+	email = zielonajulien@gmail.com
+[init]
+	defaultBranch = main
+# Pas de `core.editor` : git suit alors $VISUAL, puis $EDITOR, puis `vi`.
+# La ligne `editor = vim` a été retirée le 2026-09-07 — `vim` N'EXISTE PAS sur ce
+# poste (image minimale : `vim-minimal` fournit `vi`, pas `vim`), et un
+# `git commit` sans `-m` aurait échoué sur « vim: command not found ». Laisser
+# git retomber sur le mécanisme standard est plus portable que de nommer un
+# binaire : la session porte déjà EDITOR=/usr/bin/nano.
+[pull]
+	rebase = false
+[push]
+	autoSetupRemote = true
+[color]
+	ui = auto
+[alias]
+	st = status -sb
+	lg = log --oneline --graph --decorate -20

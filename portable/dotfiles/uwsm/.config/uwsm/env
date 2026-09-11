@@ -1,0 +1,14 @@
+# Environnement de la session graphique — sourcé par uwsm
+# (man uwsm, section CONFIGURATION : « Environment (shell) to be sourced for the
+# graphical session »).
+#
+# Pourquoi ce fichier existe : /etc/profile.d/*.sh ne s'exécute que dans un shell
+# de LOGIN. La session est lancée par greetd -> uwsm -> Hyprland, qui ne source
+# pas /etc/profile. Tout ce que la distro pose dans profile.d est donc absent de
+# la session graphique, et ça ne se voit qu'à l'usage.
+
+# XDG_DATA_DIRS : sans ça, aucune application Flatpak n'apparaît dans le lanceur.
+# On réutilise le script de Fedora plutôt que de coder les chemins en dur — il
+# interroge `flatpak --installations` et couvre donc les portées system ET user,
+# y compris si elles changent.
+[ -r /etc/profile.d/flatpak.sh ] && . /etc/profile.d/flatpak.sh

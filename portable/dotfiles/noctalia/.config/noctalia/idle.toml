@@ -1,0 +1,39 @@
+# Comportements d'inactivité — service idle NATIF de Noctalia.
+# Il s'appuie sur ext_idle_notifier_v1 : ni hypridle ni swayidle ne sont installés,
+# et il ne faut pas en ajouter, deux démons d'inactivité se marcheraient dessus.
+#
+# Doc : https://docs.noctalia.dev/noctalia/services/idle/
+#
+# Où ce fichier est lu, et pourquoi ICI.
+# Noctalia empile trois couches : ses défauts, puis TOUS les *.toml de
+# ~/.config/noctalia/ (couche déclarative, celle qu'on versionne), puis
+# ~/.local/state/noctalia/settings.toml, écrit par l'interface graphique.
+# La dernière GAGNE : un réglage d'inactivité modifié dans la GUI masquera
+# silencieusement ce fichier. Si un délai ne correspond plus à ce qui est écrit
+# ici, chercher une section [idle] dans le settings.toml de l'état avant de
+# soupçonner ce fichier.
+#
+# Les deux couches sont surveillées et rechargées à chaud : modifier ce fichier
+# suffit, il n'y a rien à relancer.
+
+[idle]
+behavior_order = ["lock", "screen-off"]
+
+# Écran de verrouillage après 5 minutes d'inactivité.
+[idle.behavior.lock]
+enabled = true
+timeout = 300
+action  = "lock"
+
+# Écrans éteints 5 minutes plus tard, soit 10 minutes d'inactivité au total.
+# Délai exprimé en inactivité ABSOLUE, pas en « après le verrouillage » : la clé
+# locked_timeout existe bien dans le binaire, mais sa sémantique n'a pas été
+# mesurée sur cette machine, et le résultat visible est identique.
+#
+# C'est aussi l'extinction PROPRE des écrans — celle qui garde le lien
+# DisplayPort ouvert, contrairement au bouton physique de la dalle qui, lui,
+# détruit le connecteur DRM (voir le journal du 2026-09-09).
+[idle.behavior.screen-off]
+enabled = true
+timeout = 600
+action  = "screen_off"
