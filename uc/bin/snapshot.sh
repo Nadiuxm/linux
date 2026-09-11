@@ -29,7 +29,8 @@
 # ici n'est pas « qu'ai-je ajouté à la distro » mais « qu'ai-je changé depuis
 # la dernière fois ».
 #
-# Usage : ./bin/snapshot.sh [--baseline | --poste] [dossier-iteration]
+# Usage : ./uc/bin/snapshot.sh [--baseline | --poste] [dossier-iteration]
+#         (depuis la racine du dépôt ; ./bin/snapshot.sh si on est dans uc/)
 #         Sans argument      : dernière itération de journal/ par ordre alpha,
 #                              et destination choisie automatiquement.
 #         --baseline         : force l'écriture de baseline/ — refusée si elle

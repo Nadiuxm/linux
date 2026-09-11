@@ -165,7 +165,7 @@ sinon Fedora tente de redescendre les bibliothèques `hypr*` que le COPR a rempl
 ### 4.2 La configuration
 
 ```bash
-cd ~/linux/dotfiles
+cd ~/linux/uc/dotfiles
 stow -n -v -t ~ hypr        # simulation d'abord, toujours
 stow    -v -t ~ hypr
 ```
@@ -592,7 +592,7 @@ done
 mkdir -p ~/.config/uwsm
 
 # 3. SIMULER — la simulation nomme le niveau exact de chaque lien
-cd ~/linux/dotfiles
+cd ~/linux/uc/dotfiles
 stow -n -v -t ~ bash git hypr kitty nas uwsm noctalia
 
 # 4. Poser
@@ -610,7 +610,7 @@ piège après `~/.bashrc.d` et `~/.config/systemd`.
 atterrit.
 
 `-t ~` est obligatoire : sans lui, `stow` vise le **parent** du dossier courant, donc
-`~/linux/`. Le paquet `desktop` n'est pas posé (son unique entrée n'a plus d'objet) et
+`~/linux/uc/`. Le paquet `desktop` n'est pas posé (son unique entrée n'a plus d'objet) et
 `sway` ne sert qu'au lab.
 
 → `ls -l` sur les cibles des six paquets — **un `[ ]` peut vouloir dire « pas fait » ou
@@ -737,7 +737,7 @@ Après le redémarrage :
       sélecteur de fichiers. Trois processus qui tournent ne prouvent pas qu'un portail répond
 - [ ] `git ls-remote` aboutit dans un vrai terminal
 - [ ] veille / reprise — jamais éprouvée sur ce matériel
-- [ ] première capture d'état : `./bin/snapshot.sh --poste` → `installation/etats/<date>/`.
+- [ ] première capture d'état : `./uc/bin/snapshot.sh --poste` → `installation/etats/<date>/`.
       **Jamais `--baseline`** : une baseline mesurerait l'image ISO, pas la distribution
 
 ## Ce qui reste ouvert après la procédure

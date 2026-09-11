@@ -93,13 +93,32 @@ Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a
 
 ## Structure
 
+> **Réorganisation par machine, le 2026-09-11.** Le dépôt décrivait **une seule** machine ;
+> il en couvre deux. Tout l'historique est descendu d'un cran dans **`uc/`** (le poste fixe,
+> Dell Pro Slim), et **`portable/`** a été créé **vide** pour le second poste.
+>
+> **Convention de lecture, qui vaut pour TOUT ce fichier et pour tout le contenu de `uc/` :**
+> les chemins cités s'entendent **relatifs à `uc/`**. `installation/procedure.md` désigne
+> `uc/installation/procedure.md`. Les fichiers n'ont pas été préfixés — c'eût été des
+> centaines de retouches sans valeur, et un texte illisible. Le préfixe s'ajoute une fois,
+> ici. **Seuls les GESTES ont été réécrits** (`cd ~/linux/uc/dotfiles`,
+> `./uc/bin/snapshot.sh`) : une commande fausse ne se rattrape pas à la lecture.
+> `installation/mesures.md` a été laissé intact **exprès** — ce sont des constats datés,
+> et réécrire ce qui a réellement été tapé ce jour-là serait une falsification.
+>
+> **Ce que `portable/` doit contenir n'est PAS décidé** — second poste de travail, ou banc
+> d'essai de `installation/procedure.md` ? Les deux ne donnent pas la même arborescence, et
+> le second est le test de reproductibilité que ce dépôt exige sans l'avoir jamais passé
+> autrement que sur papier (2026-09-08). Ne rien y écrire avant d'avoir tranché.
+
 | Chemin | Rôle |
 |---|---|
 | `journal/` | Une itération = une distro. Fiche + entrées datées + `baseline/` capturée. |
 | `poste/` | Inventaire **vivant** des outils de travail, indépendant de la distro. |
 | `installation/` | **Le poste de référence.** Quatre fichiers aux rôles disjoints, découpés le 2026-09-08 : `procedure.md` = **les gestes** (seule source de ce qu'on tape) · `mesures.md` = les constats, versions et ce qu'ils apprennent · `README.md` = les décisions · `journal.md` = le récit daté. Les numéros de section de `procedure.md` et `mesures.md` se correspondent. |
-| `dotfiles/` | Paquets **GNU Stow**. Poste de référence, *cible* : `stow -v -t ~ bash git hypr kitty nas uwsm noctalia` (**sept** paquets — `desktop` en est sorti le 2026-09-07, son unique entrée n'a plus d'objet ; `noctalia` et `kitty` sont entrés le 2026-09-09, tandis que `code` et **`foot`** ont été supprimés le même jour, avec leurs paquets RPM). **État réel au 2026-09-09 : 6 sur 7** — `noctalia` est posé, `kitty` reste à poser ; `bash` et `git` avaient été débloqués le 2026-09-08 en écartant les fichiers de l'ISO dans `~/sauvegarde-dotfiles-2026-09-08/` (ils étaient refusés depuis le 2026-09-04). Ne pas lire cette ligne comme un état : elle se re-mesure par `readlink` sur les cibles, pas par la commande qu'on a tapée. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). |
-| `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. |
+| `dotfiles/` | Paquets **GNU Stow**. Poste de référence, *cible* : `stow -v -t ~ bash git hypr kitty nas uwsm noctalia` (**sept** paquets — `desktop` en est sorti le 2026-09-07, son unique entrée n'a plus d'objet ; `noctalia` et `kitty` sont entrés le 2026-09-09, tandis que `code` et **`foot`** ont été supprimés le même jour, avec leurs paquets RPM). **État réel au 2026-09-09 : 6 sur 7** — `noctalia` est posé, `kitty` reste à poser ; `bash` et `git` avaient été débloqués le 2026-09-08 en écartant les fichiers de l'ISO dans `~/sauvegarde-dotfiles-2026-09-08/` (ils étaient refusés depuis le 2026-09-04). Ne pas lire cette ligne comme un état : elle se re-mesure par `readlink` sur les cibles, pas par la commande qu'on a tapée. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). **Et le déplacement du 2026-09-11 a cassé les dix liens d’un coup** : ils sont relatifs et visaient `linux/dotfiles/…` — restow obligatoire, voir `dotfiles/README.md`. |
+| `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. Son `REPO` se déduit de sa propre position (`dirname/..`), il résout donc vers `uc/` sans modification — les captures continuent d'atterrir au bon endroit. |
+| **`../portable/`** | **Le second poste**, vide au 2026-09-11. Rien n'y est mesuré : ni modèle, ni écrans, ni chiffrement, ni Secure Boot, ni TPM. Joignable en SSH sur `10.11.65.4`. |
 
 Itération 01 : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland) —
 sur le SSD USB, plus le poste de travail.
@@ -187,6 +206,53 @@ Wayland, seul le compositeur voit le clavier.
   séquence commentée et expliquer ce qui va se passer.
 - **Ne rien pousser ni configurer de distant sans son accord explicite.**
 - Écrire en français.
+
+### OBLIGATOIRE — consulter la documentation AVANT de donner une commande
+
+**Règle, sans exception : aucune commande n'est donnée à Julien depuis la mémoire seule.**
+La documentation se consulte **avant** de l'écrire, pas après qu'elle a échoué. Ça vaut
+d'abord pour toute commande qui **modifie un état** — `stow -D`, `systemctl disable`,
+`rm`, `--delete`, `dnf remove`, `git reset` — où l'erreur ne se rattrape pas à la lecture.
+
+**Ordre de consultation, du moins cher au plus cher. S'arrêter dès qu'on a la réponse.**
+
+1. **La page de manuel locale** — `man <outil>`, `<outil> --help`, `info <outil>`.
+   Elle décrit la **version installée ici**, ce qu'aucune page web ne garantit.
+2. **Ce que le paquet livre** — `rpm -ql <paquet>`, les stubs (`/usr/share/hypr/stubs/`),
+   les fichiers de conf d'exemple, le `README` dans `/usr/share/doc/`, les scriptlets
+   (`rpm -qp --scripts`). Un fichier peut prescrire sa propre surcharge.
+3. **Le code du composant** — un `grep` dans un script vaut mieux qu'un raisonnement sur
+   son comportement, y compris quand le raisonnement annonce une mauvaise nouvelle.
+4. **Le web** — et là il est **obligatoire**, pas optionnel, pour : un logiciel en
+   développement rapide (Hyprland, Noctalia, greeter), un paquet de COPR, un comportement
+   qui a changé récemment, ou tout ce dont la page de manuel locale ne parle pas.
+   Chercher la doc **amont de la version installée**, jamais un tutoriel : ce dépôt a déjà
+   payé 425 lignes de config écrites d'après des tutoriels périmés.
+
+**Dire d'où vient la réponse.** Citer la source dans la réponse — `man systemctl`,
+section `disable` — pour que Julien puisse vérifier. **Et si la doc n'a pas pu être
+consultée, l'écrire explicitement** au lieu de livrer une commande avec l'aplomb d'une
+qui l'a été. Une incertitude annoncée coûte une minute ; une commande fausse donnée
+comme sûre coûte la confiance dans toutes les autres.
+
+> **Pourquoi cette règle est en IMPÉRATIF ici et pas seulement dans les pièges.** Les
+> pièges disaient déjà « un mécanisme plausible n'est pas une contrainte — la documentation
+> de l'outil, si », « lire le code coûte moins cher que le raisonnement », « un avertissement
+> peut être en tête du fichier qu'on a déjà sur son disque ». **Et le 2026-09-11, trois
+> commandes fausses ont été données coup sur coup dans la même demi-heure** : `stow -D` sur
+> des liens dont la cible avait bougé, `systemctl reenable` sur une unité fournie par Stow,
+> puis « reposer le lien suffit » alors qu'Hyprland gardait son erreur.
+>
+> **Les trois étaient réfutées par des pages de manuel présentes sur le disque.** `man stow`,
+> section DELETING PACKAGES : « Any symlink it finds that **points into the package being
+> deleted** is removed » — la propriété se juge sur la **cible**. `man systemctl`, entrée
+> `disable` : « this removes **all symlinks** to matching unit files, **including manually
+> created symlinks** […] disable may remove **more symlinks** than a prior enable created ».
+> Le web n'était même pas nécessaire.
+>
+> Un catalogue de pièges se lit **après** l'erreur, comme un récit. Une règle en impératif
+> se lit **avant**, comme un protocole. C'est la seule différence entre les deux, et elle
+> vaut trois commandes fausses.
 
 ## Convention du journal
 
@@ -596,10 +662,62 @@ jour même, tant que le détail est frais.
 - **Un lien posé à la main au bon endroit n'est pas un lien reconnu par Stow — et il bloque
   tout le paquet.** Le 2026-09-08, `~/.bashrc.d` pointait vers le dépôt, en **absolu**.
   `stow -n -v bash git` a répondu `existing target is not owned by stow: .bashrc.d` puis
-  `All operations aborted` : Stow ne reconnaît comme siens que les liens **relatifs** qu'il
-  crée. Le lien fonctionnait parfaitement et empêchait pourtant le déploiement — retirer le
-  lien (pas sa cible) et laisser Stow le refaire. Même famille que « une commande qui
-  réussit n'est pas une commande qui fait ce qu'on croit ».
+  `All operations aborted`. Le lien fonctionnait parfaitement et empêchait pourtant le
+  déploiement — retirer le lien (pas sa cible) et laisser Stow le refaire. Même famille que
+  « une commande qui réussit n'est pas une commande qui fait ce qu'on croit ».
+  **L'explication donnée ici était fausse, corrigée le 2026-09-11** : elle disait « Stow ne
+  reconnaît comme siens que les liens **relatifs** qu'il crée ». C'est un raccourci qui
+  décrit bien ce cas-ci et se trompe de cause — voir l'entrée suivante, qui donne la vraie
+  règle et l'a payée.
+
+- **Ce qui décide de la propriété d'un lien, pour Stow, c'est sa CIBLE RÉSOLUE — pas sa
+  forme.** Le 2026-09-11, le dépôt a été réorganisé par machine (`dotfiles/` → `uc/dotfiles/`),
+  ce qui casse d'un coup les dix liens posés dans le home : ils sont relatifs et visaient
+  `linux/dotfiles/…`. La réparation annoncée était `stow -D` puis `stow`, au motif — écrit
+  dans le README la minute d'avant — que « Stow reconnaît un lien relatif qu'il a créé, pas
+  la validité de sa cible ». **Déroulé sur la machine : `stow -D` n'a rien fait, sortie
+  vide**, puis le `stow` suivant a déclaré les dix liens `not owned by stow` et
+  `All operations aborted`. Stow **résout** la cible et vérifie qu'elle tombe dans le
+  répertoire stow courant ; une cible hors de `~/linux/uc/dotfiles` — et ici pointant dans
+  le vide — n'est pas à lui. Réponse correcte : supprimer les liens morts avant de stower,
+  `find ~ -maxdepth 5 -xtype l -lname '*linux/dotfiles*' -delete` (`-xtype l` ne peut
+  matcher qu'un lien **cassé**, jamais un vrai fichier).
+  **C'était dans `man stow`, section DELETING PACKAGES** : « Any symlink it finds that
+  **points into the package being deleted** is removed » — la cible, pas la forme. Une page
+  de manuel locale, jamais ouverte. Deux corollaires :
+  **`All operations aborted` n'est pas un échec** mais le refus de toucher à quoi que ce
+  soit tant qu'un conflit subsiste — relancer à l'identique ne pouvait rien donner de plus ;
+  et **tout déplacement du dossier `dotfiles/` dans le dépôt casse silencieusement le home**,
+  un shell neuf perdant simplement son `.bashrc`. Même famille que « un mécanisme plausible
+  n'est pas une contrainte » : la note avait été écrite depuis un raisonnement, pas depuis
+  une mesure, et elle a tenu moins d'une heure.
+
+- **Un lien d'activation systemd ne se répare pas avec `stow`.** Corollaire du précédent,
+  même jour : `~/.config/systemd/user/graphical-session.target.wants/nas-infoadmin.service`
+  a été posé par `systemctl --user enable`, pas par Stow, et il est **absolu**. Après un
+  restow le fichier de l'unité est de nouveau en place, mais ce lien-là pointe toujours dans
+  le vide — **le NAS ne se monte plus au login, sans aucune erreur**. Il faut
+  `systemctl --user enable nas-infoadmin.service`. Deux liens vers le même fichier, posés
+  par deux outils, dont un seul revient avec `stow` : recenser par `find`, pas par paquet.
+
+- **`systemctl reenable` DÉTRUIT une unité fournie par Stow — `enable` seul est la commande
+  juste.** Suite immédiate du point précédent, le 2026-09-11 : le `reenable` recommandé a
+  répondu `Unit nas-infoadmin.service does not exist` **alors que `stow` venait de reposer
+  le lien à la ligne d'avant**, et il a fallu un second `stow`. `list-unit-files` donne
+  l'état **`linked`** : une unité atteinte par un **symlink** dans `~/.config/systemd/user/`
+  est classée *liée*, pas *installée*. Or `reenable` = `disable` + `enable`, et **`disable`
+  sur une unité `linked` supprime le symlink de l'unité elle-même**, pas seulement ses liens
+  d'activation — le `enable` qui suit ne trouve donc plus rien. **Le message décrivait un
+  état que la commande venait de créer.** Vaut pour *tout* paquet Stow livrant une unité
+  systemd, puisque Stow ne pose que des symlinks : `enable` n'écrit que dans les `.wants` et
+  est sans danger ; `disable` et `reenable` emportent le lien du dépôt. Même famille que
+  « une commande qui réussit n'est pas une commande qui fait ce qu'on croit », prise par
+  l'autre bout — la commande annonce une absence qu'elle a elle-même provoquée.
+  **Et `man systemctl` le dit mot pour mot**, entrée `disable` : « this removes **all
+  symlinks** to matching unit files, **including manually created symlinks**, and not just
+  those actually created by enable or link […] disable may remove **more symlinks** than a
+  prior enable invocation of the same unit created ». Deuxième page de manuel locale non
+  ouverte le même jour — d'où la règle impérative en tête de fichier.
 
 - **Le tree folding de Stow frappe partout où le dossier cible n'existe pas encore.**
   Troisième occurrence le 2026-09-07, après `~/.bashrc.d` et `~/.config/systemd` :

@@ -1,5 +1,9 @@
 # Journal de lab
 
+> Ce dossier décrit le **poste fixe** et vit sous `uc/` depuis la réorganisation par
+> machine du 2026-09-11. Les chemins cités ici s'entendent **relatifs à `uc/`**.
+
+
 Une itération = une distribution installée en bare-metal, utilisée pour de vrai,
 puis remplacée. Un dossier par itération, numéroté dans l'ordre chronologique.
 
@@ -40,9 +44,9 @@ Règle : noter **le problème et le temps perdu**, pas seulement la solution.
 À dérouler **intégralement** avant de lancer le moindre installateur :
 
 1. Clore l'itération : verdict dans son `README.md`, dernière entrée dans `journal.md`.
-2. `./bin/snapshot.sh` — capture finale de l'état du système. **Elle va dans
+2. `./uc/bin/snapshot.sh` — capture finale de l'état du système. **Elle va dans
    `etats/<date>/`, jamais dans `baseline/`** : le script refuse d'écraser la référence.
-   Pour le poste de référence, c'est `./bin/snapshot.sh --poste`.
+   Pour le poste de référence, c'est `./uc/bin/snapshot.sh --poste`.
 3. Reporter dans `dotfiles/` toute config à conserver (voir `dotfiles/README.md`).
 4. `git add -A && git commit && git push` — **vérifier que le push est bien passé sur GitHub**.
 5. Sauvegarder hors machine ce que git ne porte pas : clés SSH/GPG, base KeePassXC,

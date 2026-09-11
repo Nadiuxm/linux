@@ -2,6 +2,116 @@
 
 Configuration portable, réappliquée sur machine nue après chaque réinstallation.
 
+> **Le dépôt a été réorganisé par machine le 2026-09-11** : ce dossier est passé de
+> `dotfiles/` à **`uc/dotfiles/`**. Les liens Stow étant **relatifs**, ils pointaient
+> tous vers `linux/dotfiles/…` et se sont donc **cassés d’un coup** — les dix, sur le
+> poste fixe. Rien ne le signale : un shell neuf perd simplement son `.bashrc`, et un
+> `ls` sur le lien répond « Aucun fichier de ce type » alors que la cible existe, un
+> cran plus bas. À rejouer après tout `git pull` qui apporte ce déplacement :
+>
+> ```bash
+> # 1. LISTER — ne jamais supprimer une liste qu'on n'a pas lue
+> find ~ -maxdepth 5 -xtype l -lname '*linux/dotfiles*'
+>
+> # 2. Supprimer les liens morts. `-xtype l` ne matche QUE des liens cassés :
+> #    un vrai fichier, ou un lien valide, ne peut pas être touché.
+> find ~ -maxdepth 5 -xtype l -lname '*linux/dotfiles*' -delete
+>
+> # 3. SIMULER
+> cd ~/linux/uc/dotfiles
+> stow -n -v -t ~ bash git hypr nas uwsm noctalia
+>
+> # 4. Poser
+> stow -v -t ~ bash git hypr nas uwsm noctalia
+> ```
+>
+> `~/.bashrc.d` est un lien **vers un dossier** : `-delete` retire le lien, jamais son
+> contenu — les vrais fichiers vivent dans le dépôt.
+>
+> **Puis rattraper les processus qui ont lu pendant la fenêtre où le lien n'existait pas.**
+> Reposer le lien ne suffit pas : un programme déjà lancé garde ce qu'il a lu, ou ce qu'il
+> a échoué à lire.
+>
+> ```bash
+> systemctl --user enable nas-infoadmin.service   # PAS reenable — voir plus bas
+> hyprctl reload                                  # sinon `hyprctl configerrors` répète
+>                                                 # « cannot open hyprland.lua » indéfiniment
+> ```
+>
+> Constaté le 2026-09-11 : le fichier était revenu, lisible, et Hyprland affichait toujours
+> son bandeau rouge. **La vérification système et la vérification applicative mesurent deux
+> choses différentes** — même leçon que le certificat racine du 2026-09-11, où `trust list`
+> était vert pendant que Chromium refusait. ⚠ Et `hyprctl reload` ne redéplace pas les
+> espaces déjà ouverts : les `workspace_rule` ne valent qu'à la **création** de l'espace.
+
+## `stow -D` ne défait PAS des liens dont la cible a bougé
+
+**Écrit d'abord à l'envers ici même, le 2026-09-11, et démenti dans l'heure.** La note
+disait : « `stow -D` sur un lien cassé fonctionne, Stow reconnaît un lien **relatif**
+qu'il a créé, pas la validité de sa cible ». Déroulée sur la machine, la séquence a donné
+un `stow -D` **silencieux** — zéro ligne de sortie, rien retiré — puis, au `stow` suivant,
+les dix liens déclarés `existing target is not owned by stow` et `All operations aborted`.
+
+**Le vrai mécanisme :** Stow ne juge pas un lien sur sa forme, il **résout sa cible** et
+vérifie qu'elle tombe dans le répertoire stow courant. Après le déplacement, les liens
+visaient `linux/dotfiles/…` — hors de `~/linux/uc/dotfiles`, et nulle part. Donc pas à
+lui, donc ni défaits ni remplacés. **C'est la cible qui décide de la propriété, pas le
+caractère relatif du lien.**
+
+Ça recoupe, par l'autre bout, le piège du 2026-09-08 sur `~/.bashrc.d` : un lien **absolu**
+posé à la main était refusé parce que sa cible résolue ne satisfaisait pas Stow non plus.
+Une seule règle, deux symptômes opposés — et la formulation « Stow ne reconnaît que les
+liens relatifs » était un raccourci commode qui a tenu tant qu'on ne déplaçait rien.
+
+⚠ **`All operations aborted` n'est pas un échec** : c'est le refus de toucher à quoi que
+ce soit tant qu'un conflit subsiste. Rien n'avait été modifié — relancer la commande à
+l'identique ne pouvait donc rien donner de plus.
+
+*Leçon de méthode, la même que partout ailleurs dans ce dépôt : une note de piège se
+teste. Celle-ci a été écrite depuis un raisonnement plausible sur le mécanisme, et le
+raisonnement était faux.*
+>
+> **Et un lien casse que Stow ne réparera pas**, parce qu'il ne l'a pas créé :
+> `~/.config/systemd/user/graphical-session.target.wants/nas-infoadmin.service` est posé
+> par **systemd** au `systemctl --user enable`, et il est **absolu**
+> (`/home/jzielona/linux/dotfiles/nas/…`). Après le restow, le fichier de l'unité est de
+> nouveau là, mais le lien d'activation pointe toujours dans le vide — **le NAS ne se
+> monte plus, sans erreur au login** :
+>
+> ```bash
+> systemctl --user enable nas-infoadmin.service
+> ```
+>
+> ⚠ **`enable`, surtout pas `reenable`** — voir la section ci-dessous, qui l'a payé.
+>
+> Même famille que « deux composants d'un même paquet peuvent démarrer par des mécanismes
+> différents » : ici deux liens vers le même fichier, posés par deux outils, dont un seul
+> se répare avec `stow`.
+
+## `systemctl reenable` DÉTRUIT une unité fournie par Stow
+
+Le 2026-09-11, la réparation annoncée après le restow était
+`systemctl --user reenable nas-infoadmin.service`. Elle a répondu
+`Failed to reenable unit: Unit nas-infoadmin.service does not exist` — **alors que le lien
+venait d'être reposé par `stow` à la ligne précédente**, et il a fallu un second `stow`
+pour le remettre.
+
+**Le mécanisme.** `systemctl --user list-unit-files nas-infoadmin.service` donne l'état
+**`linked`** : comme l'unité est atteinte par un **symlink** dans `~/.config/systemd/user/`,
+systemd la classe parmi les unités *liées*, pas parmi les unités *installées*. Or
+`reenable` vaut `disable` **puis** `enable`, et **`disable` sur une unité `linked` supprime
+le symlink de l'unité elle-même** — pas seulement ses liens d'activation. Le `enable` qui
+suivait ne trouvait donc plus rien : *le message décrivait un état que la commande venait
+de créer.*
+
+**Tout paquet Stow qui livre une unité systemd hérite de ce piège**, puisque Stow ne pose
+que des symlinks. `enable` seul est sans danger — il n'écrit que dans les `.wants`.
+`disable` et `reenable` emportent le lien du dépôt.
+
+*Même famille que « une commande qui réussit n'est pas une commande qui fait ce qu'on
+croit », prise par l'autre bout : ici la commande annonce une absence, et c'est elle qui
+l'a provoquée.*
+
 ## Pourquoi Stow
 
 En bare-metal successif, le problème n'est pas de sauvegarder les configs : c'est de
@@ -12,7 +122,7 @@ Stow résout ça avec des liens symboliques. Chaque sous-dossier de `dotfiles/` 
 crée les liens correspondants.
 
 ```
-dotfiles/bash/.bashrc   ──stow──▶   ~/.bashrc -> ~/linux/dotfiles/bash/.bashrc
+dotfiles/bash/.bashrc   ──stow──▶   ~/.bashrc -> ~/linux/uc/dotfiles/bash/.bashrc
 ```
 
 L'intérêt concret : le fichier réel vit dans le dépôt git. Quand je modifie `~/.bashrc`,
@@ -42,7 +152,7 @@ sudo pacman -S stow        # Arch
 
 # 2. Le dépôt, en tout premier geste après l'install
 git clone <url-du-depot> ~/linux
-cd ~/linux/dotfiles
+cd ~/linux/uc/dotfiles
 
 # 3. Écarter les fichiers par défaut de la distro, sinon Stow refuse
 #    (il ne remplace jamais un vrai fichier — c'est une sécurité, pas un bug)
@@ -119,7 +229,7 @@ Vérifié dans un bash de login neuf : `PROMPT_COMMAND` = `history -a; printf "\
 ## Usage courant
 
 ```bash
-cd ~/linux/dotfiles
+cd ~/linux/uc/dotfiles
 
 stow -n -v -t ~ bash     # simulation : montre ce qui serait fait, ne fait rien
 stow    -v -t ~ bash     # poser les liens du paquet bash
@@ -128,14 +238,14 @@ stow -D -v -t ~ bash     # retirer les liens
 ```
 
 `-t ~` désigne la cible. Sans lui, Stow vise le **parent** du dossier courant, ce qui
-depuis `~/linux/dotfiles` donnerait `~/linux/` — pas `$HOME`. À toujours préciser.
+depuis `~/linux/uc/dotfiles` donnerait `~/linux/uc/` — pas `$HOME`. À toujours préciser.
 
 ## Ajouter une config au dépôt
 
 ```bash
-mkdir -p ~/linux/dotfiles/vim
-mv ~/.vimrc ~/linux/dotfiles/vim/.vimrc     # déplacer, pas copier
-cd ~/linux/dotfiles && stow -v -t ~ vim     # le lien remplace le fichier
+mkdir -p ~/linux/uc/dotfiles/vim
+mv ~/.vimrc ~/linux/uc/dotfiles/vim/.vimrc     # déplacer, pas copier
+cd ~/linux/uc/dotfiles && stow -v -t ~ vim     # le lien remplace le fichier
 ```
 
 Le `mv` compte : il ne doit rester **qu'un seul** exemplaire du fichier, celui du dépôt.

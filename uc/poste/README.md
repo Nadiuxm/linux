@@ -1,5 +1,9 @@
 # Poste de travail — ce qu'il ne faut pas oublier
 
+> Ce dossier décrit le **poste fixe** et vit sous `uc/` depuis la réorganisation par
+> machine du 2026-09-11. Les chemins cités ici s'entendent **relatifs à `uc/`**.
+
+
 Ce dossier répond à une question que ni `baseline/` ni `journal/` ne traitent :
 
 > **Qu'est-ce que je dois réinstaller et reconfigurer pour retrouver un poste

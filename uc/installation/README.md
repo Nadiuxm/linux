@@ -1,5 +1,9 @@
 # Poste de référence — cadrage
 
+> Ce dossier décrit le **poste fixe** et vit sous `uc/` depuis la réorganisation par
+> machine du 2026-09-11. Les chemins cités ici s'entendent **relatifs à `uc/`**.
+
+
 > **Ce document est une note de décision, pas un mode opératoire.** Il dit *ce qui a
 > été choisi et pourquoi*. Les gestes sont dans `procedure.md`, les mesures et versions
 > dans `mesures.md`, le récit daté de la construction dans `journal.md`.
