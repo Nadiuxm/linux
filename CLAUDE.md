@@ -115,6 +115,11 @@ Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a
 >   travaille dans **`uc/`**, et la convention de lecture ci-dessous s'applique.
 > - Tout autre modèle, ou `Chassis: laptop` → **le second poste**, donc **`portable/`** —
 >   où il n'y a rien à écrire tant que son contenu n'est pas tranché (voir plus bas).
+>   **Identifié le 2026-09-11** : `Hardware Model: Dell Pro 16 PC16250`, `Chassis: laptop`,
+>   `Static hostname: PDC-7VL5-1165` — à la différence du poste fixe, le hostname n'est
+>   **pas** vide ici et distingue déjà les deux machines. Ça ne dispense pas de vérifier
+>   `Hardware Model` + `Chassis` : c'est ce couple qui fait foi, le hostname n'est qu'une
+>   confirmation.
 >
 > **Le piège qui va avec : vérifier OÙ la commande s'exécute.** Le second poste est
 > joignable en SSH (`10.11.65.4`) ; un `hostnamectl` lancé dans une session SSH décrit la
@@ -143,7 +148,7 @@ Contrepartie inchangée du boîtier USB : modes de panne qu'un disque vissé n'a
 | `installation/` | **Le poste de référence.** Quatre fichiers aux rôles disjoints, découpés le 2026-09-08 : `procedure.md` = **les gestes** (seule source de ce qu'on tape) · `mesures.md` = les constats, versions et ce qu'ils apprennent · `README.md` = les décisions · `journal.md` = le récit daté. Les numéros de section de `procedure.md` et `mesures.md` se correspondent. |
 | `dotfiles/` | Paquets **GNU Stow**. Poste de référence, *cible* : `stow -v -t ~ bash git hypr kitty nas uwsm noctalia` (**sept** paquets — `desktop` en est sorti le 2026-09-07, son unique entrée n'a plus d'objet ; `noctalia` et `kitty` sont entrés le 2026-09-09, tandis que `code` et **`foot`** ont été supprimés le même jour, avec leurs paquets RPM). **État réel au 2026-09-09 : 6 sur 7** — `noctalia` est posé, `kitty` reste à poser ; `bash` et `git` avaient été débloqués le 2026-09-08 en écartant les fichiers de l'ISO dans `~/sauvegarde-dotfiles-2026-09-08/` (ils étaient refusés depuis le 2026-09-04). Ne pas lire cette ligne comme un état : elle se re-mesure par `readlink` sur les cibles, pas par la commande qu'on a tapée. Le paquet `sway` ne sert plus qu'au lab. **`uwsm` exige `mkdir -p ~/.config/uwsm` avant le stow** (tree folding, voir les pièges). **Et le déplacement du 2026-09-11 a cassé les dix liens d’un coup** : ils sont relatifs et visaient `linux/dotfiles/…` — restow obligatoire, voir `dotfiles/README.md`. |
 | `bin/snapshot.sh` | Capture l'état système. Agnostique du gestionnaire de paquets. Son `REPO` se déduit de sa propre position (`dirname/..`), il résout donc vers `uc/` sans modification — les captures continuent d'atterrir au bon endroit. |
-| **`../portable/`** | **Le second poste**, vide au 2026-09-11. Rien n'y est mesuré : ni modèle, ni écrans, ni chiffrement, ni Secure Boot, ni TPM. Joignable en SSH sur `10.11.65.4`. |
+| **`../portable/`** | **Le second poste** — Dell Pro 16 PC16250, `Chassis: laptop`, hostname `PDC-7VL5-1165` (identifié le 2026-09-11). Dossier lui-même toujours vide : ni écrans, ni chiffrement, ni Secure Boot, ni TPM mesurés. Joignable en SSH sur `10.11.65.4`. |
 
 Itération 01 : `journal/01-fedora-44-workstation/` (Fedora 44, GNOME 50.4, Wayland) —
 sur le SSD USB, plus le poste de travail.
