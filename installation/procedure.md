@@ -148,7 +148,7 @@ désigne pas.
 ```bash
 sudo dnf copr enable dtutila/hyprland
 sudo dnf install -y hyprland hyprland-guiutils xdg-desktop-portal-hyprland \
-                    xdg-desktop-portal-gtk noctalia foot stow keepassxc
+                    xdg-desktop-portal-gtk noctalia stow keepassxc
 ```
 
 317 paquets. `keepassxc` et `stow` viennent du protocole de baseline du lab, pas
@@ -404,15 +404,19 @@ sudo dnf install nautilus chromium kitty gvfs-smb
 ```
 
 `nautilus` est installable seul (89 exigences, aucun composant de bureau) et **nécessaire
-au moins pour le §7.2**. `kitty` est le terminal retenu ; `foot` est déjà là depuis §4.1 et
-reste inutilisé. Versions relevées : `mesures.md` §8.
+au moins pour le §7.2**. `kitty` est le terminal retenu, et le seul : `foot` arrivait
+autrefois par le §4.1, il a été **retiré du §4.1 et de la machine le 2026-09-09** parce
+qu'il était installé sans être utilisé. Versions relevées : `mesures.md` §8.
 
 → `pgrep -f xdg-desktop-portal` → les **trois** portails tournent
 
-- [ ] **Configurer kitty.** `~/.config/kitty/` est vide, kitty tourne sur ses défauts. Les
-      questions du `foot.ini` (`dpi-aware`, échelle Wayland, densité du P2725DE) se
-      reposent à l'identique — à trancher à l'usage, puis à versionner en paquet
-      `dotfiles/kitty`.
+- [x] **Configurer kitty — FAIT le 2026-09-09**, paquet `dotfiles/kitty`. Le contenu n'est
+      pas celui qu'annonçait cette case : la question de la **taille de police** est close
+      par la mesure, `font_size` valant déjà 11.0 par défaut chez kitty, soit la valeur que
+      le `foot.ini` posait à la main. Ce que le fichier porte à la place est un **filtre de
+      notifications** (`filter_notification`), qui écarte le bruit de Claude Code et garde
+      ses demandes de permission. Reste hors sujet terminal : la densité du P2725DE, qui
+      est une question d'échelle de compositeur.
 
 ### 8bis. Flatpak
 
@@ -550,10 +554,10 @@ mkdir -p ~/.config/uwsm
 
 # 3. SIMULER — la simulation nomme le niveau exact de chaque lien
 cd ~/linux/dotfiles
-stow -n -v -t ~ bash git hypr foot nas uwsm
+stow -n -v -t ~ bash git hypr kitty nas uwsm noctalia
 
 # 4. Poser
-stow -v -t ~ bash git hypr foot nas uwsm
+stow -v -t ~ bash git hypr kitty nas uwsm noctalia
 ```
 
 ⚠ **L'étape 1 n'est pas facultative** : c'est elle qui débloque `bash` et `git`. Elle n'a
@@ -573,10 +577,11 @@ atterrit.
 → `ls -l` sur les cibles des six paquets — **un `[ ]` peut vouloir dire « pas fait » ou
   « fait, pas noté », et seule la machine tranche** :
   `~/.bashrc`, `~/.bash_profile`, `~/.bashrc.d`, `~/.gitconfig`, `~/.config/git/ignore`,
-  `~/.config/hypr/hyprland.lua`, `~/.config/foot`,
+  `~/.config/hypr/hyprland.lua`, `~/.config/kitty/kitty.conf`,
+  `~/.config/noctalia/idle.toml`,
   `~/.config/systemd/user/nas-infoadmin.service`, `~/.config/uwsm/env`
-  (certains sont des liens de **dossier** — tree folding : `~/.bashrc.d` et `~/.config/foot`
-  pointent sur le dépôt en entier, donc **jamais de secret dedans**)
+  (`~/.bashrc.d` est un lien de **dossier** — tree folding : il pointe sur le dépôt en
+  entier, donc **jamais de secret dedans**. Les autres sont des liens de fichier.)
 
 Puis **déconnexion / reconnexion** : l'environnement de session ne se recharge pas.
 

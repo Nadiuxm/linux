@@ -148,6 +148,92 @@ changement amont, sans que rien ne le réclame. À rendre explicite
   place. Un fichier de conf écrit, commenté, commité et inerte, comme le
   `00-keyboard.conf`.
 
+### Notifications de Claude Code, et le départ de foot
+
+**Le symptôme.** Fond continu de notifications sur le bureau. Mesuré sur l'historique
+Noctalia (`~/.local/state/noctalia/notification_history.json`, 91 entrées) : **toutes**
+viennent de Claude Code, aucune d'autre chose.
+
+```
+83  « Claude is waiting for your input »   ← bruit : on regarde déjà l'écran
+ 8  « Claude needs your permission »       ← utile : une action est attendue
+```
+
+38 pour la seule journée du 09, écart médian 8,5 min, 4 écarts sous la minute sur 90.
+**Ce n'est pas une rafale, c'est un fond continu** — la réponse est donc un filtre par
+contenu, pas une temporisation.
+
+**Ce que la mesure a d'abord appris : l'émetteur n'est pas celui qu'on croit.** Le champ
+`app_name` de chaque entrée vaut **`kitty`**, pas « Claude Code » — seul le `summary` dit
+« Claude Code ». Claude Code n'envoie aucune notification lui-même : il émet une séquence
+**OSC 99** que le terminal transforme en notification D-Bus. Chercher un réglage du côté de
+l'application était une impasse ; le levier est dans le terminal. Même famille que « le
+programme dont le nom s'affiche n'est pas celui qui dessine ».
+
+**Réponse retenue :** `filter_notification` de kitty (0.47.1), qui match sur `title`,
+`body`, `app`, `type`, avec regex et opérateurs booléens. Une ligne suffit, et elle garde
+les demandes de permission :
+
+```
+filter_notification body:"waiting for your input"
+```
+
+Le filtre agit **dans kitty** : la notification n'atteint jamais Noctalia. Levier écarté :
+`preferredNotifChannel: notifications_disabled` dans `~/.claude/settings.json` — la clé
+existe bien dans la version installée (2.1.266, valeurs `notifications_disabled`,
+`terminal_bell`, `iterm2_with_bell`, `kitty`), mais elle est **globale** et emporterait
+aussi les huit demandes utiles.
+
+### Le paquet `kitty` créé, et une question ouverte qui n'en était pas une
+
+`~/.config/kitty/kitty.conf` n'existait pas et kitty n'avait **aucun paquet Stow**, alors
+que `dotfiles/foot/` existait pour un terminal inutilisé. Poser le fichier sans paquet
+l'aurait perdu à la première réinstallation — règle des trois destinations. D'où
+`dotfiles/kitty/`, huitième paquet du dépôt.
+
+**Et en l'écrivant, un point ouvert s'est refermé tout seul.** Le dépôt portait depuis le
+2026-09-04, en trois endroits, la case « configurer kitty : le raisonnement du `foot.ini`
+se repose à l'identique ». Le `foot.ini` n'existait que parce que le défaut de foot est
+`monospace:size=8`, illisible à `scale=1`. **Le défaut de kitty est `font_size = 11.0`**
+(`/usr/lib64/kitty/kitty/options/definition.py:52`) — exactement la valeur que le
+`foot.ini` posait à la main.
+
+> **Trois jours de « question à traiter » tenaient à ne pas avoir lu le défaut de l'outil.**
+> La question n'a pas été tranchée, elle n'existait pas. Même famille que « un mécanisme
+> plausible n'est pas une contrainte — la documentation de l'outil, si » : ici ce n'était
+> même pas la documentation, juste la valeur par défaut.
+
+La seule moitié qui survivait est la **densité** du P2725DE (2560x1440 en 27" contre deux
+1080p en 24", tous à `scale: 1`, donc texte ~15 % plus petit sur le 27"). Elle est recopiée
+dans le `kitty.conf`, avec la précision qui manquait : **ce n'est pas un réglage de
+terminal mais d'échelle de compositeur**, donc la question sort de ce point et va dans
+Hyprland.
+
+### foot retiré — et pourquoi la note qui l'interdisait avait tort
+
+`mesures.md` portait la consigne : « ne pas retirer le paquet `dotfiles/foot` dans tous les
+cas — il documente un raisonnement, comme `dotfiles/sway` ». **La comparaison ne tenait
+pas.** `dotfiles/sway` documente la solution AZERTY d'un WM tuilant, qui reste vraie et
+transposable à tout compositeur. Le `foot.ini` documentait un défaut **propre à foot**, que
+kitty n'a pas. Un fichier qui explique pourquoi corriger un problème inexistant n'apprend
+rien, il encombre — et il oriente vers un travail déjà sans objet, comme la liste de restes
+du 2026-09-07.
+
+Vérifications faites **avant** de supprimer, plutôt qu'après : foot n'était référencé comme
+terminal **nulle part** (ni `dotfiles/hypr`, ni `uwsm`, ni `bash`, ni le `greeter.toml`, ni
+les réglages Noctalia), `reason=User`, aucune dépendance inverse.
+
+> **Confirmation involontaire du tree folding, et une conclusion que j'ai eu tort de tirer.**
+> `readlink ~/.config/foot/foot.ini` répondait « Argument invalide », d'où la déduction que
+> le paquet n'avait jamais été posé — écrite dans `mesures.md` comme une septième
+> affirmation d'état démentie, puis **corrigée le même jour**. `readlink` disait seulement
+> que *`foot.ini`* n'est pas un lien, ce qui est normal quand c'est le **dossier** parent
+> qui l'est. La preuve est venue d'ailleurs : après `rm -rf dotfiles/foot`, le chemin
+> `~/.config/foot/` a disparu d'un coup — ce qui n'arrive pas à un vrai dossier.
+> `mesures.md` avait raison depuis le début. **Interroger le bon objet : un lien de dossier
+> ne se teste pas sur un fichier qu'il contient.** Même famille que « une sortie vide ne
+> distingue pas un mauvais motif d'une mauvaise cible ».
+
 ### Temps passé
 
 <!-- TODO : à compléter. -->

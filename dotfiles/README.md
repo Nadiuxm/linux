@@ -30,7 +30,7 @@ manuelle ni script de synchronisation à maintenir. Et `stow -D` défait tout pr
 | `desktop` | `.local/share/applications/*.desktop` | Entrées de lanceur maison, visibles dans le lanceur Noctalia. **Sans objet aujourd'hui, et non posé** : son unique entrée lance la VM via `virt-manager`, or la VM se retrouve par le lanceur Noctalia (`installation/mesures.md` §9). Paquet gardé comme emplacement, à reprendre quand on saura quoi y mettre — pas à poser pour cocher une case. |
 | `hypr` | `.config/hypr/hyprland.lua` | Compositeur, **tuilage seul** — le shell est à Noctalia. **En Lua, pas en `.conf`** : hyprlang est déprécié depuis Hyprland 0.55. Porte la disposition `fr/azerty`, les trois écrans et les liaisons `noctalia msg …`. Les espaces sont liés aux **symboles de niveau 1** de la rangée AZERTY (`ampersand`, `eacute`…) et non à `code:NN`, qui échoue silencieusement dans la config Lua. Remplace `sway` sur le poste de référence ; `sway` est gardé pour le lab. |
 | `uwsm` | `.config/uwsm/env` | **Environnement de la session graphique**, sourcé par `uwsm` (`man uwsm`). Il source `/etc/profile.d/flatpak.sh` pour `XDG_DATA_DIRS` — sans quoi aucune application Flatpak n'apparaît dans le lanceur. Raison de fond : `profile.d` ne s'exécute que dans un shell de **login**, et une session lancée par greetd → uwsm → Hyprland ne source jamais `/etc/profile`. **Exige `mkdir -p ~/.config/uwsm` AVANT le `stow`** (voir les limites). |
-| `foot` | `.config/foot/foot.ini` | Terminal Wayland. Corrige le défaut `size=8`, illisible à `scale=1`, que le zoom de foot ne persiste pas. **Ajouté au dépôt le 2026-09-04, après avoir failli être perdu** : il existait depuis le 2026-09-01 sans jamais avoir été commité. **Ce n'est plus le terminal du poste de référence** : kitty a pris la place le 2026-09-04. Paquet gardé — il documente un raisonnement (`dpi-aware`, échelle Wayland, densité du P2725DE) qui reste **la question à traiter pour kitty**, dont la config est vide. |
+| `kitty` | `.config/kitty/kitty.conf` | **Terminal du poste**, depuis le 2026-09-04. Remplace le paquet `foot`, supprimé le 2026-09-09 avec le paquet RPM : foot était installé et inutilisé, son `foot.ini` ne configurait plus rien. Contenu : **un filtre de notifications**, qui écarte les « Claude is waiting for your input » (83 des 91 notifications de l'historique) et **garde** les 8 demandes de permission. Aucun réglage de police, et c'est délibéré : le défaut de kitty vaut déjà 11.0, la valeur que le `foot.ini` posait à la main — le raisonnement de foot est donc **clos par la mesure**, pas hérité. |
 
 ## Installation sur une machine neuve
 
@@ -52,13 +52,13 @@ for f in .bashrc .bash_profile .gitconfig; do
 done
 
 # 4. SIMULER d'abord — la simulation nomme le niveau exact de chaque lien
-stow -n -v -t ~ bash git hypr foot nas uwsm
+stow -n -v -t ~ bash git hypr kitty nas uwsm noctalia
 
 # 5. Faire exister les dossiers que le tree folding remonterait trop haut
 mkdir -p ~/.config/uwsm
 
 # 6. Poser les liens
-stow -v -t ~ bash git hypr foot nas uwsm
+stow -v -t ~ bash git hypr kitty nas uwsm noctalia
 ```
 
 > **L'étape 4 n'est pas facultative.** `stow` remonte le lien au niveau le plus haut
@@ -69,8 +69,8 @@ stow -v -t ~ bash git hypr foot nas uwsm
 > niveau le lien atterrirait — c'est le seul contrôle fiable.
 
 > **Choisir les paquets selon la machine.** `hypr` (poste de référence) et `sway` (lab)
-> sont **exclusifs** : ce sont deux compositeurs. `nas`, `foot` et `uwsm` n'ont de sens que
-> sur une machine avec session graphique. Sur une machine sans bureau,
+> sont **exclusifs** : ce sont deux compositeurs. `nas`, `kitty`, `noctalia` et `uwsm` n'ont de sens
+> que sur une machine avec session graphique. Sur une machine sans bureau,
 > `stow -v -t ~ bash git` suffit.
 
 ### État réel des liens sur le poste de référence — 2026-09-08
@@ -83,7 +83,8 @@ par la commande qu'on a tapée :
 | `bash` | `~/.bashrc`, `~/.bash_profile`, `~/.bashrc.d` | posé le 2026-09-08 |
 | `git` | `~/.gitconfig`, `~/.config/git/ignore` | posé le 2026-09-08 |
 | `hypr` | `~/.config/hypr/hyprland.lua` | **feuille** : `~/.config/hypr` reste un dossier réel, Hyprland y écrit ses propres fichiers |
-| `foot` | `~/.config/foot` | dossier folded |
+| `kitty` | `~/.config/kitty/kitty.conf` | feuille — **créé le 2026-09-09, à poser** |
+| `noctalia` | `~/.config/noctalia/idle.toml` | feuille — posé le 2026-09-09 |
 | `nas` | `~/.config/systemd/user/nas-infoadmin.service` | feuille |
 | `uwsm` | `~/.config/uwsm/env` | feuille |
 | *hors cible* : `desktop`, `sway` | — | non posés : l'entrée de `desktop` n'a plus d'objet, `sway` ne sert qu'au lab |

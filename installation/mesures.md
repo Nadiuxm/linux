@@ -622,15 +622,25 @@ Le dépôt annonçait « `foot` provisoire, kitty envisagé à court terme » de
 pendant lesquels la procédure décrivait un terminal qui n'était plus utilisé.
 
 - [x] `kitty` installé et en service
-- [ ] **`~/.config/kitty/` est VIDE** — aucun réglage n'a été posé. Le raisonnement du
-      `foot.ini` (`dpi-aware`, échelle Wayland, densité du P2725DE à 2560x1440 sur 600 mm)
-      **ne s'applique donc à rien aujourd'hui** : kitty tourne sur ses défauts. C'est la
-      question du `foot.ini` qui se repose à l'identique, pas son réglage — à trancher à
-      l'usage, puis à versionner en paquet `dotfiles/kitty`
-- [ ] Décider du sort de `foot` : le garder comme terminal de secours (il ne coûte rien et
-      sa config est déjà au dépôt) ou le retirer pour que la liste des paquets reste
-      lisible. Ne pas retirer le paquet `dotfiles/foot` dans tous les cas — il documente
-      un raisonnement, comme `dotfiles/sway`
+- [x] **`dotfiles/kitty` créé le 2026-09-09** — et son contenu n'est pas celui qu'annonçait
+      cette case. La question de la **taille de police est sans objet** : le défaut de kitty
+      est `font_size = 11.0` (`options/definition.py:52`), soit exactement ce que le
+      `foot.ini` posait à la main pour corriger le `size=8` de foot. Il n'y avait rien à
+      reporter, et la « question à traiter » tenait à ne pas avoir lu le défaut de l'outil.
+      Reste, mais ailleurs : la densité du P2725DE est une affaire d'**échelle de
+      compositeur**, pas de terminal. Ce que le fichier porte à la place est un **filtre de
+      notifications** — voir §8quater
+- [x] **Sort de `foot` : RETIRÉ le 2026-09-09**, paquet RPM et paquet Stow. Cette case
+      prescrivait « ne pas retirer le paquet `dotfiles/foot` dans tous les cas — il
+      documente un raisonnement, comme `dotfiles/sway` ». **La comparaison avec `sway` ne
+      tenait pas :** `dotfiles/sway` documente la solution AZERTY d'un WM tuilant, qui reste
+      vraie et transposable ; le `foot.ini` documentait un défaut de foot que kitty n'a
+      pas. Un fichier qui explique pourquoi corriger un problème inexistant n'apprend rien,
+      il encombre. Le raisonnement qui survivait — la densité — est recopié dans
+      `dotfiles/kitty/.config/kitty/kitty.conf`, et c'est le seul morceau qui valait d'être
+      gardé. Vérifié avant retrait : foot n'était référencé comme terminal **nulle part**
+      (ni `hypr`, ni `uwsm`, ni `bash`, ni le greeter, ni Noctalia), `reason=User`, aucune
+      dépendance inverse
 
 ### 8ter. RustDesk — outil de support, RPM hors dépôt
 
@@ -969,7 +979,7 @@ stow    -v -t ~ bash git        # fait le 2026-09-08
 | Paquet | Posé ? | Preuve |
 |---|---|---|
 | `hypr` | oui | `~/.config/hypr/hyprland.lua` → dépôt (feuille : le dossier reste réel, Hyprland y écrit) |
-| `foot` | oui | `~/.config/foot` → dépôt (lien de **dossier**, tree folding) |
+| ~~`foot`~~ | oui, jusqu'au 2026-09-09 | `~/.config/foot` → dépôt (lien de **dossier**, tree folding). **Retiré le 2026-09-09** : le lien a été supprimé avec le paquet. Confirmation involontaire du tree folding au passage — la suppression de `dotfiles/foot` a fait disparaître `~/.config/foot/` d'un coup, ce qui n'arrive pas à un vrai dossier |
 | `nas` | oui | `~/.config/systemd/user/nas-infoadmin.service` → dépôt |
 | `uwsm` | oui | `~/.config/uwsm/env` → dépôt |
 | `bash` | oui | `~/.bashrc`, `~/.bash_profile`, `~/.bashrc.d` → dépôt (2026-09-08) |

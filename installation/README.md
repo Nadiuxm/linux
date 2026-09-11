@@ -146,7 +146,7 @@ des accessoires :
 |---|---|---|---|
 | **Support à distance** | **RustDesk** 1.4.9 | **RPM généré par Julien**, hors dépôt | c'est l'outil de traitement des tickets ; le RPM porte l'adresse du serveur et la clé de relais, donc il se **régénère**, il ne se télécharge pas |
 | **Virtualisation** | `qemu-kvm` 10.2.2 + `libvirt` 12.0.0 + `virt-manager` 5.1.0, `edk2-ovmf`, `swtpm-tools` | `dnf` | hôte de la VM Windows d'administration ; `edk2-ovmf` et `swtpm-tools` sont **obligatoires** pour Windows 11 (UEFI Secure Boot + TPM émulé) |
-| **Terminal** | **kitty** 0.47.1 | `dnf` | **tranché le 2026-09-04**, et non écrit pendant trois jours : c'est kitty qui tourne, `foot` est installé mais inutilisé |
+| **Terminal** | **kitty** 0.47.1 | `dnf` | **tranché le 2026-09-04**, et non écrit pendant trois jours : c'est kitty qui tourne. `foot`, installé sans être utilisé, a été **retiré le 2026-09-09** — paquet RPM et paquet Stow |
 | Applications Flatpak | Mattermost 6.3.0, WinBox 4.3 | Flathub, portée **`system`** | seul canal identique d'une distro à l'autre — mais voir la nuance du 2026-09-07 dans `poste/README.md` |
 
 La ligne « Terminal — **foot** — provisoire » du tableau ci-dessus est donc **périmée**.
@@ -306,14 +306,23 @@ de comparaison en soi, comme la note du 2026-09-03 l'annonçait.
   mais **l'ordonnancement au login n'est pas testé** — et c'est tout le chantier. Piste
   notée : `keepassxc.service` en `Type=dbus` + `BusName=org.freedesktop.secrets`, avec
   `nas-infoadmin.service` en `After=`. Ne couvre pas « la base est déverrouillée ».
-- ~~**Terminal.**~~ **Tranché : kitty.** Il était installé le 2026-09-04 à 15:56 et c'est
-  lui qui tourne depuis — ce point « reporté » ne l'était plus, il n'avait juste pas été
-  écrit. Ce qui reste vrai, et qui est maintenant le vrai point ouvert : **le raisonnement
-  du `foot.ini` ne s'applique aujourd'hui à rien.** `~/.config/kitty/` est vide, kitty
-  tourne sur ses défauts, et les questions du `foot.ini` — `dpi-aware`, échelle Wayland,
-  densité du P2725DE à 2560x1440 sur 600 mm — se reposent à l'identique sans avoir été
-  reposées. C'est bien une **question** qui survit, pas un réglage : elle attend juste
-  qu'on la traite pour kitty.
+- ~~**Terminal.**~~ **Tranché : kitty**, installé le 2026-09-04 à 15:56. **Et le point qui
+  restait ouvert derrière — « le raisonnement du `foot.ini` ne s'applique à rien » — est
+  CLOS le 2026-09-09, par la mesure et non par un réglage.** Ce raisonnement avait deux
+  moitiés, et elles ne se terminent pas de la même façon :
+  - **La taille de police : question sans objet.** Le `foot.ini` n'existait que parce que
+    le défaut de foot est `size=8`. Le défaut de kitty est **11.0**
+    (`options/definition.py:52`), soit exactement la valeur que le `foot.ini` posait à la
+    main. Il n'y avait donc rien à reporter — et trois jours de « question à traiter »
+    tenaient à ne pas avoir lu le défaut de l'outil. Même famille que « un mécanisme
+    plausible n'est pas une contrainte ».
+  - **La densité du P2725DE : question réelle, mais mal rangée.** Les trois écrans sont à
+    `scale: 1`, donc une taille en points rend le même nombre de pixels partout et le texte
+    paraît ~15 % plus petit sur le 27" à 1440p. Ce n'est pas un réglage de terminal mais
+    d'échelle de compositeur : la question sort de ce point et va dans Hyprland, à trancher
+    si ça devient gênant.
+  `dotfiles/kitty/` existe depuis le 2026-09-09 ; son contenu n'est pas une police mais un
+  **filtre de notifications**.
 - **Retrait de Firefox** — envisagé le 2026-09-03, jamais décidé. Sans objet ici : l'image
   minimale ne l'a pas installé.
 
@@ -404,8 +413,8 @@ la machine.
       « retrouver ce qu'on a tapé », tourner avec l'historique par défaut de Fedora
       (1000 lignes, sans horodatage) est la perte la plus concrète des trois paquets
       manquants. `desktop` peut attendre : son unique entrée n'a plus d'objet
-- [ ] **Configurer kitty.** Le raisonnement du `foot.ini` ne s'applique à rien tant que
-      `~/.config/kitty/` est vide
+- [ ] **Poser le paquet `kitty`** (`stow`). Le fichier existe depuis le 2026-09-09 (filtre
+      de notifications), il n'est pas encore lié
 - [ ] **Nommer la machine.** `hostnamectl` → `(unset)` ; le `fedora` affiché est le nom
       transitoire par défaut
 - [ ] Vérifier les portails **à l'usage** (capture d'écran, sélecteur de fichiers) : trois
