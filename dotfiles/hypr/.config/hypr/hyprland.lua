@@ -97,6 +97,24 @@ hl.on("hyprland.start", function()
     -- mécanisme ne le lance — ni unité systemd (le paquet ne livre qu'un
     -- .desktop), ni autostart XDG. Sans cette ligne, pas de shell du tout.
     hl.exec_cmd("noctalia --daemon")
+
+    -- 3CX (PWA Chromium), ajouté le 2026-09-11. Lancé ici pour être déjà
+    -- enregistré auprès du serveur quand le premier appel arrive : la
+    -- téléphonie vit dans la PAGE, une application pas ouverte ne sonne pas.
+    -- Il atterrit directement dans l'espace spécial « 3cx » (règle plus bas),
+    -- donc invisible tant qu'on n'appelle pas SUPER + A.
+    --
+    -- « uwsm app » et non la ligne Exec du .desktop : l'application obtient sa
+    -- propre unité systemd dans app-graphical.slice, comme tout ce que lance le
+    -- lanceur. L'argument est un Desktop Entry ID — forme documentée dans
+    -- « uwsm app --help » et testée le 2026-09-11.
+    --
+    -- ÉCART ASSUMÉ à la fiche « poste/ », qui envisageait l'option « Démarrer
+    -- l'application à la connexion » de Chromium. Elle écrit dans
+    -- ~/.config/autostart/, que rien ne versionne et qu'uwsm transforme en
+    -- app-*@autostart.service FILTRÉE par XDG_CURRENT_DESKTOP. Ici le geste est
+    -- dans le dépôt et ne dépend d'aucun filtre.
+    hl.exec_cmd("uwsm app -- chrome-ofbadnjniahgolcbglpdccmaofcddiig-Default.desktop")
 end)
 
 
@@ -466,6 +484,53 @@ end
 -- Espace spécial (scratchpad) et molette : défauts d'Hyprland, gardés tels quels.
 hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))
 hl.bind(mainMod .. " + SHIFT + S", hl.dsp.window.move({ workspace = "special:magic" }))
+
+-- --- 3CX : un scratchpad DÉDIÉ, à côté de « magic » (2026-09-11) ---
+--
+-- POURQUOI UN ESPACE SPÉCIAL ET PAS UNE ICÔNE DANS LA BARRE. Mesuré ce jour :
+-- Chromium ne publie qu'UN SEUL StatusNotifierItem pour tout le navigateur
+-- (« chrome_status_icon_1 »), dont le menu liste les applications
+-- d'arrière-plan — jamais une entrée par PWA. Mattermost, lui, est un Electron
+-- qui publie la sienne (« Mattermost_status_icon_1 »), d'où la différence de
+-- comportement. Il n'y a donc rien à activer côté 3CX : fermer la fenêtre du
+-- PWA ferme 3CX. L'équivalent tuilant de « réduire dans le tray » est l'espace
+-- spécial — la fenêtre sort de l'écran, le processus continue de tourner.
+--
+-- SÉPARÉ de « magic » à dessein : le scratchpad généraliste sert à garer
+-- n'importe quoi, et SUPER + S ferait alors apparaître 3CX avec le reste.
+--
+-- A COMME APPEL — choisi par Julien, et le moyen mnémotechnique compte autant
+-- que la disponibilité : « T » avait été retenu pour « téléphone », ça ne lui
+-- parlait pas (3CX est sa VOIP). SUPER + A et SUPER + SHIFT + A sont LIBRES,
+-- vérifié sur « hyprctl binds » : aucune liaison en modmask 64 ni 65.
+--
+-- DEUX COMBINAISONS ÉCARTÉES, pour qu'on ne les repropose pas :
+--   « SUPER + SHIFT + " » — « quotedbl » est le symbole de NIVEAU 1 de la
+--     touche AE03, déjà lié quelques lignes plus haut à « envoyer la fenêtre
+--     sur l'espace 3 ». Le conflit est invisible à la lecture du fichier, seul
+--     « hyprctl binds » le montre.
+--   « SUPER + V » (pour VOIP) — prise deux fois : bascule flottant en
+--     modmask 64, historique du presse-papiers Noctalia en modmask 65.
+hl.bind(mainMod .. " + A",         hl.dsp.workspace.toggle_special("3cx"),
+        { desc = "Afficher / masquer le 3CX" })
+hl.bind(mainMod .. " + SHIFT + A", hl.dsp.window.move({ workspace = "special:3cx" }),
+        { desc = "Envoyer la fenêtre dans le scratchpad 3CX" })
+
+-- La fenêtre y va seule à son ouverture. « silent » évite que la session
+-- bascule sur l'espace spécial au démarrage.
+--
+-- LA CLASSE N'EST PAS CELLE DU .desktop. Chromium y écrit
+-- « StartupWMClass=crx_<app-id> », mais la classe que voit le compositeur est
+-- « chrome-<app-id>-<profil> » — relevée dans « hyprctl clients », pas déduite.
+--
+-- PIÈGE : une règle de fenêtre ne s'applique qu'à la CRÉATION. « hyprctl
+-- reload » ne déplacera pas la fenêtre 3CX déjà ouverte ; il faut la fermer et
+-- la rouvrir, ou la pousser à la main par SUPER + SHIFT + A.
+hl.window_rule({
+    name      = "3cx-scratchpad",
+    match     = { class = "^chrome-ofbadnjniahgolcbglpdccmaofcddiig-Default$" },
+    workspace = "special:3cx silent",
+})
 
 hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
 hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
